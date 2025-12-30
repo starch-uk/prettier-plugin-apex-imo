@@ -159,7 +159,7 @@ Update `package.json`:
 		"format:check": "prettier --check .",
 		"prepare": "husky"
 	},
-	"packageManager": "pnpm@9.0.0",
+	"packageManager": "pnpm@10.26.2",
 	"peerDependencies": {
 		"prettier": "^3.0.0",
 		"prettier-plugin-apex": "^2.0.0"
@@ -1406,6 +1406,8 @@ Create `.github/workflows/ci.yml`:
 
 ```yaml
 name: CI
+permissions:
+    contents: read
 
 on:
     push:
@@ -1418,19 +1420,22 @@ jobs:
         runs-on: ubuntu-latest
         strategy:
             matrix:
-                node-version: [20, 22]
+                node-version: [20, 22, 24]
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
 
             - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: ${{ matrix.node-version }}
-                  cache: 'npm'
+                  cache: 'pnpm'
 
             - name: Install dependencies
-              run: npm ci
+              run: pnpm install --frozen-lockfile
 
             - name: Type check
               run: pnpm run typecheck
@@ -1445,8 +1450,8 @@ jobs:
               run: pnpm run test:ci
 
             - name: Upload coverage
-              uses: codecov/codecov-action@v4
-              if: matrix.node-version == 20
+              uses: codecov/codecov-action@v5
+              if: matrix.node-version == 24
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   files: ./coverage/lcov.info
@@ -1473,19 +1478,17 @@ jobs:
             id-token: write
 
         steps:
-            - uses: actions/checkout@v4
-
-            - name: Use Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-                  cache: 'pnpm'
-                  registry-url: 'https://registry.npmjs.org'
+            - uses: actions/checkout@v6
 
             - name: Install pnpm
               uses: pnpm/action-setup@v4
+
+            - name: Use Node.js
+              uses: actions/setup-node@v6
               with:
-                  version: 9
+                  node-version: 24
+                  cache: 'pnpm'
+                  registry-url: 'https://registry.npmjs.org'
 
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
@@ -1502,7 +1505,7 @@ jobs:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
             - name: Create GitHub Release
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v2
               with:
                   generate_release_notes: true
 ```
