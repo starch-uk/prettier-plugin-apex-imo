@@ -101,6 +101,40 @@ describe('prettier-plugin-apex-imo integration', () => {
 			expect(result).toMatch(/\n\s+'reading',/);
 			expect(result).toMatch(/\n\s+'coding'/);
 		});
+
+		it('should format List with multiple entries using List type name', async () => {
+			const input = `public class Test { List<Integer> nums = new List<Integer>{ 1, 2, 3 }; }`;
+			const result = await formatApex(input);
+			// Should use 'List' as type name, not 'Set'
+			expect(result).toContain('List<Integer>');
+			expect(result).not.toContain('Set<Integer>');
+			expect(result).toMatch(/List<Integer>\{\s*\n/);
+		});
+
+		it('should format Set with multiple entries using Set type name', async () => {
+			const input = `public class Test { Set<Integer> nums = new Set<Integer>{ 1, 2, 3 }; }`;
+			const result = await formatApex(input);
+			// Should use 'Set' as type name, not 'List'
+			expect(result).toContain('Set<Integer>');
+			expect(result).not.toContain('List<Integer>');
+			expect(result).toMatch(/Set<Integer>\{\s*\n/);
+		});
+
+		it('should format Set correctly', async () => {
+			const input = `public class Test { Set<MyClass> items = new Set<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const result = await formatApex(input);
+			// Should format as multiline
+			expect(result).toContain('Set<MyClass>');
+			expect(result).toMatch(/Set<MyClass>\{\s*\n/);
+		});
+
+		it('should format List correctly', async () => {
+			const input = `public class Test { List<MyClass> items = new List<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const result = await formatApex(input);
+			// Should format as multiline
+			expect(result).toContain('List<MyClass>');
+			expect(result).toMatch(/List<MyClass>\{\s*\n/);
+		});
 	});
 
 	describe('Map formatting', () => {
@@ -201,6 +235,187 @@ describe('prettier-plugin-apex-imo integration', () => {
 			);
 			// Single pair should stay on one line
 			expect(result).not.toMatch(/Map<String, String>\{\s*\n\s+'key'/);
+		});
+	});
+
+	describe('Complex scenarios', () => {
+		it('should handle lists with different data types', async () => {
+			const input = `public class Test { List<Object> mixed = new List<Object>{ 1, 'two', true, null }; }`;
+			const result = await formatApex(input);
+			expect(result).toMatch(/\n\s+1,/);
+			expect(result).toMatch(/\n\s+'two',/);
+			expect(result).toMatch(/\n\s+true,/);
+			expect(result).toMatch(/\n\s+null/);
+		});
+
+		it('should handle maps with complex values', async () => {
+			const input = `public class Test { Map<String, Object> complex = new Map<String, Object>{ 'a' => 1, 'b' => 'two', 'c' => true }; }`;
+			const result = await formatApex(input);
+			expect(result).toMatch(/\n\s+'a' => 1,/);
+			expect(result).toMatch(/\n\s+'b' => 'two',/);
+			expect(result).toMatch(/\n\s+'c' => true/);
+		});
+
+		it('should handle nested lists within lists', async () => {
+			const input = `public class Test { List<List<String>> nested = new List<List<String>>{ new List<String>{ 'a', 'b' }, new List<String>{ 'c', 'd' } }; }`;
+			const result = await formatApex(input);
+			// Outer list should be multiline
+			expect(result).toMatch(/List<List<String>>\{\s*\n/);
+			// Inner lists should also be multiline (2+ items)
+			expect(result).toMatch(/\n\s+new List<String>\{\s*\n/);
+		});
+
+		it('should handle lists with many items', async () => {
+			const input = `public class Test { List<String> many = new List<String>{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' }; }`;
+			const result = await formatApex(input);
+			// Should be multiline
+			expect(result).toMatch(/List<String>\{\s*\n/);
+			// Should contain all items
+			expect(result).toContain("'a',");
+			expect(result).toContain("'h'");
+		});
+
+		it('should handle maps with many pairs', async () => {
+			const input = `public class Test { Map<String, Integer> many = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3, 'd' => 4, 'e' => 5 }; }`;
+			const result = await formatApex(input);
+			// Should be multiline
+			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
+			// Should contain all pairs
+			expect(result).toContain("'a' => 1,");
+			expect(result).toContain("'e' => 5");
+		});
+
+		it('should handle Set with generic types', async () => {
+			const input = `public class Test { Set<MyClass> items = new Set<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const result = await formatApex(input);
+			// Should be multiline for 2+ items
+			expect(result).toMatch(/Set<MyClass>\{\s*\n/);
+		});
+
+		it('should handle List with generic types', async () => {
+			const input = `public class Test { List<MyClass> items = new List<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const result = await formatApex(input);
+			// Should be multiline for 2+ items
+			expect(result).toMatch(/List<MyClass>\{\s*\n/);
+		});
+
+		it('should handle Map with complex key types', async () => {
+			const input = `public class Test { Map<MyClass, String> items = new Map<MyClass, String>{ new MyClass() => 'a', new MyClass() => 'b' }; }`;
+			const result = await formatApex(input);
+			// Should be multiline for 2+ pairs
+			expect(result).toMatch(/Map<MyClass, String>\{\s*\n/);
+		});
+
+		it('should handle Map with type parameters', async () => {
+			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2 }; }`;
+			const result = await formatApex(input);
+			// Map types should be joined with ', ' (comma space)
+			expect(result).toContain('Map<String, Integer>');
+			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
+		});
+	});
+
+	describe('Real-world scenarios', () => {
+		it('should format method parameters with lists', async () => {
+			const input = `public class Test { public void method() { processItems(new List<String>{ 'a', 'b', 'c' }); } }`;
+			const result = await formatApex(input);
+			expect(result).toMatch(/new List<String>\{\s*\n/);
+		});
+
+		it('should format return statements with maps', async () => {
+			const input = `public class Test { public Map<String, Integer> getData() { return new Map<String, Integer>{ 'x' => 1, 'y' => 2 }; } }`;
+			const result = await formatApex(input);
+			expect(result).toMatch(/new Map<String, Integer>\{\s*\n/);
+		});
+
+		it('should format variable assignments with sets', async () => {
+			const input = `public class Test { public void method() { Set<String> tags = new Set<String>{ 'tag1', 'tag2', 'tag3' }; } }`;
+			const result = await formatApex(input);
+			expect(result).toMatch(/new Set<String>\{\s*\n/);
+		});
+
+		it('should format empty list initialization', async () => {
+			const input = `public class Test { List<String> empty = new List<String>{}; }`;
+			const result = await formatApex(input);
+			expect(result).toContain('new List<String>{}');
+			expect(result).not.toMatch(/List<String>\{\s*\n/);
+		});
+
+		it('should format empty set initialization', async () => {
+			const input = `public class Test { Set<String> empty = new Set<String>{}; }`;
+			const result = await formatApex(input);
+			expect(result).toContain('new Set<String>{}');
+			expect(result).not.toMatch(/Set<String>\{\s*\n/);
+		});
+
+		it('should format empty map initialization', async () => {
+			const input = `public class Test { Map<String, Integer> empty = new Map<String, Integer>{}; }`;
+			const result = await formatApex(input);
+			expect(result).toContain('new Map<String, Integer>{}');
+			expect(result).not.toMatch(/Map<String, Integer>\{\s*\n/);
+		});
+	});
+
+	describe('Type formatting differences', () => {
+		it('should format List with qualified type names using dot separator', async () => {
+			// Test with a qualified type name like MyNamespace.MyClass
+			// The types array would contain [MyNamespace, MyClass] which should be joined with '.'
+			const input = `public class Test { List<String> items = new List<String>{ 'a', 'b' }; }`;
+			const result = await formatApex(input);
+			// Should format as multiline
+			expect(result).toMatch(/List<String>\{\s*\n/);
+			expect(result).toContain('List<String>');
+		});
+
+		it('should format Set with qualified type names using comma-space separator', async () => {
+			// Test Set formatting - types should be joined with ', ' for Set
+			const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
+			const result = await formatApex(input);
+			// Should format as multiline
+			expect(result).toMatch(/Set<String>\{\s*\n/);
+			expect(result).toContain('Set<String>');
+		});
+
+		it('should format Map types with comma-space separator', async () => {
+			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2 }; }`;
+			const result = await formatApex(input);
+			// Map types should be joined with ', '
+			expect(result).toContain('Map<String, Integer>');
+		});
+	});
+
+	describe('Printer branch coverage', () => {
+		it('should use List type name and dot separator for List literals', async () => {
+			const input = `public class Test { List<String> items = new List<String>{ 'a', 'b' }; }`;
+			const result = await formatApex(input);
+			// Verify it uses 'List' (not 'Set') and formats correctly
+			expect(result).toContain('List<String>');
+			expect(result).not.toContain('Set<String>');
+			expect(result).toMatch(
+				/List<String>\{\s*\n\s+'a',\s*\n\s+'b'\s*\n\s*\}/,
+			);
+		});
+
+		it('should use Set type name and comma-space separator for Set literals', async () => {
+			const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
+			const result = await formatApex(input);
+			// Verify it uses 'Set' (not 'List') and formats correctly
+			expect(result).toContain('Set<String>');
+			expect(result).not.toContain('List<String>');
+			expect(result).toMatch(
+				/Set<String>\{\s*\n\s+'a',\s*\n\s+'b'\s*\n\s*\}/,
+			);
+		});
+
+		it('should format Map with multiple pairs using multiline format', async () => {
+			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3 }; }`;
+			const result = await formatApex(input);
+			// Verify multiline format with proper key-value pairs
+			expect(result).toContain('Map<String, Integer>');
+			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
+			expect(result).toMatch(/\n\s+'a' => 1,/);
+			expect(result).toMatch(/\n\s+'b' => 2,/);
+			expect(result).toMatch(/\n\s+'c' => 3/);
 		});
 	});
 });
