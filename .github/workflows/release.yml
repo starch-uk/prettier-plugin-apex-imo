@@ -13,7 +13,7 @@ jobs:
             id-token: write
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Install pnpm
               uses: pnpm/action-setup@v4
@@ -21,7 +21,7 @@ jobs:
                   version: 9
 
             - name: Use Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: 24
                   cache: 'pnpm'
@@ -42,6 +42,6 @@ jobs:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
             - name: Create GitHub Release
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v2
               with:
                   generate_release_notes: true
