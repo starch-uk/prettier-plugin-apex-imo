@@ -78,9 +78,17 @@ prettier-plugin-apex-imo/
 │   ├── printer.test.ts       # Printer unit tests
 │   └── integration.test.ts   # End-to-end formatting tests
 ├── .github/
-│   └── workflows/
-│       ├── ci.yml            # CI pipeline
-│       └── release.yml       # npm publish workflow
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.md     # Bug report issue template
+│   │   └── feature_request.md # Feature request issue template
+│   ├── workflows/
+│   │   └── ci.yml            # CI pipeline
+│   ├── dependabot.yml        # Dependabot configuration
+│   └── PULL_REQUEST_TEMPLATE.md # Pull request template
+├── docs/                     # Additional documentation
+│   ├── ESLINT.md            # ESLint reference
+│   ├── HUSKY9.md            # Husky v9 reference
+│   └── PNPM.md              # pnpm reference
 ├── package.json
 ├── tsconfig.json
 ├── tsup.config.ts            # Build configuration
@@ -88,7 +96,9 @@ prettier-plugin-apex-imo/
 ├── .prettierrc
 ├── eslint.config.js          # ESLint flat config
 ├── .gitignore
-├── LICENSE                   # MIT License
+├── CODE_OF_CONDUCT.md        # Contributor Code of Conduct
+├── CONTRIBUTING.md           # Contributing guidelines
+├── LICENSE.md                # MIT License
 ├── README.md
 ├── SECURITY.md
 └── CHANGELOG.md
@@ -1690,7 +1700,7 @@ and this project adheres to
 
 **Phase 4:**
 
-> "Write the README, SECURITY.md, and LICENSE files for the package."
+> "Write the README, SECURITY.md, and LICENSE.md files for the package."
 
 **Phase 5:**
 
