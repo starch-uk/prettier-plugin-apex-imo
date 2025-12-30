@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/starch-uk/prettier-plugin-apex-imo/actions/workflows/ci.yml/badge.svg)](https://github.com/starch-uk/prettier-plugin-apex-imo/actions/workflows/ci.yml)
 
-> **IMO** = In My Opinion — because Prettier is opinionated, and so am I.
+> **IMO** = In My Opinion. Because Prettier is opinionated, and so am I.
 
 An opinionated enhancement for
 [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) that
@@ -23,7 +23,11 @@ final String expectedJson = String.join(new List<String>{
 }, '\n');
 ```
 
-Gets reformatted to a single line, defeating the purpose of readable formatting.
+Gets reformatted to a single line, defeating the purpose of readable formatting:
+
+```apex
+final String expectedJson = String.join(new List<String>{ '{', '  \"tags\" : [ \"reading\", \"gaming\", \"coding\" ]', '}' }, '\n');
+```
 
 ## The Solution
 
@@ -47,24 +51,53 @@ Or with npm:
 npm install --save-dev prettier prettier-plugin-apex prettier-plugin-apex-imo
 ```
 
-## Usage
+## Usage in Salesforce Projects
 
-Add the plugin to your Prettier configuration:
+If you're working with a Salesforce project (created with `sf project generate`
+or Salesforce DX), follow these steps:
 
-```json
-{
-	"plugins": ["prettier-plugin-apex-imo"]
-}
-```
+1. **Install the plugin:**
 
-That's it! The plugin automatically includes `prettier-plugin-apex`, so you only
-need to specify this one.
+    ```bash
+    npm install --save-dev prettier-plugin-apex-imo
+    ```
 
-### CLI
+    Standard Salesforce projects already include `prettier` and
+    `prettier-plugin-apex` in their `package.json`, so you only need to install
+    `prettier-plugin-apex-imo`.
 
-```bash
-prettier --plugin=prettier-plugin-apex-imo --write "**/*.{cls,trigger}"
-```
+2. **Update your `.prettierrc` file:**
+
+    Replace `prettier-plugin-apex` with `prettier-plugin-apex-imo` in the
+    plugins array:
+
+    ```json
+    {
+    	"trailingComma": "none",
+    	"plugins": ["prettier-plugin-apex-imo", "@prettier/plugin-xml"]
+    }
+    ```
+
+    The `prettier-plugin-apex-imo` plugin wraps `prettier-plugin-apex`, so you
+    only need to specify `prettier-plugin-apex-imo` in your config. However,
+    **both plugins must be installed** since `prettier-plugin-apex` is a peer
+    dependency.
+
+3. **Verify the configuration:**
+
+    ```bash
+    npm run prettier:verify
+    ```
+
+    Or format your files:
+
+    ```bash
+    npm run prettier
+    ```
+
+    Standard Salesforce projects typically include a `prettier` script in
+    `package.json` that formats all relevant files including Apex classes
+    (`.cls`) and triggers (`.trigger`).
 
 ## Examples
 
