@@ -4,7 +4,9 @@
 
 **Repository:** `starch-uk/prettier-plugin-apex-imo`  
 **Package Name:** `prettier-plugin-apex-imo`  
-**Description:** An opinionated enhancement plugin for `prettier-plugin-apex` that enforces multiline formatting for Apex Lists and Maps with multiple entries.
+**Description:** An opinionated enhancement plugin for `prettier-plugin-apex`
+that enforces multiline formatting for Apex Lists and Maps with multiple
+entries.
 
 ### The Problem
 
@@ -29,7 +31,9 @@ This defeats the purpose of laying out code nicely for maintainability.
 ### The Solution
 
 This plugin wraps `prettier-plugin-apex` and modifies the printing behavior for:
+
 - **List literals** with 2+ entries → Always multiline
+- **Set literals** with 2+ entries → Always multiline
 - **Map literals** with 2+ entries → Always multiline
 
 **Important:** This is non-configurable behavior. Once installed, it just works.
@@ -59,7 +63,16 @@ prettier-plugin-apex-imo/
 │   │   ├── map-single/
 │   │   │   ├── input.cls
 │   │   │   └── output.cls
-│   │   └── mixed/
+│   │   ├── set-multiline/
+│   │   │   ├── input.cls
+│   │   │   └── output.cls
+│   │   ├── set-single/
+│   │   │   ├── input.cls
+│   │   │   └── output.cls
+│   │   ├── mixed/
+│   │   │   ├── input.cls
+│   │   │   └── output.cls
+│   │   └── nested/
 │   │       ├── input.cls
 │   │       └── output.cls
 │   ├── printer.test.ts       # Printer unit tests
@@ -73,7 +86,7 @@ prettier-plugin-apex-imo/
 ├── tsup.config.ts            # Build configuration
 ├── vitest.config.ts          # Test configuration
 ├── .prettierrc
-├── .eslintrc.json
+├── eslint.config.js          # ESLint flat config
 ├── .gitignore
 ├── LICENSE                   # MIT License
 ├── README.md
@@ -85,87 +98,87 @@ prettier-plugin-apex-imo/
 
 ## Phase 1: Project Initialization
 
-### 1.1 Initialize npm Package
+### 1.1 Initialize pnpm Package
 
 ```bash
 mkdir prettier-plugin-apex-imo
 cd prettier-plugin-apex-imo
-npm init -y
+pnpm init
 ```
 
 Update `package.json`:
 
 ```json
 {
-  "name": "prettier-plugin-apex-imo",
-  "version": "0.1.0",
-  "description": "Opinionated multiline formatting for Apex Lists and Maps - extends prettier-plugin-apex",
-  "keywords": [
-    "prettier",
-    "plugin",
-    "apex",
-    "salesforce",
-    "formatter",
-    "multiline",
-    "list",
-    "map"
-  ],
-  "homepage": "https://github.com/starch-uk/prettier-plugin-apex-imo#readme",
-  "bugs": {
-    "url": "https://github.com/starch-uk/prettier-plugin-apex-imo/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/starch-uk/prettier-plugin-apex-imo.git"
-  },
-  "license": "MIT",
-  "author": "Starch UK <info@starch.uk>",
-  "type": "module",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "test": "vitest",
-    "test:coverage": "vitest --coverage",
-    "test:ci": "vitest run --coverage",
-    "lint": "eslint src tests --ext .ts",
-    "lint:fix": "eslint src tests --ext .ts --fix",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
-  },
-  "peerDependencies": {
-    "prettier": "^3.0.0",
-    "prettier-plugin-apex": "^2.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "@vitest/coverage-v8": "^2.0.0",
-    "eslint": "^8.0.0",
-    "prettier": "^3.4.0",
-    "prettier-plugin-apex": "^2.2.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
-    "vitest": "^2.0.0"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+	"name": "prettier-plugin-apex-imo",
+	"version": "0.1.0",
+	"description": "Opinionated multiline formatting for Apex Lists and Maps - extends prettier-plugin-apex",
+	"keywords": [
+		"prettier",
+		"plugin",
+		"apex",
+		"salesforce",
+		"formatter",
+		"multiline",
+		"list",
+		"map"
+	],
+	"homepage": "https://github.com/starch-uk/prettier-plugin-apex-imo#readme",
+	"bugs": {
+		"url": "https://github.com/starch-uk/prettier-plugin-apex-imo/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/starch-uk/prettier-plugin-apex-imo.git"
+	},
+	"license": "MIT",
+	"author": "Starch UK <info@starch.uk>",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs",
+			"types": "./dist/index.d.ts"
+		}
+	},
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsup --watch",
+		"test": "vitest",
+		"test:coverage": "vitest --coverage",
+		"test:ci": "vitest run --coverage",
+		"lint": "eslint src tests",
+		"lint:fix": "eslint src tests --fix",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "pnpm run build",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"prepare": "husky"
+	},
+	"packageManager": "pnpm@9.0.0",
+	"peerDependencies": {
+		"prettier": "^3.0.0",
+		"prettier-plugin-apex": "^2.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^20.0.0",
+		"@typescript-eslint/eslint-plugin": "^7.0.0",
+		"@typescript-eslint/parser": "^7.0.0",
+		"@vitest/coverage-v8": "^2.0.0",
+		"eslint": "^8.0.0",
+		"prettier": "^3.4.0",
+		"prettier-plugin-apex": "^2.2.0",
+		"tsup": "^8.0.0",
+		"typescript": "^5.0.0",
+		"vitest": "^2.0.0"
+	},
+	"engines": {
+		"node": ">=20"
+	}
 }
 ```
 
@@ -175,29 +188,29 @@ Create `tsconfig.json`:
 
 ```json
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022"],
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022"],
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true,
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true
+	},
+	"include": ["src/**/*"],
+	"exclude": ["node_modules", "dist", "tests"]
 }
 ```
 
@@ -209,14 +222,14 @@ Create `tsup.config.ts`:
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
-  format: ['esm', 'cjs'],
-  dts: true,
-  clean: true,
-  sourcemap: true,
-  minify: false,
-  target: 'node20',
-  external: ['prettier', 'prettier-plugin-apex'],
+	entry: ['src/index.ts'],
+	format: ['esm', 'cjs'],
+	dts: true,
+	clean: true,
+	sourcemap: true,
+	minify: false,
+	target: 'node20',
+	external: ['prettier', 'prettier-plugin-apex'],
 });
 ```
 
@@ -228,21 +241,21 @@ Create `vitest.config.ts`:
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  test: {
-    globals: true,
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/types.ts'],
-      thresholds: {
-        lines: 80,
-        functions: 80,
-        branches: 80,
-        statements: 80,
-      },
-    },
-  },
+	test: {
+		globals: true,
+		coverage: {
+			provider: 'v8',
+			reporter: ['text', 'json', 'html', 'lcov'],
+			include: ['src/**/*.ts'],
+			exclude: ['src/types.ts'],
+			thresholds: {
+				lines: 80,
+				functions: 80,
+				branches: 80,
+				statements: 80,
+			},
+		},
+	},
 });
 ```
 
@@ -261,33 +274,35 @@ import type { AstPath, Doc, ParserOptions, Plugin, Printer } from 'prettier';
  * Apex AST node types we care about for multiline formatting
  */
 export interface ApexListInitNode {
-  '@class': 'apex.jorje.data.ast.NewListInit' | 'apex.jorje.data.ast.NewSetInit';
-  values: ApexNode[];
-  [key: string]: unknown;
+	'@class':
+		| 'apex.jorje.data.ast.NewObject$NewListLiteral'
+		| 'apex.jorje.data.ast.NewObject$NewSetLiteral';
+	values: ApexNode[];
+	[key: string]: unknown;
 }
 
 export interface ApexMapInitNode {
-  '@class': 'apex.jorje.data.ast.NewMapInit';
-  pairs: ApexMapPair[];
-  [key: string]: unknown;
+	'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral';
+	pairs: ApexMapPair[];
+	[key: string]: unknown;
 }
 
 export interface ApexMapPair {
-  '@class': 'apex.jorje.data.ast.MapLiteralKeyValue';
-  key: ApexNode;
-  value: ApexNode;
-  [key: string]: unknown;
+	'@class': 'apex.jorje.data.ast.MapLiteralKeyValue';
+	key: ApexNode;
+	value: ApexNode;
+	[key: string]: unknown;
 }
 
 export interface ApexNode {
-  '@class': string;
-  [key: string]: unknown;
+	'@class': string;
+	[key: string]: unknown;
 }
 
 export type ApexAst = ApexNode;
 
 export interface ApexPrinterOptions extends ParserOptions {
-  originalText: string;
+	originalText: string;
 }
 
 export type ApexPath = AstPath<ApexNode>;
@@ -295,13 +310,13 @@ export type ApexPath = AstPath<ApexNode>;
 export type PrintFn = (path: AstPath) => Doc;
 
 export interface ApexPrinter extends Printer<ApexNode> {
-  print: (path: ApexPath, options: ApexPrinterOptions, print: PrintFn) => Doc;
+	print: (path: ApexPath, options: ApexPrinterOptions, print: PrintFn) => Doc;
 }
 
 export interface ApexPlugin extends Plugin<ApexNode> {
-  printers: {
-    'apex-ast': ApexPrinter;
-  };
+	printers: {
+		apex: ApexPrinter;
+	};
 }
 ```
 
@@ -316,44 +331,45 @@ import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
  * Check if node is a List or Set literal initializer
  */
 export function isListInit(node: ApexNode): node is ApexListInitNode {
-  return (
-    node['@class'] === 'apex.jorje.data.ast.NewListInit' ||
-    node['@class'] === 'apex.jorje.data.ast.NewSetInit'
-  );
+	const nodeClass = node['@class'];
+	return (
+		nodeClass === 'apex.jorje.data.ast.NewObject$NewListLiteral' ||
+		nodeClass === 'apex.jorje.data.ast.NewObject$NewSetLiteral'
+	);
 }
 
 /**
  * Check if node is a Map literal initializer
  */
 export function isMapInit(node: ApexNode): node is ApexMapInitNode {
-  return node['@class'] === 'apex.jorje.data.ast.NewMapInit';
+	return node['@class'] === 'apex.jorje.data.ast.NewObject$NewMapLiteral';
 }
 
 /**
  * Check if a List/Set has multiple entries (2+)
  */
 export function hasMultipleListEntries(node: ApexListInitNode): boolean {
-  return Array.isArray(node.values) && node.values.length >= 2;
+	return Array.isArray(node.values) && node.values.length >= 2;
 }
 
 /**
  * Check if a Map has multiple entries (2+)
  */
 export function hasMultipleMapEntries(node: ApexMapInitNode): boolean {
-  return Array.isArray(node.pairs) && node.pairs.length >= 2;
+	return Array.isArray(node.pairs) && node.pairs.length >= 2;
 }
 
 /**
  * Determine if this node should be forced to multiline
  */
 export function shouldForceMultiline(node: ApexNode): boolean {
-  if (isListInit(node)) {
-    return hasMultipleListEntries(node);
-  }
-  if (isMapInit(node)) {
-    return hasMultipleMapEntries(node);
-  }
-  return false;
+	if (isListInit(node)) {
+		return hasMultipleListEntries(node);
+	}
+	if (isMapInit(node)) {
+		return hasMultipleMapEntries(node);
+	}
+	return false;
 }
 ```
 
@@ -364,16 +380,16 @@ Create `src/printer.ts`:
 ```typescript
 import { doc, type AstPath, type Doc, type ParserOptions } from 'prettier';
 import type {
-  ApexNode,
-  ApexListInitNode,
-  ApexMapInitNode,
-  PrintFn,
+	ApexNode,
+	ApexListInitNode,
+	ApexMapInitNode,
+	PrintFn,
 } from './types.js';
 import {
-  isListInit,
-  isMapInit,
-  hasMultipleListEntries,
-  hasMultipleMapEntries,
+	isListInit,
+	isMapInit,
+	hasMultipleListEntries,
+	hasMultipleMapEntries,
 } from './utils.js';
 
 const { group, indent, line, hardline, softline, join } = doc.builders;
@@ -382,104 +398,138 @@ const { group, indent, line, hardline, softline, join } = doc.builders;
  * Print a List or Set literal with forced multiline when 2+ entries
  */
 function printListInit(
-  path: AstPath<ApexListInitNode>,
-  options: ParserOptions,
-  print: PrintFn,
-  originalPrint: () => Doc
+	path: AstPath<ApexListInitNode>,
+	options: ParserOptions,
+	print: PrintFn,
+	originalPrint: () => Doc,
 ): Doc {
-  const node = path.node;
+	const node = path.node;
 
-  // Only force multiline for 2+ entries
-  if (!hasMultipleListEntries(node)) {
-    return originalPrint();
-  }
+	// Only force multiline for 2+ entries
+	if (!hasMultipleListEntries(node)) {
+		return originalPrint();
+	}
 
-  // Force multiline: each entry on its own line
-  const printedValues = path.map(print, 'values');
+	// The NewObject$NewListLiteral or NewObject$NewSetLiteral node contains both types and values
+	// We need to print: List<types> or Set<types> + multiline literal
+	// Print the types using path.map(print, 'types')
+	const printedTypes = path.map(print, 'types' as never) as unknown as Doc[];
+	const nodeClass = node['@class'];
+	const isSet = nodeClass === 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 
-  return group([
-    '{',
-    indent([hardline, join([',', hardline], printedValues)]),
-    hardline,
-    '}',
-  ]);
+	// List types are joined with '.', Set types are joined with ', '
+	const typesDoc = isSet
+		? join([',', ' '], printedTypes)
+		: join('.', printedTypes);
+
+	// Print multiline literal
+	const printedValues = path.map(
+		print,
+		'values' as never,
+	) as unknown as Doc[];
+	const multilineLiteral = group([
+		'{',
+		indent([hardline, join([',', hardline], printedValues)]),
+		hardline,
+		'}',
+	]);
+
+	// Construct the full expression: List<types> or Set<types> + multiline literal
+	const typeName = isSet ? 'Set' : 'List';
+	return group([typeName + '<', typesDoc, '>', multilineLiteral]);
 }
 
 /**
  * Print a Map literal with forced multiline when 2+ entries
  */
 function printMapInit(
-  path: AstPath<ApexMapInitNode>,
-  options: ParserOptions,
-  print: PrintFn,
-  originalPrint: () => Doc
+	path: AstPath<ApexMapInitNode>,
+	options: ParserOptions,
+	print: PrintFn,
+	originalPrint: () => Doc,
 ): Doc {
-  const node = path.node;
+	const node = path.node;
 
-  // Only force multiline for 2+ entries
-  if (!hasMultipleMapEntries(node)) {
-    return originalPrint();
-  }
+	// Only force multiline for 2+ entries
+	if (!hasMultipleMapEntries(node)) {
+		return originalPrint();
+	}
 
-  // Force multiline: each key-value pair on its own line
-  const printedPairs = path.map((pairPath) => {
-    return [
-      pairPath.call(print, 'key'),
-      ' => ',
-      pairPath.call(print, 'value'),
-    ];
-  }, 'pairs');
+	// The NewObject$NewMapLiteral node contains both types and pairs
+	// We need to print: Map<types> + multiline literal
+	// Print the types using path.map(print, 'types')
+	const printedTypes = path.map(print, 'types' as never) as unknown as Doc[];
+	const typesDoc = join(', ', printedTypes); // Map types are joined with ', '
 
-  return group([
-    '{',
-    indent([hardline, join([',', hardline], printedPairs)]),
-    hardline,
-    '}',
-  ]);
+	// Force multiline: each key-value pair on its own line
+	const printedPairs = path.map((pairPath) => {
+		return [
+			pairPath.call(print, 'key' as never) as unknown as Doc,
+			' => ',
+			pairPath.call(print, 'value' as never) as unknown as Doc,
+		];
+	}, 'pairs' as never) as unknown as Doc[][];
+
+	const multilineLiteral = group([
+		'{',
+		indent([hardline, join([',', hardline], printedPairs)]),
+		hardline,
+		'}',
+	]);
+
+	// Construct the full expression: Map<types> + multiline literal
+	return group(['Map<', typesDoc, '>', multilineLiteral]);
 }
 
 /**
  * Create a wrapped printer that intercepts List/Map literals
  */
 export function createWrappedPrinter(originalPrinter: {
-  print: (path: AstPath<ApexNode>, options: ParserOptions, print: PrintFn) => Doc;
+	print: (
+		path: AstPath<ApexNode>,
+		options: ParserOptions,
+		print: PrintFn,
+	) => Doc;
 }) {
-  return {
-    ...originalPrinter,
-    print(
-      path: AstPath<ApexNode>,
-      options: ParserOptions,
-      print: PrintFn
-    ): Doc {
-      const node = path.node;
+	return {
+		...originalPrinter,
+		print(
+			path: AstPath<ApexNode>,
+			options: ParserOptions,
+			print: PrintFn,
+		): Doc {
+			const node = path.node;
 
-      // Create a thunk for the original print behavior
-      const originalPrint = () => originalPrinter.print(path, options, print);
+			// Create a thunk for the original print behavior
+			const originalPrint = () =>
+				originalPrinter.print(path, options, print);
 
-      // Intercept List/Set literals
-      if (isListInit(node)) {
-        return printListInit(
-          path as AstPath<ApexListInitNode>,
-          options,
-          print,
-          originalPrint
-        );
-      }
+			// Intercept List/Set literals directly
+			// The NewObject$NewListLiteral/NewSetLiteral node contains types and values
+			// We intercept here and construct the full expression (types + multiline literal)
+			if (isListInit(node)) {
+				return printListInit(
+					path as AstPath<ApexListInitNode>,
+					options,
+					print,
+					() => originalPrinter.print(path, options, print),
+				);
+			}
 
-      // Intercept Map literals
-      if (isMapInit(node)) {
-        return printMapInit(
-          path as AstPath<ApexMapInitNode>,
-          options,
-          print,
-          originalPrint
-        );
-      }
+			// Intercept Map literals
+			if (isMapInit(node)) {
+				return printMapInit(
+					path as AstPath<ApexMapInitNode>,
+					options,
+					print,
+					() => originalPrinter.print(path, options, print),
+				);
+			}
 
-      // All other nodes: use original printer
-      return originalPrint();
-    },
-  };
+			// All other nodes: use original printer
+			return originalPrinter.print(path, options, print);
+		},
+	};
 }
 ```
 
@@ -495,13 +545,13 @@ import { createWrappedPrinter } from './printer.js';
 import type { ApexNode } from './types.js';
 
 // Get the original apex printer
-const originalPrinter = apexPlugin.printers?.['apex-ast'];
+const originalPrinter = apexPlugin.printers?.['apex'];
 
 if (!originalPrinter) {
-  throw new Error(
-    'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. ' +
-      'The apex-ast printer was not found.'
-  );
+	throw new Error(
+		'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. ' +
+			'The apex printer was not found.',
+	);
 }
 
 // Create our wrapped printer
@@ -514,22 +564,22 @@ const wrappedPrinter = createWrappedPrinter(originalPrinter);
  * Lists and Maps with 2+ entries.
  */
 const plugin: Plugin<ApexNode> = {
-  // Re-export languages from apex plugin
-  languages: apexPlugin.languages,
+	// Re-export languages from apex plugin
+	languages: apexPlugin.languages,
 
-  // Re-export parsers from apex plugin
-  parsers: apexPlugin.parsers,
+	// Re-export parsers from apex plugin
+	parsers: apexPlugin.parsers,
 
-  // Provide our wrapped printer
-  printers: {
-    'apex-ast': wrappedPrinter,
-  },
+	// Provide our wrapped printer
+	printers: {
+		apex: wrappedPrinter,
+	},
 
-  // Re-export options from apex plugin (if any)
-  options: apexPlugin.options,
+	// Re-export options from apex plugin (if any)
+	options: apexPlugin.options,
 
-  // Re-export defaultOptions from apex plugin (if any)
-  defaultOptions: apexPlugin.defaultOptions,
+	// Re-export defaultOptions from apex plugin (if any)
+	defaultOptions: apexPlugin.defaultOptions,
 };
 
 export default plugin;
@@ -545,6 +595,8 @@ export const defaultOptions = plugin.defaultOptions;
 ---
 
 ## Phase 3: Test Suite
+
+### 3.1 Test Fixtures
 
 ### 3.1 Test Fixtures
 
@@ -625,6 +677,92 @@ public class MapMultilineTest {
     public void multiplePairs() {
         Map<String, Integer> counts = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3 };
     }
+}
+```
+
+Create `tests/__fixtures__/set-single/input.cls`:
+
+```apex
+public class SetSingleTest {
+    public void singleItem() {
+        Set<String> items = new Set<String>{ 'one' };
+    }
+}
+```
+
+Create `tests/__fixtures__/set-single/output.cls`:
+
+```apex
+public class SetSingleTest {
+  public void singleItem() {
+    Set<String> items = new Set<String>{ 'one' };
+  }
+}
+```
+
+Create `tests/__fixtures__/set-multiline/input.cls`:
+
+```apex
+public class SetMultilineTest {
+    public void multipleItems() {
+        Set<String> items = new Set<String>{ 'one', 'two', 'three' };
+        Set<Integer> numbers = new Set<Integer>{ 1, 2, 3, 4 };
+    }
+}
+```
+
+Create `tests/__fixtures__/set-multiline/output.cls`:
+
+```apex
+public class SetMultilineTest {
+  public void multipleItems() {
+    Set<String> items = new Set<String>{
+      'one',
+      'two',
+      'three'
+    };
+    Set<Integer> numbers = new Set<Integer>{
+      1,
+      2,
+      3,
+      4
+    };
+  }
+}
+```
+
+Create `tests/__fixtures__/nested/input.cls`:
+
+```apex
+public class NestedTest {
+    public void nestedStructures() {
+        // Map with List values (nested lists should be multiline)
+        Map<String, List<String> > mapWithLists = new Map<String, List<String> >{
+            'tags' => new List<String>{ 'reading', 'gaming' },
+            'categories' => new List<String>{ 'tech', 'books', 'games' }
+        };
+    }
+}
+```
+
+Create `tests/__fixtures__/nested/output.cls`:
+
+```apex
+public class NestedTest {
+  public void nestedStructures() {
+    // Map with List values (nested lists should be multiline)
+    Map<String, List<String>> mapWithLists = new Map<String, List<String>>{
+      'tags' => new List<String>{
+        'reading',
+        'gaming'
+      },
+      'categories' => new List<String>{
+        'tech',
+        'books',
+        'games'
+      }
+    };
+  }
 }
 ```
 
@@ -714,129 +852,202 @@ Create `tests/printer.test.ts`:
 ```typescript
 import { describe, it, expect } from 'vitest';
 import {
-  isListInit,
-  isMapInit,
-  hasMultipleListEntries,
-  hasMultipleMapEntries,
-  shouldForceMultiline,
+	isListInit,
+	isMapInit,
+	hasMultipleListEntries,
+	hasMultipleMapEntries,
+	shouldForceMultiline,
 } from '../src/utils.js';
 
 describe('utils', () => {
-  describe('isListInit', () => {
-    it('should identify NewListInit nodes', () => {
-      expect(isListInit({ '@class': 'apex.jorje.data.ast.NewListInit', values: [] })).toBe(true);
-    });
+	describe('isListInit', () => {
+		it('should identify NewListLiteral nodes', () => {
+			expect(
+				isListInit({
+					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [],
+				}),
+			).toBe(true);
+		});
 
-    it('should identify NewSetInit nodes', () => {
-      expect(isListInit({ '@class': 'apex.jorje.data.ast.NewSetInit', values: [] })).toBe(true);
-    });
+		it('should identify NewSetLiteral nodes', () => {
+			expect(
+				isListInit({
+					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					values: [],
+				}),
+			).toBe(true);
+		});
 
-    it('should reject other node types', () => {
-      expect(isListInit({ '@class': 'apex.jorje.data.ast.NewMapInit', pairs: [] })).toBe(false);
-    });
-  });
+		it('should reject other node types', () => {
+			expect(
+				isListInit({
+					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [],
+				}),
+			).toBe(false);
+		});
+	});
 
-  describe('isMapInit', () => {
-    it('should identify NewMapInit nodes', () => {
-      expect(isMapInit({ '@class': 'apex.jorje.data.ast.NewMapInit', pairs: [] })).toBe(true);
-    });
+	describe('isMapInit', () => {
+		it('should identify NewMapLiteral nodes', () => {
+			expect(
+				isMapInit({
+					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [],
+				}),
+			).toBe(true);
+		});
 
-    it('should reject other node types', () => {
-      expect(isMapInit({ '@class': 'apex.jorje.data.ast.NewListInit', values: [] })).toBe(false);
-    });
-  });
+		it('should reject other node types', () => {
+			expect(
+				isMapInit({
+					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [],
+				}),
+			).toBe(false);
+		});
+	});
 
-  describe('hasMultipleListEntries', () => {
-    it('should return false for empty list', () => {
-      expect(hasMultipleListEntries({ '@class': 'apex.jorje.data.ast.NewListInit', values: [] })).toBe(false);
-    });
+	describe('hasMultipleListEntries', () => {
+		it('should return false for empty list', () => {
+			expect(
+				hasMultipleListEntries({
+					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [],
+				}),
+			).toBe(false);
+		});
 
-    it('should return false for single item', () => {
-      expect(hasMultipleListEntries({
-        '@class': 'apex.jorje.data.ast.NewListInit',
-        values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
-      })).toBe(false);
-    });
+		it('should return false for single item', () => {
+			expect(
+				hasMultipleListEntries({
+					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
+				}),
+			).toBe(false);
+		});
 
-    it('should return true for 2+ items', () => {
-      expect(hasMultipleListEntries({
-        '@class': 'apex.jorje.data.ast.NewListInit',
-        values: [
-          { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-          { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-        ],
-      })).toBe(true);
-    });
-  });
+		it('should return true for 2+ items', () => {
+			expect(
+				hasMultipleListEntries({
+					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [
+						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+					],
+				}),
+			).toBe(true);
+		});
+	});
 
-  describe('hasMultipleMapEntries', () => {
-    it('should return false for empty map', () => {
-      expect(hasMultipleMapEntries({ '@class': 'apex.jorje.data.ast.NewMapInit', pairs: [] })).toBe(false);
-    });
+	describe('hasMultipleMapEntries', () => {
+		it('should return false for empty map', () => {
+			expect(
+				hasMultipleMapEntries({
+					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [],
+				}),
+			).toBe(false);
+		});
 
-    it('should return false for single pair', () => {
-      expect(hasMultipleMapEntries({
-        '@class': 'apex.jorje.data.ast.NewMapInit',
-        pairs: [{
-          '@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-          key: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-          value: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-        }],
-      })).toBe(false);
-    });
+		it('should return false for single pair', () => {
+			expect(
+				hasMultipleMapEntries({
+					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [
+						{
+							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							key: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+							value: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+						},
+					],
+				}),
+			).toBe(false);
+		});
 
-    it('should return true for 2+ pairs', () => {
-      expect(hasMultipleMapEntries({
-        '@class': 'apex.jorje.data.ast.NewMapInit',
-        pairs: [
-          {
-            '@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-            key: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-            value: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-          },
-          {
-            '@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-            key: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-            value: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-          },
-        ],
-      })).toBe(true);
-    });
-  });
+		it('should return true for 2+ pairs', () => {
+			expect(
+				hasMultipleMapEntries({
+					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [
+						{
+							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							key: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+							value: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+						},
+						{
+							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							key: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+							value: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+						},
+					],
+				}),
+			).toBe(true);
+		});
+	});
 
-  describe('shouldForceMultiline', () => {
-    it('should return true for list with multiple entries', () => {
-      expect(shouldForceMultiline({
-        '@class': 'apex.jorje.data.ast.NewListInit',
-        values: [
-          { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-          { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-        ],
-      })).toBe(true);
-    });
+	describe('shouldForceMultiline', () => {
+		it('should return true for list with multiple entries', () => {
+			expect(
+				shouldForceMultiline({
+					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [
+						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+					],
+				}),
+			).toBe(true);
+		});
 
-    it('should return true for map with multiple entries', () => {
-      expect(shouldForceMultiline({
-        '@class': 'apex.jorje.data.ast.NewMapInit',
-        pairs: [
-          {
-            '@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-            key: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-            value: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-          },
-          {
-            '@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-            key: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-            value: { '@class': 'apex.jorje.data.ast.LiteralExpr' },
-          },
-        ],
-      })).toBe(true);
-    });
+		it('should return true for map with multiple entries', () => {
+			expect(
+				shouldForceMultiline({
+					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [
+						{
+							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							key: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+							value: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+						},
+						{
+							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							key: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+							value: {
+								'@class': 'apex.jorje.data.ast.LiteralExpr',
+							},
+						},
+					],
+				}),
+			).toBe(true);
+		});
 
-    it('should return false for other nodes', () => {
-      expect(shouldForceMultiline({ '@class': 'apex.jorje.data.ast.MethodDecl' })).toBe(false);
-    });
-  });
+		it('should return false for other nodes', () => {
+			expect(
+				shouldForceMultiline({
+					'@class': 'apex.jorje.data.ast.MethodDecl',
+				}),
+			).toBe(false);
+		});
+	});
 });
 ```
 
@@ -857,80 +1068,110 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import plugin from '../src/index.js';
 
 async function formatApex(code: string): Promise<string> {
-  return prettier.format(code, {
-    parser: 'apex',
-    plugins: [plugin],
-    tabWidth: 2,
-  });
+	return prettier.format(code, {
+		parser: 'apex',
+		plugins: [plugin],
+		tabWidth: 2,
+	});
 }
 
 function loadFixture(name: string, file: 'input' | 'output'): string {
-  const fixturePath = path.join(__dirname, '__fixtures__', name, `${file}.cls`);
-  return fs.readFileSync(fixturePath, 'utf-8');
+	const fixturePath = path.join(
+		__dirname,
+		'__fixtures__',
+		name,
+		`${file}.cls`,
+	);
+	return fs.readFileSync(fixturePath, 'utf-8');
 }
 
 describe('prettier-plugin-apex-imo integration', () => {
-  describe('List formatting', () => {
-    it('should keep single-item lists inline', async () => {
-      const input = loadFixture('list-single', 'input');
-      const expected = loadFixture('list-single', 'output');
-      const result = await formatApex(input);
-      expect(result).toBe(expected);
-    });
+	describe('List formatting', () => {
+		it('should keep single-item lists inline', async () => {
+			const input = loadFixture('list-single', 'input');
+			const expected = loadFixture('list-single', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
 
-    it('should format multi-item lists as multiline', async () => {
-      const input = loadFixture('list-multiline', 'input');
-      const expected = loadFixture('list-multiline', 'output');
-      const result = await formatApex(input);
-      expect(result).toBe(expected);
-    });
-  });
+		it('should format multi-item lists as multiline', async () => {
+			const input = loadFixture('list-multiline', 'input');
+			const expected = loadFixture('list-multiline', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+	});
 
-  describe('Map formatting', () => {
-    it('should keep single-pair maps inline', async () => {
-      const input = loadFixture('map-single', 'input');
-      const expected = loadFixture('map-single', 'output');
-      const result = await formatApex(input);
-      expect(result).toBe(expected);
-    });
+	describe('Set formatting', () => {
+		it('should keep single-item sets inline', async () => {
+			const input = loadFixture('set-single', 'input');
+			const expected = loadFixture('set-single', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
 
-    it('should format multi-pair maps as multiline', async () => {
-      const input = loadFixture('map-multiline', 'input');
-      const expected = loadFixture('map-multiline', 'output');
-      const result = await formatApex(input);
-      expect(result).toBe(expected);
-    });
-  });
+		it('should format multi-item sets as multiline', async () => {
+			const input = loadFixture('set-multiline', 'input');
+			const expected = loadFixture('set-multiline', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+	});
 
-  describe('Mixed scenarios', () => {
-    it('should handle mixed list/map scenarios correctly', async () => {
-      const input = loadFixture('mixed', 'input');
-      const expected = loadFixture('mixed', 'output');
-      const result = await formatApex(input);
-      expect(result).toBe(expected);
-    });
-  });
+	describe('Map formatting', () => {
+		it('should keep single-pair maps inline', async () => {
+			const input = loadFixture('map-single', 'input');
+			const expected = loadFixture('map-single', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
 
-  describe('Edge cases', () => {
-    it('should handle empty lists', async () => {
-      const input = `public class Test { List<String> empty = new List<String>{}; }`;
-      const result = await formatApex(input);
-      expect(result).toContain('new List<String>{}');
-    });
+		it('should format multi-pair maps as multiline', async () => {
+			const input = loadFixture('map-multiline', 'input');
+			const expected = loadFixture('map-multiline', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+	});
 
-    it('should handle empty maps', async () => {
-      const input = `public class Test { Map<String,String> empty = new Map<String,String>{}; }`;
-      const result = await formatApex(input);
-      expect(result).toContain('new Map<String, String>{}');
-    });
+	describe('Nested structures', () => {
+		it('should handle Map with List values (nested lists)', async () => {
+			const input = loadFixture('nested', 'input');
+			const expected = loadFixture('nested', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+	});
 
-    it('should handle Set literals like List literals', async () => {
-      const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
-      const result = await formatApex(input);
-      expect(result).toContain("'a',");
-      expect(result).toContain("'b'");
-    });
-  });
+	describe('Mixed scenarios', () => {
+		it('should handle mixed list/map scenarios correctly', async () => {
+			const input = loadFixture('mixed', 'input');
+			const expected = loadFixture('mixed', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+	});
+
+	describe('Edge cases', () => {
+		it('should handle empty lists', async () => {
+			const input = `public class Test { List<String> empty = new List<String>{}; }`;
+			const result = await formatApex(input);
+			expect(result).toContain('new List<String>{}');
+		});
+
+		it('should handle empty maps', async () => {
+			const input = `public class Test { Map<String,String> empty = new Map<String,String>{}; }`;
+			const result = await formatApex(input);
+			expect(result).toContain('new Map<String, String>{}');
+		});
+
+		it('should handle Set literals like List literals', async () => {
+			const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
+			const result = await formatApex(input);
+			expect(result).toContain("'a',");
+			expect(result).toContain("'b'");
+		});
+	});
 });
 ```
 
@@ -940,7 +1181,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 ### 4.1 README.md
 
-```markdown
+````markdown
 # prettier-plugin-apex-imo
 
 [![npm version](https://img.shields.io/npm/v/prettier-plugin-apex-imo.svg)](https://www.npmjs.com/package/prettier-plugin-apex-imo)
@@ -949,7 +1190,9 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 > **IMO** = In My Opinion — because Prettier is opinionated, and so am I.
 
-An opinionated enhancement for [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) that enforces multiline formatting for Apex Lists and Maps with multiple entries.
+An opinionated enhancement for
+[prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) that
+enforces multiline formatting for Apex Lists and Maps with multiple entries.
 
 ## The Problem
 
@@ -962,6 +1205,7 @@ final String expectedJson = String.join(new List<String>{
   '}'
 }, '\n');
 ```
+````
 
 Gets reformatted to a single line, defeating the purpose of readable formatting.
 
@@ -978,6 +1222,12 @@ This is **non-configurable** behaviour. Once installed, it just works.
 ## Installation
 
 ```bash
+pnpm add -D prettier prettier-plugin-apex prettier-plugin-apex-imo
+```
+
+Or with npm:
+
+```bash
 npm install --save-dev prettier prettier-plugin-apex prettier-plugin-apex-imo
 ```
 
@@ -987,11 +1237,12 @@ Add the plugin to your Prettier configuration:
 
 ```json
 {
-  "plugins": ["prettier-plugin-apex-imo"]
+	"plugins": ["prettier-plugin-apex-imo"]
 }
 ```
 
-That's it! The plugin automatically includes `prettier-plugin-apex`, so you only need to specify this one.
+That's it! The plugin automatically includes `prettier-plugin-apex`, so you only
+need to specify this one.
 
 ### CLI
 
@@ -1038,17 +1289,25 @@ Map<String, Integer> singleMap = new Map<String, Integer>{ 'key' => 1 };
 
 ## Why "imo"?
 
-Prettier has a strict [option philosophy](https://prettier.io/docs/option-philosophy) that discourages adding new formatting options. While I respect this philosophy, I believe the current behaviour for multi-item Lists and Maps is suboptimal for code readability.
+Prettier has a strict
+[option philosophy](https://prettier.io/docs/option-philosophy) that discourages
+adding new formatting options. While I respect this philosophy, I believe the
+current behaviour for multi-item Lists and Maps is suboptimal for code
+readability.
 
-Rather than fork `prettier-plugin-apex` or maintain options, this plugin provides a simple, opinionated wrapper that enforces the behaviour I (and hopefully others) prefer.
+Rather than fork `prettier-plugin-apex` or maintain options, this plugin
+provides a simple, opinionated wrapper that enforces the behaviour I (and
+hopefully others) prefer.
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for
+details.
 
 ## Security
 
-For security issues, please email security@starch.uk. See [SECURITY.md](SECURITY.md) for details.
+For security issues, please email security@starch.uk. See
+[SECURITY.md](SECURITY.md) for details.
 
 ## License
 
@@ -1056,9 +1315,11 @@ MIT © Starch UK
 
 ## Acknowledgements
 
-- [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) by Dang Mai
+- [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) by
+  Dang Mai
 - [Prettier](https://prettier.io/) for the amazing formatting engine
-```
+
+````
 
 ### 4.2 SECURITY.md
 
@@ -1107,7 +1368,7 @@ When we receive a security bug report, we will:
 4. Release new versions and announce the fix
 
 We will credit reporters in our release notes unless they wish to remain anonymous.
-```
+````
 
 ### 4.3 LICENSE
 
@@ -1147,49 +1408,49 @@ Create `.github/workflows/ci.yml`:
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22]
+    build:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [20, 22]
 
-    steps:
-      - uses: actions/checkout@v4
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+            - name: Install dependencies
+              run: npm ci
 
-      - name: Type check
-        run: npm run typecheck
+            - name: Type check
+              run: pnpm run typecheck
 
-      - name: Lint
-        run: npm run lint
+            - name: Lint
+              run: pnpm run lint
 
-      - name: Build
-        run: npm run build
+            - name: Build
+              run: pnpm run build
 
-      - name: Test
-        run: npm run test:ci
+            - name: Test
+              run: pnpm run test:ci
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: matrix.node-version == 20
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
+            - name: Upload coverage
+              uses: codecov/codecov-action@v4
+              if: matrix.node-version == 20
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  files: ./coverage/lcov.info
+                  fail_ci_if_error: false
 ```
 
 ### 5.2 GitHub Actions Release
@@ -1200,45 +1461,50 @@ Create `.github/workflows/release.yml`:
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+    push:
+        tags:
+            - 'v*'
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
+    release:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
 
-    steps:
-      - uses: actions/checkout@v4
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
+            - name: Use Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: 'pnpm'
+                  registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
-        run: npm ci
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 9
 
-      - name: Build
-        run: npm run build
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
 
-      - name: Test
-        run: npm run test:ci
+            - name: Build
+              run: pnpm run build
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+            - name: Test
+              run: pnpm run test:ci
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          generate_release_notes: true
+            - name: Publish to npm
+              run: pnpm publish --provenance --access public
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v1
+              with:
+                  generate_release_notes: true
 ```
 
 ---
@@ -1280,39 +1546,73 @@ npm-debug.log*
 
 ```json
 {
-  "semi": true,
-  "singleQuote": true,
-  "trailingComma": "all",
-  "printWidth": 100,
-  "tabWidth": 2
+	"semi": true,
+	"singleQuote": true,
+	"trailingComma": "all",
+	"printWidth": 80,
+	"tabWidth": 4,
+	"useTabs": true
 }
 ```
 
-### 6.3 .eslintrc.json
+### 6.3 eslint.config.js (ESLint Flat Config)
 
-```json
-{
-  "root": true,
-  "parser": "@typescript-eslint/parser",
-  "parserOptions": {
-    "ecmaVersion": 2022,
-    "sourceType": "module"
-  },
-  "plugins": ["@typescript-eslint"],
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
-  ],
-  "rules": {
-    "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/explicit-function-return-type": "off",
-    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
-  },
-  "env": {
-    "node": true,
-    "es2022": true
-  }
-}
+Create `eslint.config.js`:
+
+```typescript
+import parser from '@typescript-eslint/parser';
+import plugin from '@typescript-eslint/eslint-plugin';
+
+export default [
+	{
+		files: ['src/**/*.ts'],
+		languageOptions: {
+			parser,
+			parserOptions: {
+				ecmaVersion: 2022,
+				sourceType: 'module',
+				project: './tsconfig.json',
+			},
+		},
+		plugins: {
+			'@typescript-eslint': plugin,
+		},
+		rules: {
+			...plugin.configs.recommended.rules,
+			'@typescript-eslint/no-explicit-any': 'warn',
+			'@typescript-eslint/explicit-function-return-type': 'off',
+			'@typescript-eslint/no-unused-vars': [
+				'error',
+				{ argsIgnorePattern: '^_' },
+			],
+		},
+	},
+	{
+		files: ['tests/**/*.ts'],
+		languageOptions: {
+			parser,
+			parserOptions: {
+				ecmaVersion: 2022,
+				sourceType: 'module',
+			},
+		},
+		plugins: {
+			'@typescript-eslint': plugin,
+		},
+		rules: {
+			...plugin.configs.recommended.rules,
+			'@typescript-eslint/no-explicit-any': 'warn',
+			'@typescript-eslint/explicit-function-return-type': 'off',
+			'@typescript-eslint/no-unused-vars': [
+				'error',
+				{ argsIgnorePattern: '^_' },
+			],
+		},
+	},
+	{
+		ignores: ['dist/**', 'node_modules/**'],
+	},
+];
 ```
 
 ### 6.4 CHANGELOG.md
@@ -1323,13 +1623,15 @@ npm-debug.log*
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ## [0.1.0] - YYYY-MM-DD
 
 ### Added
+
 - Initial release
 - Force multiline formatting for List literals with 2+ entries
 - Force multiline formatting for Set literals with 2+ entries
@@ -1343,46 +1645,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Key Technical Considerations
 
-1. **AST Node Types**: The exact `@class` values need to be verified against the actual `prettier-plugin-apex` AST. The values used in this plan are educated guesses based on the jorje parser naming conventions.
+1. **AST Node Types**: The exact `@class` values need to be verified against the
+   actual `prettier-plugin-apex` AST. The values used in this plan are educated
+   guesses based on the jorje parser naming conventions.
 
-2. **Printer Wrapping Strategy**: The approach of wrapping the original printer and selectively intercepting specific node types is the cleanest way to extend functionality without forking.
+2. **Printer Wrapping Strategy**: The approach of wrapping the original printer
+   and selectively intercepting specific node types is the cleanest way to
+   extend functionality without forking.
 
-3. **Doc Builders**: The `hardline` builder is used to force line breaks. This is different from `line` which allows Prettier to decide.
+3. **Doc Builders**: The `hardline` builder is used to force line breaks. This
+   is different from `line` which allows Prettier to decide.
 
-4. **Testing with Apex Parser**: Integration tests require the Apex parser to be available. If running on a platform without native executables, Java 11+ is required.
+4. **Testing with Apex Parser**: Integration tests require the Apex parser to be
+   available. If running on a platform without native executables, Java 11+ is
+   required.
 
 5. **Edge Cases to Consider**:
-   - Nested structures (Map containing Lists)
-   - Very long single-item values that might wrap
-   - Comments within List/Map literals
-   - Trailing commas
+    - Nested structures (Map containing Lists)
+    - Very long single-item values that might wrap
+    - Comments within List/Map literals
+    - Trailing commas
 
 ### Cursor Prompts for Each Phase
 
 **Phase 1:**
-> "Initialize a new TypeScript npm package for a Prettier plugin called prettier-plugin-apex-imo. Set up tsup for building, vitest for testing, and configure ESM + CJS dual exports."
+
+> "Initialize a new TypeScript npm package for a Prettier plugin called
+> prettier-plugin-apex-imo. Set up tsup for building, vitest for testing, and
+> configure ESM + CJS dual exports."
 
 **Phase 2:**
-> "Implement the core plugin logic that wraps prettier-plugin-apex and overrides the printer for List and Map literals to force multiline when there are 2+ entries. Use the Prettier doc builders."
+
+> "Implement the core plugin logic that wraps prettier-plugin-apex and overrides
+> the printer for List and Map literals to force multiline when there are 2+
+> entries. Use the Prettier doc builders."
 
 **Phase 3:**
-> "Create comprehensive tests including unit tests for utility functions and integration tests that use Prettier to format actual Apex code fixtures."
+
+> "Create comprehensive tests including unit tests for utility functions and
+> integration tests that use Prettier to format actual Apex code fixtures."
 
 **Phase 4:**
+
 > "Write the README, SECURITY.md, and LICENSE files for the package."
 
 **Phase 5:**
+
 > "Set up GitHub Actions CI/CD with test, build, and npm publish workflows."
 
 ---
 
 ## Appendix A: Discovering Exact AST Node Types
 
-The plan uses educated guesses for AST node class names. Before implementation, verify the exact node types using these techniques:
+The plan uses educated guesses for AST node class names. Before implementation,
+verify the exact node types using these techniques:
 
 ### A.1 Using the Playground
 
 Visit https://apex.dangmai.net and:
+
 1. Enter sample code with List/Map literals
 2. Check the "Show AST" option
 3. Examine the JSON output for `@class` values
@@ -1400,12 +1721,12 @@ console.log('Node type:', node['@class'], 'Keys:', Object.keys(node));
 
 Based on GitHub issues and source analysis:
 
-| Apex Construct | Likely `@class` Value |
-|----------------|----------------------|
-| List literal `new List<T>{ }` | `apex.jorje.data.ast.NewListInit` |
-| Set literal `new Set<T>{ }` | `apex.jorje.data.ast.NewSetInit` |
-| Map literal `new Map<K,V>{ }` | `apex.jorje.data.ast.NewMapInit` |
-| Map key-value pair | `apex.jorje.data.ast.MapLiteralKeyValue` |
+| Apex Construct                | Actual `@class` Value                          |
+| ----------------------------- | ---------------------------------------------- |
+| List literal `new List<T>{ }` | `apex.jorje.data.ast.NewObject$NewListLiteral` |
+| Set literal `new Set<T>{ }`   | `apex.jorje.data.ast.NewObject$NewSetLiteral`  |
+| Map literal `new Map<K,V>{ }` | `apex.jorje.data.ast.NewObject$NewMapLiteral`  |
+| Map key-value pair            | `apex.jorje.data.ast.MapLiteralKeyValue`       |
 
 ### A.4 Alternative Approach: Introspection Script
 
@@ -1424,9 +1745,9 @@ public class Test {
 `;
 
 async function inspect() {
-  // Access the parser directly
-  const ast = await apexPlugin.parsers.apex.parse(code, {});
-  console.log(JSON.stringify(ast, null, 2));
+	// Access the parser directly
+	const ast = await apexPlugin.parsers.apex.parse(code, {});
+	console.log(JSON.stringify(ast, null, 2));
 }
 
 inspect();
@@ -1438,39 +1759,47 @@ inspect();
 
 ### B.1 Plugin Not Loading
 
-Ensure the plugin is listed BEFORE prettier-plugin-apex in the plugins array, as Prettier uses the first matching printer:
+Ensure the plugin is listed BEFORE prettier-plugin-apex in the plugins array, as
+Prettier uses the first matching printer:
 
 ```json
 {
-  "plugins": ["prettier-plugin-apex-imo"]
+	"plugins": ["prettier-plugin-apex-imo"]
 }
 ```
 
-Since our plugin re-exports everything from prettier-plugin-apex, you only need to list ours.
+Since our plugin re-exports everything from prettier-plugin-apex, you only need
+to list ours.
 
 ### B.2 Printer Not Being Called
 
 If your printer modifications aren't taking effect:
-1. Verify the `astFormat` matches (`apex-ast`)
+
+1. Verify the printer key matches (`apex`, not `apex-ast`)
 2. Check that you're exporting `printers` correctly
 3. Add logging to confirm the print function is invoked
+4. Note: The AST node types are `NewObject$NewListLiteral`,
+   `NewObject$NewSetLiteral`, and `NewObject$NewMapLiteral` (not the simpler
+   `NewListInit`, etc.)
 
 ### B.3 Type Errors with prettier-plugin-apex
 
-The apex plugin may not have complete TypeScript definitions. Use `@ts-expect-error` or create a declarations file:
+The apex plugin may not have complete TypeScript definitions. Use
+`@ts-expect-error` or create a declarations file:
 
 ```typescript
 // src/apex-plugin.d.ts
 declare module 'prettier-plugin-apex' {
-  import type { Plugin } from 'prettier';
-  const plugin: Plugin;
-  export = plugin;
+	import type { Plugin } from 'prettier';
+	const plugin: Plugin;
+	export = plugin;
 }
 ```
 
 ### B.4 Test Failures Due to Apex Parser
 
 Integration tests require the Apex parser. Options:
+
 1. Use native executables (default on supported platforms)
 2. Install Java 11+ for JVM-based parsing
 3. Start the Apex server before running tests:
@@ -1487,11 +1816,14 @@ npx stop-apex-server
 
 If the core functionality works well, consider these additions:
 
-1. **Threshold Configuration**: Allow users to set the minimum count (default 2) that triggers multiline
-2. **Anonymous Apex Support**: Ensure the `apex-anonymous` parser works correctly
+1. **Threshold Configuration**: Allow users to set the minimum count (default 2)
+   that triggers multiline
+2. **Anonymous Apex Support**: Ensure the `apex-anonymous` parser works
+   correctly
 3. **SOQL/SOSL Lists**: Handle list literals in query contexts
 4. **VSCode Extension**: Package as a VSCode extension for easier adoption
-5. **Prettier 3.x Features**: Leverage `printPrettierIgnored()` for custom ignore handling
+5. **Prettier 3.x Features**: Leverage `printPrettierIgnored()` for custom
+   ignore handling
 
 ---
 
@@ -1504,4 +1836,7 @@ This plan provides a complete blueprint for creating `prettier-plugin-apex-imo`:
 - **Well-tested**: Unit and integration tests with coverage targets
 - **Production-ready**: CI/CD, security policy, proper documentation
 - **TypeScript**: Full type safety with dual ESM/CJS exports
+
+```
+
 ```

@@ -1,0 +1,74 @@
+{
+	"name": "prettier-plugin-apex-imo",
+	"version": "0.1.0",
+	"description": "Opinionated multiline formatting for Apex Lists and Maps - extends prettier-plugin-apex",
+	"keywords": [
+		"prettier",
+		"plugin",
+		"apex",
+		"salesforce",
+		"formatter",
+		"multiline",
+		"list",
+		"map"
+	],
+	"homepage": "https://github.com/starch-uk/prettier-plugin-apex-imo#readme",
+	"bugs": {
+		"url": "https://github.com/starch-uk/prettier-plugin-apex-imo/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/starch-uk/prettier-plugin-apex-imo.git"
+	},
+	"license": "MIT",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		}
+	},
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsup --watch",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"test:ci": "vitest run --coverage",
+		"lint": "eslint src tests",
+		"lint:fix": "eslint src tests --fix",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "pnpm run build",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"prepare": "husky"
+	},
+	"packageManager": "pnpm@9.0.0",
+	"peerDependencies": {
+		"prettier": "^3.0.0",
+		"prettier-plugin-apex": "^2.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^25.0.3",
+		"@typescript-eslint/eslint-plugin": "^8.51.0",
+		"@typescript-eslint/parser": "^8.51.0",
+		"@vitest/coverage-v8": "^4.0.16",
+		"eslint": "^9.39.2",
+		"husky": "^9.0.11",
+		"prettier": "^3.7.4",
+		"prettier-plugin-apex": "^2.2.6",
+		"tsup": "^8.5.1",
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.16"
+	},
+	"engines": {
+		"node": ">=20"
+	}
+}
