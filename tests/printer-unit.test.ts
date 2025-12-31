@@ -1,6 +1,33 @@
+/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types, @typescript-eslint/no-unsafe-type-assertion */
 import { describe, it, expect, vi } from 'vitest';
+import type { AstPath, ParserOptions, Doc } from 'prettier';
 import { createWrappedPrinter } from '../src/printer.js';
 import type { ApexNode } from '../src/types.js';
+
+const nodeClassKey = '@class';
+
+// Helper function to create type-safe mock path
+function createMockPath(node: Readonly<ApexNode>): AstPath<ApexNode> {
+	const mockPath = {
+		node,
+		map: vi.fn(() => []),
+		call: vi.fn(() => ''),
+	};
+	return mockPath as AstPath<ApexNode>;
+}
+
+// Helper function to create type-safe mock options
+function createMockOptions(): Readonly<ParserOptions> {
+	return {} as Readonly<ParserOptions>;
+}
+
+// Helper function to create type-safe mock print function
+function createMockPrint(): Readonly<
+	(path: Readonly<AstPath<ApexNode>>) => Doc
+> {
+	const mockPrint = vi.fn(() => '');
+	return mockPrint as (path: Readonly<AstPath<ApexNode>>) => Doc;
+}
 
 describe('printer', () => {
 	describe('createWrappedPrinter', () => {
@@ -22,16 +49,14 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.MethodDecl',
-				} as ApexNode,
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
+			} as ApexNode);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			expect(result).toBe('original output');
@@ -49,26 +74,23 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: [
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-					],
-					types: [],
-				} as ApexNode,
-				map: vi.fn(() => []),
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewListLiteral',
+				values: [
+					{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+				],
+				types: [],
+			} as ApexNode);
 
 			// Mock the path.map to return empty arrays for types and values
 			(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce([]);
 			(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce([]);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should not call original printer for multiline lists
@@ -85,26 +107,23 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
-					values: [
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-					],
-					types: [],
-				} as ApexNode,
-				map: vi.fn(() => []),
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+				values: [
+					{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+				],
+				types: [],
+			} as ApexNode);
 
 			// Mock the path.map to return empty arrays for types and values
 			(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce([]);
 			(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce([]);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should not call original printer for multiline sets
@@ -120,42 +139,41 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: [
-						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
-							},
-							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
-							},
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+				pairs: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.MapLiteralKeyValue',
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr',
 						},
-						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
-							},
-							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
-							},
+						value: {
+							[nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr',
 						},
-					],
-					types: [],
-				} as ApexNode,
-				map: vi.fn(() => []),
-			};
+					},
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.MapLiteralKeyValue',
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr',
+						},
+						value: {
+							[nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr',
+						},
+					},
+				],
+				types: [],
+			} as ApexNode);
 
 			// Mock the path.map to return empty arrays for types and pairs
 			(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce([]);
 			(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce([]);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should not call original printer for multiline maps
@@ -171,17 +189,15 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
-				} as ApexNode,
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewListLiteral',
+				values: [{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' }],
+			} as ApexNode);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should call original printer for single-item lists
@@ -196,27 +212,26 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: [
-						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
-							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
-							},
-							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
-							},
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+				pairs: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.MapLiteralKeyValue',
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr',
 						},
-					],
-				} as ApexNode,
-			};
+						value: {
+							[nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr',
+						},
+					},
+				],
+			} as ApexNode);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should call original printer for single-pair maps
@@ -236,7 +251,8 @@ describe('printer', () => {
 
 			expect(wrapped.embed).toBe(mockOriginalPrinter.embed);
 			expect(wrapped.preprocess).toBe(mockOriginalPrinter.preprocess);
-			expect((wrapped as { otherProp?: string }).otherProp).toBe('test');
+			const wrappedWithProps = wrapped as { otherProp?: string };
+			expect(wrappedWithProps.otherProp).toBe('test');
 		});
 
 		it('should pass through set nodes with single entry to original printer', () => {
@@ -246,17 +262,15 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
-					values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
-				} as ApexNode,
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+				values: [{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' }],
+			} as ApexNode);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should call original printer for single-item sets
@@ -271,17 +285,15 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: [],
-				} as ApexNode,
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewListLiteral',
+				values: [],
+			} as ApexNode);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should call original printer for empty lists
@@ -296,17 +308,15 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
-					values: [],
-				} as ApexNode,
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+				values: [],
+			} as ApexNode);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should call original printer for empty sets
@@ -321,17 +331,15 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = {
-				node: {
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: [],
-				} as ApexNode,
-			};
+			const mockPath = createMockPath({
+				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+				pairs: [],
+			} as ApexNode);
 
 			const result = wrapped.print(
-				mockPath as never,
-				{} as never,
-				vi.fn() as never,
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
 			);
 
 			// Should call original printer for empty maps

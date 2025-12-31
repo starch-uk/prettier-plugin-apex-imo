@@ -9,7 +9,7 @@
 An opinionated enhancement for
 [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) that
 enforces multiline formatting for Apex Lists, Sets, and Maps with multiple
-entries.
+entries, and formats code inside ApexDoc `{@code}` blocks.
 
 ## The Problem
 
@@ -36,6 +36,7 @@ This plugin wraps `prettier-plugin-apex` and modifies the printing behaviour:
 - **List literals** with 2+ entries → Always multiline
 - **Map literals** with 2+ entries → Always multiline
 - **Set literals** with 2+ entries → Always multiline
+- **ApexDoc `{@code}` blocks** → Code inside is formatted using Prettier
 
 This is **non-configurable** behaviour. Once installed, it just works.
 
@@ -136,6 +137,41 @@ List<String> single = new List<String>{ 'only' };
 Set<String> singleSet = new Set<String>{ 'only' };
 Map<String, Integer> singleMap = new Map<String, Integer>{ 'key' => 1 };
 ```
+
+### ApexDoc {@code} Block Formatting
+
+Code inside ApexDoc `{@code}` blocks is automatically formatted using Prettier:
+
+**Before:**
+
+```apex
+/**
+ * Example method.
+ * {@code List<String> items = new List<String>{'a','b','c'}; }
+ */
+```
+
+**After:**
+
+```apex
+/**
+ * Example method.
+ * {@code
+ *   List<String> items = new List<String>{
+ *     'a',
+ *     'b',
+ *     'c'
+ *   };
+ * }
+ */
+```
+
+The formatting:
+
+- Aligns with the opening bracket of `{@code`
+- Maintains the `*` vertical alignment of the comment block
+- Handles nested braces correctly
+- Preserves invalid blocks (unmatched brackets or invalid code) unchanged
 
 ## Requirements
 

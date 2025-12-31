@@ -19,6 +19,16 @@ You MUST update both:
 This ensures documentation stays in sync with the actual codebase and prevents confusion for contributors and users.
 
 Refer to documentation files in `docs/*.md`:
+- `docs/APEXDOC.md` - ApexDoc quick reference for AI agents
 - `docs/ESLINT.md` - ESLint reference and configuration
 - `docs/HUSKY9.md` - Husky v9 reference and setup
 - `docs/PNPM.md` - pnpm reference and usage
+- `docs/VITEST.md` - Vitest reference and configuration
+
+## External Code Inspection
+
+For reference implementation inspection, the following repositories can be checked out to environmental temporary folders:
+- **prettier**: https://github.com/prettier/prettier.git
+- **prettier-plugin-apex**: https://github.com/dangmai/prettier-plugin-apex.git
+
+These can be cloned to temporary directories for code inspection and reference when implementing features or debugging issues.

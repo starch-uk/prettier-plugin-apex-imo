@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { describe, it, expect } from 'vitest';
 import {
 	isListInit,
@@ -8,12 +9,15 @@ import {
 } from '../src/utils.js';
 import type { ApexNode } from '../src/types.js';
 
+const nodeClassKey = '@class';
+
 describe('utils', () => {
 	describe('isListInit', () => {
 		it('should identify NewListLiteral nodes', () => {
 			expect(
 				isListInit({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [],
 				}),
 			).toBe(true);
@@ -22,7 +26,8 @@ describe('utils', () => {
 		it('should identify NewSetLiteral nodes', () => {
 			expect(
 				isListInit({
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewSetLiteral',
 					values: [],
 				}),
 			).toBe(true);
@@ -31,7 +36,8 @@ describe('utils', () => {
 		it('should reject other node types', () => {
 			expect(
 				isListInit({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [],
 				}),
 			).toBe(false);
@@ -42,7 +48,8 @@ describe('utils', () => {
 		it('should identify NewMapLiteral nodes', () => {
 			expect(
 				isMapInit({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [],
 				}),
 			).toBe(true);
@@ -51,7 +58,8 @@ describe('utils', () => {
 		it('should reject other node types', () => {
 			expect(
 				isMapInit({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [],
 				}),
 			).toBe(false);
@@ -62,7 +70,8 @@ describe('utils', () => {
 		it('should return false for empty list', () => {
 			expect(
 				hasMultipleListEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [],
 				}),
 			).toBe(false);
@@ -71,8 +80,11 @@ describe('utils', () => {
 		it('should return false for single item', () => {
 			expect(
 				hasMultipleListEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					],
 				}),
 			).toBe(false);
 		});
@@ -80,10 +92,11 @@ describe('utils', () => {
 		it('should return true for 2+ items', () => {
 			expect(
 				hasMultipleListEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 					],
 				}),
 			).toBe(true);
@@ -92,29 +105,34 @@ describe('utils', () => {
 		it('should return true for set with 2+ items', () => {
 			expect(
 				hasMultipleListEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewSetLiteral',
 					values: [
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 					],
 				}),
 			).toBe(true);
 		});
 
 		it('should handle null/undefined values gracefully', () => {
+			const invalidValues: unknown = null;
 			expect(
 				hasMultipleListEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: null as unknown as ApexNode[],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: invalidValues as ApexNode[],
 				}),
 			).toBe(false);
 		});
 
 		it('should handle non-array values gracefully', () => {
+			const invalidValues: unknown = 'not an array';
 			expect(
 				hasMultipleListEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: 'not an array' as unknown as ApexNode[],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: invalidValues as ApexNode[],
 				}),
 			).toBe(false);
 		});
@@ -124,7 +142,8 @@ describe('utils', () => {
 		it('should return false for empty map', () => {
 			expect(
 				hasMultipleMapEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [],
 				}),
 			).toBe(false);
@@ -133,15 +152,19 @@ describe('utils', () => {
 		it('should return false for single pair', () => {
 			expect(
 				hasMultipleMapEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [
 						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							[nodeClassKey]:
+								'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
 					],
@@ -152,24 +175,31 @@ describe('utils', () => {
 		it('should return true for 2+ pairs', () => {
 			expect(
 				hasMultipleMapEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [
 						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							[nodeClassKey]:
+								'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
 						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							[nodeClassKey]:
+								'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
 					],
@@ -178,19 +208,23 @@ describe('utils', () => {
 		});
 
 		it('should handle null/undefined pairs gracefully', () => {
+			const invalidPairs: unknown = null;
 			expect(
 				hasMultipleMapEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: null as unknown as ApexNode[],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: invalidPairs as ApexNode[],
 				}),
 			).toBe(false);
 		});
 
 		it('should handle non-array pairs gracefully', () => {
+			const invalidPairs: unknown = 'not an array';
 			expect(
 				hasMultipleMapEntries({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: 'not an array' as unknown as ApexNode[],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: invalidPairs as ApexNode[],
 				}),
 			).toBe(false);
 		});
@@ -200,10 +234,11 @@ describe('utils', () => {
 		it('should return true for list with multiple entries', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 					],
 				}),
 			).toBe(true);
@@ -212,10 +247,11 @@ describe('utils', () => {
 		it('should return true for set with multiple entries', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewSetLiteral',
 					values: [
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 					],
 				}),
 			).toBe(true);
@@ -224,24 +260,31 @@ describe('utils', () => {
 		it('should return true for map with multiple entries', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [
 						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							[nodeClassKey]:
+								'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
 						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							[nodeClassKey]:
+								'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
 					],
@@ -252,8 +295,11 @@ describe('utils', () => {
 		it('should return false for list with single entry', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					],
 				}),
 			).toBe(false);
 		});
@@ -261,8 +307,11 @@ describe('utils', () => {
 		it('should return false for set with single entry', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
-					values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					values: [
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					],
 				}),
 			).toBe(false);
 		});
@@ -270,15 +319,19 @@ describe('utils', () => {
 		it('should return false for map with single entry', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [
 						{
-							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
+							[nodeClassKey]:
+								'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								'@class': 'apex.jorje.data.ast.LiteralExpr',
+								[nodeClassKey]:
+									'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
 					],
@@ -289,7 +342,8 @@ describe('utils', () => {
 		it('should return false for empty list', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [],
 				}),
 			).toBe(false);
@@ -298,7 +352,8 @@ describe('utils', () => {
 		it('should return false for empty set', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewSetLiteral',
 					values: [],
 				}),
 			).toBe(false);
@@ -307,7 +362,8 @@ describe('utils', () => {
 		it('should return false for empty map', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [],
 				}),
 			).toBe(false);
@@ -316,25 +372,29 @@ describe('utils', () => {
 		it('should return false for other nodes', () => {
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.MethodDecl',
+					[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
 				}),
 			).toBe(false);
 		});
 
 		it('should return false for null/undefined values', () => {
+			const invalidValues: unknown = null;
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: null as unknown as ApexNode[],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: invalidValues as ApexNode[],
 				}),
 			).toBe(false);
 		});
 
 		it('should return false for null/undefined pairs', () => {
+			const invalidPairs: unknown = null;
 			expect(
 				shouldForceMultiline({
-					'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: null as unknown as ApexNode[],
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: invalidPairs as ApexNode[],
 				}),
 			).toBe(false);
 		});

@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 // Import our plugin
 import plugin from '../src/index.js';
@@ -20,7 +20,7 @@ async function formatApex(code: string): Promise<string> {
 
 function loadFixture(name: string, file: 'input' | 'output'): string {
 	const fixturePath = path.join(
-		__dirname,
+		testDirectory,
 		'__fixtures__',
 		name,
 		`${file}.cls`,
@@ -46,19 +46,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 		it('should handle lists with various item counts', async () => {
 			// 2 items - should be multiline
-			const input2 = `public class Test { List<String> two = new List<String>{ 'a', 'b' }; }`;
+			const input2 = loadFixture('list-two-items', 'input');
+			const expected2 = loadFixture('list-two-items', 'output');
 			const result2 = await formatApex(input2);
-			expect(result2).toContain("'a',");
-			expect(result2).toContain("'b'");
-			expect(result2).toMatch(/\n\s+'a',/);
-			expect(result2).toMatch(/\n\s+'b'/);
+			expect(result2).toBe(expected2);
 
 			// 3+ items - should be multiline
-			const input3 = `public class Test { List<String> three = new List<String>{ 'a', 'b', 'c' }; }`;
+			const input3 = loadFixture('list-three-items', 'input');
+			const expected3 = loadFixture('list-three-items', 'output');
 			const result3 = await formatApex(input3);
-			expect(result3).toMatch(/\n\s+'a',/);
-			expect(result3).toMatch(/\n\s+'b',/);
-			expect(result3).toMatch(/\n\s+'c'/);
+			expect(result3).toBe(expected3);
 		});
 	});
 
@@ -79,61 +76,55 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 		it('should handle sets with various item counts', async () => {
 			// 2 items - should be multiline
-			const input2 = `public class Test { Set<String> two = new Set<String>{ 'a', 'b' }; }`;
+			const input2 = loadFixture('set-two-items', 'input');
+			const expected2 = loadFixture('set-two-items', 'output');
 			const result2 = await formatApex(input2);
-			expect(result2).toContain("'a',");
-			expect(result2).toContain("'b'");
-			expect(result2).toMatch(/\n\s+'a',/);
-			expect(result2).toMatch(/\n\s+'b'/);
+			expect(result2).toBe(expected2);
 
 			// 3+ items - should be multiline
-			const input3 = `public class Test { Set<Integer> three = new Set<Integer>{ 1, 2, 3 }; }`;
+			const input3 = loadFixture('set-three-items', 'input');
+			const expected3 = loadFixture('set-three-items', 'output');
 			const result3 = await formatApex(input3);
-			expect(result3).toMatch(/\n\s+1,/);
-			expect(result3).toMatch(/\n\s+2,/);
-			expect(result3).toMatch(/\n\s+3/);
+			expect(result3).toBe(expected3);
 		});
 
 		it('should format Set types correctly with type parameters', async () => {
-			const input = `public class Test { Set<String> tags = new Set<String>{ 'reading', 'coding' }; }`;
+			const input = loadFixture('set-type-parameters', 'input');
+			const expected = loadFixture('set-type-parameters', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain('Set<String>');
-			expect(result).toMatch(/\n\s+'reading',/);
-			expect(result).toMatch(/\n\s+'coding'/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format List with multiple entries using List type name', async () => {
-			const input = `public class Test { List<Integer> nums = new List<Integer>{ 1, 2, 3 }; }`;
+			const input = loadFixture('list-multiple-entries', 'input');
+			const expected = loadFixture('list-multiple-entries', 'output');
 			const result = await formatApex(input);
 			// Should use 'List' as type name, not 'Set'
-			expect(result).toContain('List<Integer>');
-			expect(result).not.toContain('Set<Integer>');
-			expect(result).toMatch(/List<Integer>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format Set with multiple entries using Set type name', async () => {
-			const input = `public class Test { Set<Integer> nums = new Set<Integer>{ 1, 2, 3 }; }`;
+			const input = loadFixture('set-multiple-entries', 'input');
+			const expected = loadFixture('set-multiple-entries', 'output');
 			const result = await formatApex(input);
 			// Should use 'Set' as type name, not 'List'
-			expect(result).toContain('Set<Integer>');
-			expect(result).not.toContain('List<Integer>');
-			expect(result).toMatch(/Set<Integer>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format Set correctly', async () => {
-			const input = `public class Test { Set<MyClass> items = new Set<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const input = loadFixture('set-generic-types', 'input');
+			const expected = loadFixture('set-generic-types', 'output');
 			const result = await formatApex(input);
 			// Should format as multiline
-			expect(result).toContain('Set<MyClass>');
-			expect(result).toMatch(/Set<MyClass>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format List correctly', async () => {
-			const input = `public class Test { List<MyClass> items = new List<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const input = loadFixture('list-generic-types', 'input');
+			const expected = loadFixture('list-generic-types', 'output');
 			const result = await formatApex(input);
 			// Should format as multiline
-			expect(result).toContain('List<MyClass>');
-			expect(result).toMatch(/List<MyClass>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 	});
 
@@ -154,17 +145,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 		it('should handle maps with various pair counts', async () => {
 			// 2 pairs - should be multiline
-			const input2 = `public class Test { Map<String, String> two = new Map<String, String>{ 'a' => '1', 'b' => '2' }; }`;
+			const input2 = loadFixture('map-two-pairs', 'input');
+			const expected2 = loadFixture('map-two-pairs', 'output');
 			const result2 = await formatApex(input2);
-			expect(result2).toMatch(/\n\s+'a' => '1',/);
-			expect(result2).toMatch(/\n\s+'b' => '2'/);
+			expect(result2).toBe(expected2);
 
 			// 3+ pairs - should be multiline
-			const input3 = `public class Test { Map<String, Integer> three = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3 }; }`;
+			const input3 = loadFixture('map-three-pairs', 'input');
+			const expected3 = loadFixture('map-three-pairs', 'output');
 			const result3 = await formatApex(input3);
-			expect(result3).toMatch(/\n\s+'a' => 1,/);
-			expect(result3).toMatch(/\n\s+'b' => 2,/);
-			expect(result3).toMatch(/\n\s+'c' => 3/);
+			expect(result3).toBe(expected3);
 		});
 	});
 
@@ -188,171 +178,170 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 	describe('Edge cases', () => {
 		it('should handle empty lists', async () => {
-			const input = `public class Test { List<String> empty = new List<String>{}; }`;
+			const input = loadFixture('list-empty', 'input');
+			const expected = loadFixture('list-empty', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain('new List<String>{}');
 			// Empty lists should stay on one line
-			expect(result).not.toMatch(/List<String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle empty sets', async () => {
-			const input = `public class Test { Set<String> empty = new Set<String>{}; }`;
+			const input = loadFixture('set-empty', 'input');
+			const expected = loadFixture('set-empty', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain('new Set<String>{}');
 			// Empty sets should stay on one line
-			expect(result).not.toMatch(/Set<String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle empty maps', async () => {
-			const input = `public class Test { Map<String,String> empty = new Map<String,String>{}; }`;
+			const input = loadFixture('map-empty', 'input');
+			const expected = loadFixture('map-empty', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain('new Map<String, String>{}');
 			// Empty maps should stay on one line
-			expect(result).not.toMatch(/Map<String, String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should keep single-item lists inline', async () => {
-			const input = `public class Test { List<String> single = new List<String>{ 'only' }; }`;
+			const input = loadFixture('list-single-item', 'input');
+			const expected = loadFixture('list-single-item', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain("new List<String>{ 'only' }");
 			// Single item should stay on one line
-			expect(result).not.toMatch(/List<String>\{\s*\n\s+'only'/);
+			expect(result).toBe(expected);
 		});
 
 		it('should keep single-item sets inline', async () => {
-			const input = `public class Test { Set<String> single = new Set<String>{ 'only' }; }`;
+			const input = loadFixture('set-single-item', 'input');
+			const expected = loadFixture('set-single-item', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain("new Set<String>{ 'only' }");
 			// Single item should stay on one line
-			expect(result).not.toMatch(/Set<String>\{\s*\n\s+'only'/);
+			expect(result).toBe(expected);
 		});
 
 		it('should keep single-pair maps inline', async () => {
-			const input = `public class Test { Map<String, String> single = new Map<String, String>{ 'key' => 'value' }; }`;
+			const input = loadFixture('map-single-pair', 'input');
+			const expected = loadFixture('map-single-pair', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain(
-				"new Map<String, String>{ 'key' => 'value' }",
-			);
 			// Single pair should stay on one line
-			expect(result).not.toMatch(/Map<String, String>\{\s*\n\s+'key'/);
+			expect(result).toBe(expected);
 		});
 	});
 
 	describe('Complex scenarios', () => {
 		it('should handle lists with different data types', async () => {
-			const input = `public class Test { List<Object> mixed = new List<Object>{ 1, 'two', true, null }; }`;
+			const input = loadFixture('list-mixed-types', 'input');
+			const expected = loadFixture('list-mixed-types', 'output');
 			const result = await formatApex(input);
-			expect(result).toMatch(/\n\s+1,/);
-			expect(result).toMatch(/\n\s+'two',/);
-			expect(result).toMatch(/\n\s+true,/);
-			expect(result).toMatch(/\n\s+null/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle maps with complex values', async () => {
-			const input = `public class Test { Map<String, Object> complex = new Map<String, Object>{ 'a' => 1, 'b' => 'two', 'c' => true }; }`;
+			const input = loadFixture('map-complex-values', 'input');
+			const expected = loadFixture('map-complex-values', 'output');
 			const result = await formatApex(input);
-			expect(result).toMatch(/\n\s+'a' => 1,/);
-			expect(result).toMatch(/\n\s+'b' => 'two',/);
-			expect(result).toMatch(/\n\s+'c' => true/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle nested lists within lists', async () => {
-			const input = `public class Test { List<List<String>> nested = new List<List<String>>{ new List<String>{ 'a', 'b' }, new List<String>{ 'c', 'd' } }; }`;
+			const input = loadFixture('list-nested', 'input');
+			const expected = loadFixture('list-nested', 'output');
 			const result = await formatApex(input);
 			// Outer list should be multiline
-			expect(result).toMatch(/List<List<String>>\{\s*\n/);
 			// Inner lists should also be multiline (2+ items)
-			expect(result).toMatch(/\n\s+new List<String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle lists with many items', async () => {
-			const input = `public class Test { List<String> many = new List<String>{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' }; }`;
+			const input = loadFixture('list-many-items', 'input');
+			const expected = loadFixture('list-many-items', 'output');
 			const result = await formatApex(input);
 			// Should be multiline
-			expect(result).toMatch(/List<String>\{\s*\n/);
 			// Should contain all items
-			expect(result).toContain("'a',");
-			expect(result).toContain("'h'");
+			expect(result).toBe(expected);
 		});
 
 		it('should handle maps with many pairs', async () => {
-			const input = `public class Test { Map<String, Integer> many = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3, 'd' => 4, 'e' => 5 }; }`;
+			const input = loadFixture('map-many-pairs', 'input');
+			const expected = loadFixture('map-many-pairs', 'output');
 			const result = await formatApex(input);
 			// Should be multiline
-			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
 			// Should contain all pairs
-			expect(result).toContain("'a' => 1,");
-			expect(result).toContain("'e' => 5");
+			expect(result).toBe(expected);
 		});
 
 		it('should handle Set with generic types', async () => {
-			const input = `public class Test { Set<MyClass> items = new Set<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const input = loadFixture('set-generic-types', 'input');
+			const expected = loadFixture('set-generic-types', 'output');
 			const result = await formatApex(input);
 			// Should be multiline for 2+ items
-			expect(result).toMatch(/Set<MyClass>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle List with generic types', async () => {
-			const input = `public class Test { List<MyClass> items = new List<MyClass>{ new MyClass(), new MyClass() }; }`;
+			const input = loadFixture('list-generic-types', 'input');
+			const expected = loadFixture('list-generic-types', 'output');
 			const result = await formatApex(input);
 			// Should be multiline for 2+ items
-			expect(result).toMatch(/List<MyClass>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle Map with complex key types', async () => {
-			const input = `public class Test { Map<MyClass, String> items = new Map<MyClass, String>{ new MyClass() => 'a', new MyClass() => 'b' }; }`;
+			const input = loadFixture('map-complex-keys', 'input');
+			const expected = loadFixture('map-complex-keys', 'output');
 			const result = await formatApex(input);
 			// Should be multiline for 2+ pairs
-			expect(result).toMatch(/Map<MyClass, String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should handle Map with type parameters', async () => {
-			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2 }; }`;
+			const input = loadFixture('map-type-parameters', 'input');
+			const expected = loadFixture('map-type-parameters', 'output');
 			const result = await formatApex(input);
 			// Map types should be joined with ', ' (comma space)
-			expect(result).toContain('Map<String, Integer>');
-			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 	});
 
 	describe('Real-world scenarios', () => {
 		it('should format method parameters with lists', async () => {
-			const input = `public class Test { public void method() { processItems(new List<String>{ 'a', 'b', 'c' }); } }`;
+			const input = loadFixture('method-params-lists', 'input');
+			const expected = loadFixture('method-params-lists', 'output');
 			const result = await formatApex(input);
-			expect(result).toMatch(/new List<String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format return statements with maps', async () => {
-			const input = `public class Test { public Map<String, Integer> getData() { return new Map<String, Integer>{ 'x' => 1, 'y' => 2 }; } }`;
+			const input = loadFixture('return-statements-maps', 'input');
+			const expected = loadFixture('return-statements-maps', 'output');
 			const result = await formatApex(input);
-			expect(result).toMatch(/new Map<String, Integer>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format variable assignments with sets', async () => {
-			const input = `public class Test { public void method() { Set<String> tags = new Set<String>{ 'tag1', 'tag2', 'tag3' }; } }`;
+			const input = loadFixture('variable-assignments-sets', 'input');
+			const expected = loadFixture('variable-assignments-sets', 'output');
 			const result = await formatApex(input);
-			expect(result).toMatch(/new Set<String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format empty list initialization', async () => {
-			const input = `public class Test { List<String> empty = new List<String>{}; }`;
+			const input = loadFixture('list-empty', 'input');
+			const expected = loadFixture('list-empty', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain('new List<String>{}');
-			expect(result).not.toMatch(/List<String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format empty set initialization', async () => {
-			const input = `public class Test { Set<String> empty = new Set<String>{}; }`;
+			const input = loadFixture('set-empty', 'input');
+			const expected = loadFixture('set-empty', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain('new Set<String>{}');
-			expect(result).not.toMatch(/Set<String>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 
 		it('should format empty map initialization', async () => {
-			const input = `public class Test { Map<String, Integer> empty = new Map<String, Integer>{}; }`;
+			const input = loadFixture('map-empty', 'input');
+			const expected = loadFixture('map-empty', 'output');
 			const result = await formatApex(input);
-			expect(result).toContain('new Map<String, Integer>{}');
-			expect(result).not.toMatch(/Map<String, Integer>\{\s*\n/);
+			expect(result).toBe(expected);
 		});
 	});
 
@@ -360,62 +349,145 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it('should format List with qualified type names using dot separator', async () => {
 			// Test with a qualified type name like MyNamespace.MyClass
 			// The types array would contain [MyNamespace, MyClass] which should be joined with '.'
-			const input = `public class Test { List<String> items = new List<String>{ 'a', 'b' }; }`;
+			const input = loadFixture('list-qualified-types', 'input');
+			const expected = loadFixture('list-qualified-types', 'output');
 			const result = await formatApex(input);
 			// Should format as multiline
-			expect(result).toMatch(/List<String>\{\s*\n/);
-			expect(result).toContain('List<String>');
+			expect(result).toBe(expected);
 		});
 
 		it('should format Set with qualified type names using comma-space separator', async () => {
 			// Test Set formatting - types should be joined with ', ' for Set
-			const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
+			const input = loadFixture('set-qualified-types', 'input');
+			const expected = loadFixture('set-qualified-types', 'output');
 			const result = await formatApex(input);
 			// Should format as multiline
-			expect(result).toMatch(/Set<String>\{\s*\n/);
-			expect(result).toContain('Set<String>');
+			expect(result).toBe(expected);
 		});
 
 		it('should format Map types with comma-space separator', async () => {
-			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2 }; }`;
+			const input = loadFixture('map-qualified-types', 'input');
+			const expected = loadFixture('map-qualified-types', 'output');
 			const result = await formatApex(input);
 			// Map types should be joined with ', '
-			expect(result).toContain('Map<String, Integer>');
+			expect(result).toBe(expected);
 		});
 	});
 
 	describe('Printer branch coverage', () => {
 		it('should use List type name and dot separator for List literals', async () => {
-			const input = `public class Test { List<String> items = new List<String>{ 'a', 'b' }; }`;
+			const input = loadFixture('list-type-name', 'input');
+			const expected = loadFixture('list-type-name', 'output');
 			const result = await formatApex(input);
 			// Verify it uses 'List' (not 'Set') and formats correctly
-			expect(result).toContain('List<String>');
-			expect(result).not.toContain('Set<String>');
-			expect(result).toMatch(
-				/List<String>\{\s*\n\s+'a',\s*\n\s+'b'\s*\n\s*\}/,
-			);
+			expect(result).toBe(expected);
 		});
 
 		it('should use Set type name and comma-space separator for Set literals', async () => {
-			const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
+			const input = loadFixture('set-type-name', 'input');
+			const expected = loadFixture('set-type-name', 'output');
 			const result = await formatApex(input);
 			// Verify it uses 'Set' (not 'List') and formats correctly
-			expect(result).toContain('Set<String>');
-			expect(result).not.toContain('List<String>');
-			expect(result).toMatch(
-				/Set<String>\{\s*\n\s+'a',\s*\n\s+'b'\s*\n\s*\}/,
-			);
+			expect(result).toBe(expected);
 		});
 
 		it('should format Map with multiple pairs using multiline format', async () => {
-			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3 }; }`;
+			const input = loadFixture('map-multiple-pairs', 'input');
+			const expected = loadFixture('map-multiple-pairs', 'output');
 			const result = await formatApex(input);
 			// Verify multiline format with proper key-value pairs
-			expect(result).toContain('Map<String, Integer>');
-			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
-			expect(result).toMatch(/\n\s+'a' => 1,/);
-			expect(result).toMatch(/\n\s+'b' => 2,/);
-			expect(result).toMatch(/\n\s+'c' => 3/);
+			expect(result).toBe(expected);
+		});
+	});
+
+	describe('ApexDoc {@code} block formatting', () => {
+		it('should format single-line {@code} blocks', async () => {
+			const input = loadFixture('apexdoc-single-line-code', 'input');
+			const expected = loadFixture('apexdoc-single-line-code', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should format multi-line {@code} blocks', async () => {
+			const input = loadFixture('apexdoc-multi-line-code', 'input');
+			const expected = loadFixture('apexdoc-multi-line-code', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should preserve invalid {@code} blocks with unmatched brackets', async () => {
+			const input = loadFixture('apexdoc-invalid-brackets', 'input');
+			const expected = loadFixture('apexdoc-invalid-brackets', 'output');
+			const result = await formatApex(input);
+			// Should preserve the original invalid block
+			expect(result).toBe(expected);
+		});
+
+		it('should preserve {@code} blocks with invalid Apex code', async () => {
+			const input = loadFixture('apexdoc-invalid-apex', 'input');
+			const expected = loadFixture('apexdoc-invalid-apex', 'output');
+			const result = await formatApex(input);
+			// Should preserve the original block if formatting fails
+			expect(result).toBe(expected);
+		});
+
+		it('should handle multiple {@code} blocks in one file', async () => {
+			const input = loadFixture('apexdoc-multiple-blocks', 'input');
+			const expected = loadFixture('apexdoc-multiple-blocks', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should handle nested braces in {@code} blocks', async () => {
+			const input = loadFixture('apexdoc-nested-braces', 'input');
+			const expected = loadFixture('apexdoc-nested-braces', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should maintain comment indentation alignment', async () => {
+			const input = loadFixture('apexdoc-comment-indentation', 'input');
+			const expected = loadFixture(
+				'apexdoc-comment-indentation',
+				'output',
+			);
+			const result = await formatApex(input);
+			// Check that the comment structure is preserved
+			expect(result).toBe(expected);
+		});
+
+		it('should handle empty {@code} blocks', async () => {
+			const input = loadFixture('apexdoc-empty-blocks', 'input');
+			const expected = loadFixture('apexdoc-empty-blocks', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should only process {@code} in ApexDoc comments', async () => {
+			const input = loadFixture('apexdoc-regular-comment', 'input');
+			const expected = loadFixture('apexdoc-regular-comment', 'output');
+			const result = await formatApex(input);
+			// Should not process {@code} in regular comments
+			expect(result).toBe(expected);
+		});
+
+		it('should handle {@code} blocks in inner class methods with odd indentation (3 spaces)', async () => {
+			const input = loadFixture(
+				'apexdoc-inner-class-odd-indent',
+				'input',
+			);
+			const expected = loadFixture(
+				'apexdoc-inner-class-odd-indent',
+				'output',
+			);
+			// Use tabWidth: 3 to preserve the 3-space indentation
+			const result = await prettier.format(input, {
+				parser: 'apex',
+				plugins: [plugin],
+				tabWidth: 3,
+			});
+			// Should correctly indent {@code} blocks when the inner class has 3 spaces of indentation
+			expect(result).toBe(expected);
 		});
 	});
 });
