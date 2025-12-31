@@ -54,103 +54,17 @@ function normalizeAnnotationOptions(
 	annotationName: string,
 	paramContent: string,
 ): string {
-	let result = paramContent;
-	let searchPos = 0;
-
-	// Find option names (identifiers followed by = or whitespace)
-	while (searchPos < result.length) {
-		// Skip whitespace and commas
-		while (searchPos < result.length && /[\s,]/.test(result[searchPos])) {
-			searchPos++;
-		}
-
-		if (searchPos >= result.length) {
-			break;
-		}
-
-		// Find the start of an option name (identifier character)
-		const optionStart = searchPos;
-
-		// Find the end of the option name (first non-identifier character)
-		let optionEnd = optionStart;
-		while (
-			optionEnd < result.length &&
-			/[a-zA-Z0-9_]/.test(result[optionEnd])
-		) {
-			optionEnd++;
-		}
-
-		if (optionEnd > optionStart) {
-			const optionName = result.substring(optionStart, optionEnd);
-			const normalizedOption = normalizeAnnotationOptionName(
+	// Use regex to find and replace option names
+	return paramContent.replace(
+		/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g,
+		(match, optionName: string) => {
+			const normalized = normalizeAnnotationOptionName(
 				annotationName,
 				optionName,
 			);
-
-			if (normalizedOption !== optionName) {
-				// Replace option name
-				result =
-					result.substring(0, optionStart) +
-					normalizedOption +
-					result.substring(optionEnd);
-				// Continue from after the normalized option name
-				searchPos = optionStart + normalizedOption.length;
-			} else {
-				// Skip to after the option name and its value
-				// Option value can be: =value, ='value', =true, =false, or just whitespace
-				searchPos = optionEnd;
-				// Skip whitespace
-				while (
-					searchPos < result.length &&
-					/\s/.test(result[searchPos])
-				) {
-					searchPos++;
-				}
-				// If there's an =, skip it and the value
-				if (searchPos < result.length && result[searchPos] === '=') {
-					searchPos++; // Skip =
-					// Skip whitespace after =
-					while (
-						searchPos < result.length &&
-						/\s/.test(result[searchPos])
-					) {
-						searchPos++;
-					}
-					// Skip the value (could be true, false, 'string', or identifier)
-					if (searchPos < result.length) {
-						if (result[searchPos] === "'") {
-							// String value - find closing quote
-							searchPos++;
-							while (
-								searchPos < result.length &&
-								result[searchPos] !== "'"
-							) {
-								if (result[searchPos] === '\\') {
-									searchPos++; // Skip escaped character
-								}
-								searchPos++;
-							}
-							if (searchPos < result.length) {
-								searchPos++; // Skip closing quote
-							}
-						} else {
-							// Boolean or identifier - find end (whitespace, comma, or end)
-							while (
-								searchPos < result.length &&
-								!/[\s,]/.test(result[searchPos])
-							) {
-								searchPos++;
-							}
-						}
-					}
-				}
-			}
-		} else {
-			searchPos++;
-		}
-	}
-
-	return result;
+			return normalized !== optionName ? `${normalized}=` : match;
+		},
+	);
 }
 
 /**
@@ -159,111 +73,25 @@ function normalizeAnnotationOptions(
  * This allows the parser to handle incorrectly cased annotation names and options
  */
 function normalizeAnnotationNamesInText(text: string): string {
-	let result = text;
-	let searchPos = 0;
-
-	// Find all @ annotations and normalize their names and options
-	while (searchPos < result.length) {
-		const atPos = result.indexOf('@', searchPos);
-		if (atPos === -1) {
-			break;
-		}
-
-		// Find the end of the annotation name (first non-identifier character)
-		let nameEnd = atPos + 1;
-		while (
-			nameEnd < result.length &&
-			/[a-zA-Z0-9_]/.test(result[nameEnd])
-		) {
-			nameEnd++;
-		}
-
-		// Extract annotation name
-		const annotationName = result.substring(atPos + 1, nameEnd);
-		if (annotationName.length > 0) {
-			// Normalize the annotation name
-			const normalizedName = normalizeAnnotationName(annotationName);
-			let annotationChanged = false;
-
-			if (normalizedName !== annotationName) {
-				// Replace with normalized name
-				result =
-					result.substring(0, atPos + 1) +
-					normalizedName +
-					result.substring(nameEnd);
-				annotationChanged = true;
-				// Update nameEnd to reflect the new length
-				nameEnd = atPos + 1 + normalizedName.length;
-			}
-
-			// Now check if there are parameters (content between parentheses)
-			// Skip whitespace after annotation name
-			let paramStart = nameEnd;
-			while (
-				paramStart < result.length &&
-				/\s/.test(result[paramStart])
-			) {
-				paramStart++;
-			}
-
-			// If we find an opening parenthesis, normalize options inside
-			if (paramStart < result.length && result[paramStart] === '(') {
-				// Find matching closing parenthesis
-				let depth = 1;
-				let paramEnd = paramStart + 1;
-				while (paramEnd < result.length && depth > 0) {
-					if (result[paramEnd] === '(') {
-						depth++;
-					} else if (result[paramEnd] === ')') {
-						depth--;
-					}
-					paramEnd++;
-				}
-
-				if (depth === 0) {
-					// Extract parameter content (without parentheses)
-					const paramContent = result.substring(
-						paramStart + 1,
-						paramEnd - 1,
-					);
-
-					// Normalize option names in the parameter content
-					// Options are in the format: optionName=value or optionName value
-					// We need to find option names (identifiers before = or whitespace)
-					let normalizedParams = normalizeAnnotationOptions(
-						normalizedName,
-						paramContent,
-					);
-
-					if (normalizedParams !== paramContent) {
-						// Replace parameter content
-						result =
-							result.substring(0, paramStart + 1) +
-							normalizedParams +
-							result.substring(paramEnd - 1);
-						annotationChanged = true;
-						// Continue searching from after the closing parenthesis
-						searchPos =
-							paramStart + 1 + normalizedParams.length + 1;
-					} else {
-						searchPos = paramEnd;
-					}
-				} else {
-					searchPos = nameEnd;
-				}
-			} else {
-				searchPos = nameEnd;
-			}
-
-			if (!annotationChanged) {
-				searchPos = nameEnd;
-			}
-		} else {
-			searchPos = atPos + 1;
-		}
-	}
-
-	return result;
+	return text
+		.replace(
+			/@([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/g,
+			(_match, name: string, params: string) => {
+				const normalizedName = normalizeAnnotationName(name);
+				const normalizedParams = normalizeAnnotationOptions(
+					normalizedName,
+					params,
+				);
+				return `@${normalizedName}(${normalizedParams})`;
+			},
+		)
+		.replace(
+			/@([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_(])/g,
+			(_match, name: string) => {
+				const normalizedName = normalizeAnnotationName(name);
+				return `@${normalizedName}`;
+			},
+		);
 }
 
 /**

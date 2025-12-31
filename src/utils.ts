@@ -256,23 +256,29 @@ function extractCodeFromBlock(
 /**
  * Calculate the indentation level for a line
  * Returns the number of spaces (tabs are converted based on tabWidth)
- * Manually calculates indentation by counting leading spaces and tabs
  */
 function getIndentLevel(
 	line: string,
 	tabWidth: number = prettierDefaultTabWidth,
 ): number {
-	let indent = 0;
-	for (const char of line) {
-		if (char === ' ') {
-			indent++;
-		} else if (char === '\t') {
-			indent += tabWidth;
-		} else {
-			break;
-		}
-	}
-	return indent;
+	const regex = /^[\t ]*/;
+	const execResult = regex.exec(line);
+	const match = execResult?.[0] ?? '';
+	return match.replace(/\t/g, ' '.repeat(tabWidth)).length;
+}
+
+/**
+ * Create indent string based on options
+ */
+function createIndent(
+	level: number,
+	tabWidth: number,
+	useTabs?: boolean | null,
+): string {
+	if (level <= 0) return '';
+	return useTabs === true
+		? '\t'.repeat(Math.floor(level / tabWidth))
+		: ' '.repeat(level);
 }
 
 /**
@@ -405,18 +411,16 @@ export async function formatCodeBlock(
 		});
 
 		// Extract the code from the wrapped context
-		// The formatted code will be: "public class Temp {\n  void method() {\n    <code>\n  }\n}\n"
-		// We need to extract just the <code> part
 		const lines = formatted.split('\n');
 		const codeLines: string[] = [];
-		let inMethod = false;
 		const { tabWidth, useTabs } = options;
 
-		// Find the method declaration line and calculate its indentation
 		let methodIndent = 0;
-		let methodBraceCount = 0; // Track nested braces to find the actual method closing brace
+		let methodBraceCount = 0;
 		let classIndent = 0;
 		let inClass = false;
+		let inMethod = false;
+
 		for (const line of lines) {
 			if (line.includes('public class Temp')) {
 				classIndent = getIndentLevel(line, tabWidth);
@@ -424,71 +428,40 @@ export async function formatCodeBlock(
 				continue;
 			}
 			if (isAnnotationCode && inClass && !inMethod) {
-				// For annotations, extract lines between class opening and method declaration
-				if (line.includes('void method()')) {
+				if (line.includes('void method()') || line.trim() === '}')
 					break;
-				}
-				// Skip class closing brace
-				if (line.trim() === '}') {
-					break;
-				}
 				const lineIndent = getIndentLevel(line, tabWidth);
 				const codeIndent = Math.max(
 					0,
 					lineIndent - classIndent - tabWidth,
 				);
-				const indentChar = useTabs === true ? '\t' : ' ';
-				const indent =
-					codeIndent > 0
-						? useTabs === true
-							? '\t'.repeat(Math.floor(codeIndent / tabWidth))
-							: indentChar.repeat(codeIndent)
-						: '';
-				const codeContent = line.trimStart();
-				const finalLine = indent + codeContent;
-				codeLines.push(finalLine);
+				codeLines.push(
+					createIndent(codeIndent, tabWidth, useTabs) +
+						line.trimStart(),
+				);
 				continue;
 			}
 			if (line.includes('void method() {')) {
-				// Calculate the indentation of the method declaration
 				methodIndent = getIndentLevel(line, tabWidth);
 				inMethod = true;
-				methodBraceCount = 1; // Opening brace of method
+				methodBraceCount = 1;
 				continue;
 			}
 			if (inMethod) {
-				// Count braces to find the actual method closing brace
 				const openBraces = (line.match(/\{/g) ?? []).length;
 				const closeBraces = (line.match(/\}/g) ?? []).length;
 				methodBraceCount += openBraces - closeBraces;
+				if (methodBraceCount === 0 && line.trim() === '}') break;
 
-				// If we've closed all braces and this line only has the closing brace (no code),
-				// this is the method's closing brace
-				if (methodBraceCount === 0 && line.trim() === '}') {
-					break;
-				}
-			}
-			if (inMethod) {
-				// Remove the method-level indentation to get the raw code
-				// The code inside the method will have methodIndent + tabWidth spaces
 				const lineIndent = getIndentLevel(line, tabWidth);
 				const codeIndent = Math.max(
 					0,
 					lineIndent - methodIndent - tabWidth,
 				);
-
-				// Reconstruct the line with only the code-level indentation
-				// This preserves the relative indentation of the formatted code
-				const indentChar = useTabs === true ? '\t' : ' ';
-				const indent =
-					codeIndent > 0
-						? useTabs === true
-							? '\t'.repeat(Math.floor(codeIndent / tabWidth))
-							: indentChar.repeat(codeIndent)
-						: '';
-				const codeContent = line.trimStart();
-				const finalLine = indent + codeContent;
-				codeLines.push(finalLine);
+				codeLines.push(
+					createIndent(codeIndent, tabWidth, useTabs) +
+						line.trimStart(),
+				);
 			}
 		}
 
@@ -523,43 +496,16 @@ export function applyCommentIndentation(
 		return '';
 	}
 
+	const commentPrefix =
+		createIndent(commentIndent, tabWidth, useTabs) + ' * ';
+
 	const indentedLines = lines.map((line) => {
 		if (line.trim() === '') {
-			// Empty lines should just have the comment prefix
-			const indent =
-				useTabs === true
-					? '\t'.repeat(Math.floor(commentIndent / tabWidth))
-					: ' '.repeat(commentIndent);
-			return indent + ' *';
+			return createIndent(commentIndent, tabWidth, useTabs) + ' *';
 		}
-
-		// Calculate the indent level of the code line (before trimming)
-		// This represents the relative indentation of the code inside the {@code} block
 		const codeIndentLevel = getIndentLevel(line, tabWidth);
-
-		// Formula: INDENT LEVEL OF COMMENT BLOCK + ' * ' + INDENT LEVEL OF CODE INSIDE {@code} BLOCK
-		// Build the base indent for the comment block (where * appears)
-		const commentBlockIndent =
-			useTabs === true
-				? '\t'.repeat(Math.floor(commentIndent / tabWidth))
-				: ' '.repeat(commentIndent);
-
-		// Add the comment prefix " * "
-		const commentPrefix = commentBlockIndent + ' * ';
-
-		// Add the code's indent level (the relative indent of the code inside {@code} block)
-		const codeIndent =
-			codeIndentLevel > 0
-				? useTabs === true
-					? '\t'.repeat(Math.floor(codeIndentLevel / tabWidth))
-					: ' '.repeat(codeIndentLevel)
-				: '';
-
-		// Get the code content (without leading whitespace, since we've already accounted for it)
-		const codeContent = line.trimStart();
-
-		// Combine: comment indent + " * " + code indent + code content
-		return commentPrefix + codeIndent + codeContent;
+		const codeIndent = createIndent(codeIndentLevel, tabWidth, useTabs);
+		return commentPrefix + codeIndent + line.trimStart();
 	});
 
 	return indentedLines.join('\n');

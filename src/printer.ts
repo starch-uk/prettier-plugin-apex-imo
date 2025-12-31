@@ -46,28 +46,16 @@ function printListInit({
 		return originalPrint();
 	}
 
-	// The NewObject$NewListLiteral or NewObject$NewSetLiteral node contains both types and values
-	// We need to print: List<types> or Set<types> + multiline literal
-	// Print the types using path.map(print, 'types') - this is how the original printer does it
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	const printedTypesRaw = path.map(print, 'types' as never);
-	const printedTypes: Doc[] = Array.isArray(printedTypesRaw)
-		? printedTypesRaw
-		: [];
-	const nodeClass = node['@class'];
-	const isSet = nodeClass === 'apex.jorje.data.ast.NewObject$NewSetLiteral';
-
-	// List types are joined with '.', Set types are joined with ', '
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-type-assertion
+	const printedTypes = path.map(print, 'types' as never) as Doc[];
+	const isSet =
+		node['@class'] === 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 	const typesDoc = isSet
 		? join([',', ' '], printedTypes)
 		: join('.', printedTypes);
 
-	// Print multiline literal
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	const printedValuesRaw = path.map(print, 'values' as never);
-	const printedValues: Doc[] = Array.isArray(printedValuesRaw)
-		? printedValuesRaw
-		: [];
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-type-assertion
+	const printedValues = path.map(print, 'values' as never) as Doc[];
 	const multilineLiteral = group([
 		'{',
 		indent([hardline, join([',', hardline], printedValues)]),
@@ -75,9 +63,13 @@ function printListInit({
 		'}',
 	]);
 
-	// Construct the full expression: List<types> or Set<types> + multiline literal
-	const typeName = isSet ? 'Set' : 'List';
-	return group([typeName + '<', typesDoc, '>', multilineLiteral]);
+	return group([
+		isSet ? 'Set' : 'List',
+		'<',
+		typesDoc,
+		'>',
+		multilineLiteral,
+	]);
 }
 
 /**
@@ -106,31 +98,22 @@ function printMapInit({
 		return originalPrint();
 	}
 
-	// The NewObject$NewMapLiteral node contains both types and pairs
-	// We need to print: Map<types> + multiline literal
-	// Print the types using path.map(print, 'types')
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	const printedTypesRaw = path.map(print, 'types' as never);
-	const printedTypes: Doc[] = Array.isArray(printedTypesRaw)
-		? printedTypesRaw
-		: [];
-	const typesDoc = join(', ', printedTypes); // Map types are joined with ', '
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-type-assertion
+	const printedTypes = path.map(print, 'types' as never) as Doc[];
+	const typesDoc = join(', ', printedTypes);
 
-	// Force multiline: each key-value pair on its own line
-	const printedPairsRaw = path.map(
-		(pairPath: Readonly<AstPath<ApexNode>>) => {
+	// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+	const printedPairs = path.map(
+		(pairPath: Readonly<AstPath<ApexNode>>) => [
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-			const keyDoc = pairPath.call(print, 'key' as never);
+			pairPath.call(print, 'key' as never),
+			' => ',
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-			const valueDoc = pairPath.call(print, 'value' as never);
-			return [keyDoc, ' => ', valueDoc];
-		},
+			pairPath.call(print, 'value' as never),
+		],
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 		'pairs' as never,
-	);
-	const printedPairs: Doc[][] = Array.isArray(printedPairsRaw)
-		? printedPairsRaw
-		: [];
+	) as Doc[][];
 
 	const multilineLiteral = group([
 		'{',
@@ -139,7 +122,6 @@ function printMapInit({
 		'}',
 	]);
 
-	// Construct the full expression: Map<types> + multiline literal
 	return group(['Map<', typesDoc, '>', multilineLiteral]);
 }
 
@@ -157,94 +139,64 @@ function printAnnotation({
 }): Doc {
 	const { node } = path;
 
-	// Normalize annotation name
-	const nameNode = node.name;
-	const originalName = nameNode.value;
+	const originalName = node.name.value;
 	const normalizedName = normalizeAnnotationName(originalName);
-
-	// If no parameters, just return normalized name
 	if (node.parameters.length === 0) {
 		return ['@', normalizedName];
 	}
 
-	// Format parameters
-	const formattedParams: Doc[] = [];
-	for (const param of node.parameters) {
-		const paramClass = param['@class'];
-
+	const formattedParams: Doc[] = node.parameters.map((param) => {
 		if (
-			paramClass ===
+			param['@class'] ===
 			'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue'
 		) {
 			const kvParam = param as ApexAnnotationKeyValue;
-			const keyName = kvParam.key.value;
-			const normalizedKey = normalizeAnnotationOptionName(
-				originalName,
-				keyName,
-			);
-			const valueStr = formatAnnotationValue(kvParam.value);
-			formattedParams.push([normalizedKey, '=', valueStr]);
-		} else {
-			// AnnotationString parameter
-			const strParam = param as unknown as { value: string };
-			// For SuppressWarnings, format as comma-separated string
-			formattedParams.push(`'${strParam.value}'`);
-		}
-	}
-
-	// Wrapping rules:
-	// - InvocableMethod and InvocableVariable: smart wrapping (force multiline if multiple params or long strings)
-	// - All other annotations: printWidth-based wrapping (Prettier's default group() behavior)
-	const lowerAnnotationName = normalizedName.toLowerCase();
-	const useSmartWrapping = ['invocablemethod', 'invocablevariable'].includes(
-		lowerAnnotationName,
-	);
-
-	// For smart wrapping annotations: force multiline if multiple params or long strings
-	if (useSmartWrapping) {
-		const shouldForceMultiline =
-			formattedParams.length > 1 ||
-			formattedParams.some((p) => typeof p === 'string' && p.length > 40);
-
-		if (shouldForceMultiline) {
-			// Force multiline format - space separated
-			// Add newline after ')' since annotations are modifiers and need newlines after them
 			return [
-				group([
-					'@',
-					normalizedName,
-					'(',
-					indent([hardline, join([' ', hardline], formattedParams)]),
-					hardline,
-					')',
-				]),
-				hardline,
+				normalizeAnnotationOptionName(originalName, kvParam.key.value),
+				'=',
+				formatAnnotationValue(kvParam.value),
 			];
 		}
+		return `'${(param as unknown as { value: string }).value}'`;
+	});
+
+	const isSmartWrap = ['invocablemethod', 'invocablevariable'].includes(
+		normalizedName.toLowerCase(),
+	);
+	const forceMultiline =
+		isSmartWrap &&
+		(formattedParams.length > 1 ||
+			formattedParams.some(
+				(p) => typeof p === 'string' && p.length > 40,
+			));
+
+	if (forceMultiline) {
+		return [
+			group([
+				'@',
+				normalizedName,
+				'(',
+				indent([hardline, join([' ', hardline], formattedParams)]),
+				hardline,
+				')',
+			]),
+			hardline,
+		];
 	}
 
-	// Single line format (will wrap based on printWidth if needed)
-	// For smart wrapping annotations, this is used when single line fits
-	// For other annotations, we still need to normalize names/options, but we can use
-	// the original printer's formatting structure. However, since normalization happens
-	// in preprocess, the AST already has normalized names. But in unit tests, we need
-	// to handle normalization here. So we'll use our custom formatting for all annotations
-	// to ensure normalization works in both cases.
-	// Modifiers are space-separated, not comma-separated
-	// Use group() to allow Prettier to wrap based on printWidth
-	// Structure allows breaking after '(' when content is too long
-	// Add hardline after ')' since annotations are modifiers and need newlines after them
-	const annotationDoc = group([
-		'@',
-		normalizedName,
+	return [
 		group([
-			'(',
-			indent([softline, join([' ', softline], formattedParams)]),
-			softline,
-			')',
+			'@',
+			normalizedName,
+			group([
+				'(',
+				indent([softline, join([' ', softline], formattedParams)]),
+				softline,
+				')',
+			]),
 		]),
-	]);
-	return [annotationDoc, hardline];
+		hardline,
+	];
 }
 
 /**
