@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers */
 import * as prettier from 'prettier';
 import * as apexPlugin from 'prettier-plugin-apex';
 import type { ParserOptions } from 'prettier';
@@ -14,20 +15,7 @@ import {
 } from './refs/apex-annotations.js';
 
 // Prettier's default tabWidth is 2 (as documented in prettier's doc.d.ts)
-// This matches prettier's default and avoids hardcoding magic numbers
 const prettierDefaultTabWidth = 2;
-
-// Constants for magic numbers
-const magicNumbers = {
-	zero: 0,
-	one: 1,
-	two: 2,
-	three: 3,
-	six: 6,
-	seven: 7,
-	thirtySix: 36,
-	eighty: 80,
-};
 
 /**
  * Check if node is a List or Set literal initializer
@@ -58,8 +46,7 @@ export function hasMultipleListEntries(
 	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
 	node: Readonly<ApexListInitNode>,
 ): boolean {
-	const minEntries = magicNumbers.two;
-	return Array.isArray(node.values) && node.values.length >= minEntries;
+	return Array.isArray(node.values) && node.values.length >= 2;
 }
 
 /**
@@ -69,21 +56,7 @@ export function hasMultipleMapEntries(
 	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
 	node: Readonly<ApexMapInitNode>,
 ): boolean {
-	const minEntries = magicNumbers.two;
-	return Array.isArray(node.pairs) && node.pairs.length >= minEntries;
-}
-
-/**
- * Determine if this node should be forced to multiline
- */
-export function shouldForceMultiline(node: Readonly<ApexNode>): boolean {
-	if (isListInit(node)) {
-		return hasMultipleListEntries(node);
-	}
-	if (isMapInit(node)) {
-		return hasMultipleMapEntries(node);
-	}
-	return false;
+	return Array.isArray(node.pairs) && node.pairs.length >= 2;
 }
 
 /**
@@ -138,13 +111,10 @@ export function formatAnnotationValue(
 	) {
 		return 'false';
 	}
-	// StringAnnotationValue is the only remaining case after True/False checks
+	// StringAnnotationValue is the only remaining case
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 	const stringValue = (value as unknown as { value: string }).value;
-	if (stringValue) {
-		return `'${stringValue}'`;
-	}
-	return "''";
+	return stringValue ? `'${stringValue}'` : "''";
 }
 
 /**
@@ -182,22 +152,18 @@ export interface ReadonlyCodeBlock {
  */
 function findApexDocComments(text: string): { start: number; end: number }[] {
 	const comments: { start: number; end: number }[] = [];
-	let i = magicNumbers.zero;
+	let i = 0;
 
 	while (i < text.length) {
 		// Look for /** (start of ApexDoc comment)
-		if (
-			text[i] === '/' &&
-			text[i + magicNumbers.one] === '*' &&
-			text[i + magicNumbers.two] === '*'
-		) {
+		if (text[i] === '/' && text[i + 1] === '*' && text[i + 2] === '*') {
 			const start = i;
-			i += magicNumbers.three; // Skip /**
+			i += 3; // Skip /**
 
 			// Find the closing */
-			while (i < text.length - magicNumbers.one) {
-				if (text[i] === '*' && text[i + magicNumbers.one] === '/') {
-					const end = i + magicNumbers.two; // Include */
+			while (i < text.length - 1) {
+				if (text[i] === '*' && text[i + 1] === '/') {
+					const end = i + 2; // Include */
 					comments.push({ start, end });
 					i = end;
 					break;
@@ -224,7 +190,7 @@ function extractCodeFromBlock(
 	// startPos is the position of {@code
 	// The { of {@code is at startPos
 	// Skip past {@code to find where the code starts
-	const codeStartAfterTag = startPos + magicNumbers.six; // {@code is 6 characters
+	const codeStartAfterTag = startPos + 6; // {@code is 6 characters
 
 	// Skip whitespace after {@code using prettier's utility
 	const skippedWhitespace = prettier.util.skipWhitespace(
@@ -243,12 +209,10 @@ function extractCodeFromBlock(
 	// Now find the closing } that matches the {@code tag
 	// We need to match braces because the code itself may contain braces
 	// The opening { is at startPos (the { of {@code)
-	const initialBraceCount = magicNumbers.one; // We've seen the { of {@code
-	let braceCount = initialBraceCount;
+	let braceCount = 1; // We've seen the { of {@code
 	let pos = codeStart;
-	const { zero } = magicNumbers;
 
-	while (pos < text.length && braceCount > zero) {
+	while (pos < text.length && braceCount > 0) {
 		if (text[pos] === '{') {
 			braceCount++;
 		} else if (text[pos] === '}') {
@@ -257,12 +221,12 @@ function extractCodeFromBlock(
 		pos++;
 	}
 
-	if (braceCount !== zero) {
+	if (braceCount !== 0) {
 		// Unmatched braces - preserve original
 		return null;
 	}
 
-	const codeEnd = pos - magicNumbers.one; // Position before the closing }
+	const codeEnd = pos - 1; // Position before the closing }
 	// Extract code and clean up comment prefixes if present
 	// Multi-line code blocks may have " * " prefixes that we need to remove
 	let code = text.substring(codeStart, codeEnd);
@@ -322,7 +286,7 @@ function getCommentIndent(text: string, commentStart: number): number {
 	if (pos < text.length) {
 		// Skip newline to get to the next line
 		const afterNewline = prettier.util.skipNewline(text, pos);
-		pos = afterNewline === false ? pos + magicNumbers.one : afterNewline;
+		pos = afterNewline === false ? pos + 1 : afterNewline;
 	}
 	let lineStart = commentStart;
 
@@ -331,16 +295,13 @@ function getCommentIndent(text: string, commentStart: number): number {
 		if (text[pos] === '*') {
 			// Found *, now find the start of this line
 			lineStart = pos;
-			while (
-				lineStart > magicNumbers.zero &&
-				text[lineStart - magicNumbers.one] !== '\n'
-			) {
+			while (lineStart > 0 && text[lineStart - 1] !== '\n') {
 				lineStart--;
 			}
 			const line = text.substring(lineStart, pos);
 			return getIndentLevel(line, prettierDefaultTabWidth);
 		}
-		if (text[pos] === '/' && text[pos - magicNumbers.one] === '*') {
+		if (text[pos] === '/' && text[pos - 1] === '*') {
 			// Reached end of comment
 			break;
 		}
@@ -349,10 +310,7 @@ function getCommentIndent(text: string, commentStart: number): number {
 
 	// Fallback: use the indent of the line containing /**
 	lineStart = commentStart;
-	while (
-		lineStart > magicNumbers.zero &&
-		text[lineStart - magicNumbers.one] !== '\n'
-	) {
+	while (lineStart > 0 && text[lineStart - 1] !== '\n') {
 		lineStart--;
 	}
 	const line = text.substring(lineStart, commentStart);
@@ -373,7 +331,7 @@ export function findApexDocCodeBlocks(text: string): CodeBlock[] {
 		// Search for {@code within this comment
 		while (searchPos < commentText.length) {
 			const codeTagPos = commentText.indexOf('{@code', searchPos);
-			if (codeTagPos === -magicNumbers.one) {
+			if (codeTagPos === -1) {
 				break;
 			}
 
@@ -382,14 +340,10 @@ export function findApexDocCodeBlocks(text: string): CodeBlock[] {
 
 			if (extraction) {
 				// Calculate line number and column
-				const beforeBlock = text.substring(
-					magicNumbers.zero,
-					absolutePos,
-				);
-				const lineNumber =
-					(beforeBlock.match(/\n/g) ?? []).length + magicNumbers.one;
+				const beforeBlock = text.substring(0, absolutePos);
+				const lineNumber = (beforeBlock.match(/\n/g) ?? []).length + 1;
 				const lastNewline = beforeBlock.lastIndexOf('\n');
-				const column = absolutePos - lastNewline - magicNumbers.one;
+				const column = absolutePos - lastNewline - 1;
 
 				// Get comment indent
 				const commentIndent = getCommentIndent(text, comment.start);
@@ -410,7 +364,7 @@ export function findApexDocCodeBlocks(text: string): CodeBlock[] {
 				searchPos = codeTagPos + extraction.endPos - codeTagPos;
 			} else {
 				// Invalid block, skip it
-				searchPos = codeTagPos + magicNumbers.six; // Skip {@code
+				searchPos = codeTagPos + 6; // Skip {@code
 			}
 		}
 	}
@@ -457,12 +411,11 @@ export async function formatCodeBlock(
 		const codeLines: string[] = [];
 		let inMethod = false;
 		const { tabWidth, useTabs } = options;
-		const { zero, one } = magicNumbers;
 
 		// Find the method declaration line and calculate its indentation
-		let methodIndent = zero;
-		let methodBraceCount = zero; // Track nested braces to find the actual method closing brace
-		let classIndent = zero;
+		let methodIndent = 0;
+		let methodBraceCount = 0; // Track nested braces to find the actual method closing brace
+		let classIndent = 0;
 		let inClass = false;
 		for (const line of lines) {
 			if (line.includes('public class Temp')) {
@@ -481,12 +434,12 @@ export async function formatCodeBlock(
 				}
 				const lineIndent = getIndentLevel(line, tabWidth);
 				const codeIndent = Math.max(
-					zero,
+					0,
 					lineIndent - classIndent - tabWidth,
 				);
 				const indentChar = useTabs === true ? '\t' : ' ';
 				const indent =
-					codeIndent > zero
+					codeIndent > 0
 						? useTabs === true
 							? '\t'.repeat(Math.floor(codeIndent / tabWidth))
 							: indentChar.repeat(codeIndent)
@@ -500,7 +453,7 @@ export async function formatCodeBlock(
 				// Calculate the indentation of the method declaration
 				methodIndent = getIndentLevel(line, tabWidth);
 				inMethod = true;
-				methodBraceCount = one; // Opening brace of method
+				methodBraceCount = 1; // Opening brace of method
 				continue;
 			}
 			if (inMethod) {
@@ -511,7 +464,7 @@ export async function formatCodeBlock(
 
 				// If we've closed all braces and this line only has the closing brace (no code),
 				// this is the method's closing brace
-				if (methodBraceCount === zero && line.trim() === '}') {
+				if (methodBraceCount === 0 && line.trim() === '}') {
 					break;
 				}
 			}
@@ -520,7 +473,7 @@ export async function formatCodeBlock(
 				// The code inside the method will have methodIndent + tabWidth spaces
 				const lineIndent = getIndentLevel(line, tabWidth);
 				const codeIndent = Math.max(
-					zero,
+					0,
 					lineIndent - methodIndent - tabWidth,
 				);
 
@@ -528,7 +481,7 @@ export async function formatCodeBlock(
 				// This preserves the relative indentation of the formatted code
 				const indentChar = useTabs === true ? '\t' : ' ';
 				const indent =
-					codeIndent > zero
+					codeIndent > 0
 						? useTabs === true
 							? '\t'.repeat(Math.floor(codeIndent / tabWidth))
 							: indentChar.repeat(codeIndent)
@@ -566,7 +519,7 @@ export function applyCommentIndentation(
 
 	// Split formatted code into lines
 	const lines = formattedCode.split('\n');
-	if (lines.length === magicNumbers.zero) {
+	if (lines.length === 0) {
 		return '';
 	}
 
@@ -596,7 +549,7 @@ export function applyCommentIndentation(
 
 		// Add the code's indent level (the relative indent of the code inside {@code} block)
 		const codeIndent =
-			codeIndentLevel > magicNumbers.zero
+			codeIndentLevel > 0
 				? useTabs === true
 					? '\t'.repeat(Math.floor(codeIndentLevel / tabWidth))
 					: ' '.repeat(codeIndentLevel)

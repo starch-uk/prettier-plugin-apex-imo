@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+/* eslint-disable @typescript-eslint/no-magic-numbers */
 import { doc, type AstPath, type Doc, type ParserOptions } from 'prettier';
 import type {
 	ApexNode,
@@ -18,13 +19,6 @@ import {
 	formatAnnotationValue,
 } from './utils.js';
 const { group, indent, hardline, softline, join } = doc.builders;
-
-// Constants for annotation formatting
-const ANNOTATION_MAGIC_NUMBERS = {
-	zero: 0,
-	one: 1,
-	forty: 40,
-} as const;
 
 /**
  * Options for printing List/Set literals
@@ -152,23 +146,15 @@ function printMapInit({
 /**
  * Options for printing annotations
  */
-interface PrintAnnotationOptions {
-	readonly path: Readonly<AstPath<ApexAnnotationNode>>;
-	readonly options: Readonly<ParserOptions>;
-	readonly print: (path: Readonly<AstPath<ApexNode>>) => Doc;
-	readonly originalPrint: () => Doc;
-}
-
 /**
  * Print an annotation with normalized names and formatted parameters
  */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 function printAnnotation({
 	path,
-	options: _options,
-	print: _print,
-	originalPrint: _originalPrint,
-}: PrintAnnotationOptions): Doc {
+}: {
+	readonly path: Readonly<AstPath<ApexAnnotationNode>>;
+}): Doc {
 	const { node } = path;
 
 	// Normalize annotation name
@@ -177,7 +163,7 @@ function printAnnotation({
 	const normalizedName = normalizeAnnotationName(originalName);
 
 	// If no parameters, just return normalized name
-	if (node.parameters.length === ANNOTATION_MAGIC_NUMBERS.zero) {
+	if (node.parameters.length === 0) {
 		return ['@', normalizedName];
 	}
 
@@ -217,12 +203,8 @@ function printAnnotation({
 	// For smart wrapping annotations: force multiline if multiple params or long strings
 	if (useSmartWrapping) {
 		const shouldForceMultiline =
-			formattedParams.length > ANNOTATION_MAGIC_NUMBERS.one ||
-			formattedParams.some(
-				(p) =>
-					typeof p === 'string' &&
-					p.length > ANNOTATION_MAGIC_NUMBERS.forty,
-			);
+			formattedParams.length > 1 ||
+			formattedParams.some((p) => typeof p === 'string' && p.length > 40);
 
 		if (shouldForceMultiline) {
 			// Force multiline format - space separated
@@ -296,15 +278,8 @@ export function createWrappedPrinter(
 
 		// Intercept annotations
 		if (isAnnotation(node)) {
-			const annotationPath = path as Readonly<
-				AstPath<ApexAnnotationNode>
-			>;
 			return printAnnotation({
-				path: annotationPath,
-				options,
-				print,
-				originalPrint: () =>
-					originalPrinter.print(path, options, print),
+				path: path as Readonly<AstPath<ApexAnnotationNode>>,
 			});
 		}
 

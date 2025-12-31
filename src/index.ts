@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+/* eslint-disable @typescript-eslint/no-magic-numbers */
 import type { AstPath, Doc, Plugin, ParserOptions } from 'prettier';
 import * as apexPlugin from 'prettier-plugin-apex';
 import { createWrappedPrinter } from './printer.js';
@@ -10,13 +11,6 @@ import {
 	normalizeAnnotationName,
 	normalizeAnnotationOptionName,
 } from './utils.js';
-
-// Constants for magic numbers
-const magicNumbers = {
-	zero: 0,
-	one: 1,
-	two: 2,
-} as const;
 
 // Get the original apex printer
 // Access printers directly from apexPlugin to avoid type assertion on the plugin itself
@@ -62,7 +56,6 @@ function normalizeAnnotationOptions(
 ): string {
 	let result = paramContent;
 	let searchPos = 0;
-	const zero = 0;
 
 	// Find option names (identifiers followed by = or whitespace)
 	while (searchPos < result.length) {
@@ -97,7 +90,7 @@ function normalizeAnnotationOptions(
 			if (normalizedOption !== optionName) {
 				// Replace option name
 				result =
-					result.substring(zero, optionStart) +
+					result.substring(0, optionStart) +
 					normalizedOption +
 					result.substring(optionEnd);
 				// Continue from after the normalized option name
@@ -170,17 +163,14 @@ function normalizeAnnotationNamesInText(text: string): string {
 	let searchPos = 0;
 
 	// Find all @ annotations and normalize their names and options
-	const notFound = -1;
-	const one = 1;
-	const zero = 0;
 	while (searchPos < result.length) {
 		const atPos = result.indexOf('@', searchPos);
-		if (atPos === notFound) {
+		if (atPos === -1) {
 			break;
 		}
 
 		// Find the end of the annotation name (first non-identifier character)
-		let nameEnd = atPos + one;
+		let nameEnd = atPos + 1;
 		while (
 			nameEnd < result.length &&
 			/[a-zA-Z0-9_]/.test(result[nameEnd])
@@ -189,8 +179,8 @@ function normalizeAnnotationNamesInText(text: string): string {
 		}
 
 		// Extract annotation name
-		const annotationName = result.substring(atPos + one, nameEnd);
-		if (annotationName.length > zero) {
+		const annotationName = result.substring(atPos + 1, nameEnd);
+		if (annotationName.length > 0) {
 			// Normalize the annotation name
 			const normalizedName = normalizeAnnotationName(annotationName);
 			let annotationChanged = false;
@@ -198,12 +188,12 @@ function normalizeAnnotationNamesInText(text: string): string {
 			if (normalizedName !== annotationName) {
 				// Replace with normalized name
 				result =
-					result.substring(zero, atPos + one) +
+					result.substring(0, atPos + 1) +
 					normalizedName +
 					result.substring(nameEnd);
 				annotationChanged = true;
 				// Update nameEnd to reflect the new length
-				nameEnd = atPos + one + normalizedName.length;
+				nameEnd = atPos + 1 + normalizedName.length;
 			}
 
 			// Now check if there are parameters (content between parentheses)
@@ -220,8 +210,8 @@ function normalizeAnnotationNamesInText(text: string): string {
 			if (paramStart < result.length && result[paramStart] === '(') {
 				// Find matching closing parenthesis
 				let depth = 1;
-				let paramEnd = paramStart + one;
-				while (paramEnd < result.length && depth > zero) {
+				let paramEnd = paramStart + 1;
+				while (paramEnd < result.length && depth > 0) {
 					if (result[paramEnd] === '(') {
 						depth++;
 					} else if (result[paramEnd] === ')') {
@@ -230,11 +220,11 @@ function normalizeAnnotationNamesInText(text: string): string {
 					paramEnd++;
 				}
 
-				if (depth === zero) {
+				if (depth === 0) {
 					// Extract parameter content (without parentheses)
 					const paramContent = result.substring(
-						paramStart + one,
-						paramEnd - one,
+						paramStart + 1,
+						paramEnd - 1,
 					);
 
 					// Normalize option names in the parameter content
@@ -248,13 +238,13 @@ function normalizeAnnotationNamesInText(text: string): string {
 					if (normalizedParams !== paramContent) {
 						// Replace parameter content
 						result =
-							result.substring(zero, paramStart + one) +
+							result.substring(0, paramStart + 1) +
 							normalizedParams +
-							result.substring(paramEnd - one);
+							result.substring(paramEnd - 1);
 						annotationChanged = true;
 						// Continue searching from after the closing parenthesis
 						searchPos =
-							paramStart + one + normalizedParams.length + one;
+							paramStart + 1 + normalizedParams.length + 1;
 					} else {
 						searchPos = paramEnd;
 					}
@@ -269,7 +259,7 @@ function normalizeAnnotationNamesInText(text: string): string {
 				searchPos = nameEnd;
 			}
 		} else {
-			searchPos = atPos + one;
+			searchPos = atPos + 1;
 		}
 	}
 
@@ -300,28 +290,21 @@ function createPreprocess(
 
 		const codeBlocks = findApexDocCodeBlocks(processedText);
 
-		if (codeBlocks.length === magicNumbers.zero) {
+		if (codeBlocks.length === 0) {
 			return processedText;
 		}
 
 		// Process blocks in reverse order to maintain positions
 		// Format all blocks asynchronously
 		// Note: processedText already has normalized annotations from above
-		for (
-			let i = codeBlocks.length - magicNumbers.one;
-			i >= magicNumbers.zero;
-			i--
-		) {
+		for (let i = codeBlocks.length - 1; i >= 0; i--) {
 			const block = codeBlocks[i];
 
 			// Handle empty code blocks - normalize to {@code}
 			if (!block.code || block.code.trim() === '') {
 				// For empty blocks, normalize to {@code} (no space)
 				// Replace the original block with normalized version
-				const beforeBlock = processedText.substring(
-					magicNumbers.zero,
-					block.startPos,
-				);
+				const beforeBlock = processedText.substring(0, block.startPos);
 				const afterBlock = processedText.substring(block.endPos);
 				const newBlock = '{@code}';
 				processedText = beforeBlock + newBlock + afterBlock;
@@ -335,57 +318,25 @@ function createPreprocess(
 				pluginInstance,
 			);
 
-			// If formatting failed (returned empty or threw), preserve original format
-			if (!formattedCode || formattedCode.trim() === '') {
-				// Preserve the original block format - don't reformat it
+			// Skip if formatting failed
+			if (
+				!formattedCode ||
+				formattedCode.trim() === '' ||
+				formattedCode.startsWith('__FORMAT_FAILED__')
+			) {
 				continue;
 			}
 
-			// Check if formatting actually failed (formatCodeBlock caught an error)
-			// formatCodeBlock returns "__FORMAT_FAILED__" + original code on error
-			const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
-			if (formattedCode.startsWith(FORMAT_FAILED_PREFIX)) {
-				// Formatting failed (invalid code), preserve original block format
-				continue;
-			}
-
-			// Check if formatting actually failed by comparing with original
-			// If formattedCode === block.code, it means formatting didn't change the code
-			// This could mean the code is invalid (formatCodeBlock caught an error and returned original)
-			// OR the code is already correctly formatted
-			// We need to distinguish: if the original block is already in the correct format
-			// (code on new line), we can skip. Otherwise, we should format it.
-			const originalBlockText = processedText.substring(
-				block.startPos,
-				block.endPos,
-			);
-			const isAlreadyFormatted = originalBlockText.includes('\n');
-
-			// If formattedCode === block.code, it means formatting didn't change the code
-			// This could be:
-			// 1. Invalid code (formatCodeBlock caught an error and returned original) - preserve original block
-			// 2. Valid code that's already correctly formatted - check if block structure is correct
+			// Skip if code unchanged and block already properly formatted
 			if (formattedCode === block.code) {
-				// If the block is already formatted (has newlines), it's valid and correctly formatted
-				if (isAlreadyFormatted) {
-					// Code is already correctly formatted with proper block structure, skip
+				const originalBlockText = processedText.substring(
+					block.startPos,
+					block.endPos,
+				);
+				if (originalBlockText.includes('\n')) {
 					continue;
 				}
-				// If the block is inline and code hasn't changed, we need to distinguish:
-				// - Invalid code: should preserve as-is
-				// - Valid code (e.g., normalized annotation): should format block structure
-				// Since formatCodeBlock returns the original code on error, we can't easily distinguish
-				// However, if the code was successfully parsed (no exception thrown), it's valid
-				// and we should format the block structure. The only way to know if it failed
-				// is if formatCodeBlock threw, but it catches and returns original.
-				// For now, we'll format the block structure for inline blocks with unchanged code,
-				// as this handles the annotation normalization case correctly.
-				// Invalid code that can't be parsed will be preserved by the catch in formatCodeBlock
-				// and we'll format the structure, but that's acceptable - invalid code in {@code}
-				// blocks should ideally be formatted with proper structure too.
 			}
-			// If formattedCode !== block.code OR formattedCode === block.code but block is inline,
-			// format the block structure to put code on new line
 
 			// Apply proper indentation
 			const indentedCode = applyCommentIndentation(
@@ -395,16 +346,10 @@ function createPreprocess(
 			);
 
 			// Replace the original code block
-			const beforeBlock = processedText.substring(
-				magicNumbers.zero,
-				block.startPos,
-			);
+			const beforeBlock = processedText.substring(0, block.startPos);
 			const afterBlock = processedText.substring(block.endPos);
 
 			// Reconstruct the block with formatted code
-			// Always put code on a new line after {@code and before }
-			// The block starts with {@code and ends with }
-			// We need to add newlines and proper indentation
 			const { tabWidth, useTabs } = options;
 			const closingIndent =
 				useTabs === true
@@ -441,73 +386,43 @@ function wrapParsers(
 	if (!parsers) {
 		return parsers;
 	}
-	// Type guard to check if parsers object has expected structure
-	const wrappedParsers: Record<string, ParserWithPreprocess | undefined> = {};
-	for (const key in parsers) {
-		if (Object.prototype.hasOwnProperty.call(parsers, key)) {
-			const parser = parsers[key];
-			// Create a new object by spreading to match ParserWithPreprocess shape
-			wrappedParsers[key] = { ...parser } as ParserWithPreprocess;
-		}
-	}
-
-	// Wrap each parser to normalize annotations and chain preprocess functions
+	const wrappedParsers: Record<string, ParserWithPreprocess> = {};
 	for (const parserName in parsers) {
-		if (Object.prototype.hasOwnProperty.call(parsers, parserName)) {
-			// Get the original parser from the original parsers object (not the wrapped copy)
-			const originalParserFromSource = parsers[parserName];
-			const wrappedParser = wrappedParsers[parserName];
-			// wrappedParser is always defined here because we only add keys from parsers
-			if (wrappedParser) {
-				const originalPreprocess = wrappedParser.preprocess;
-				const originalParse = originalParserFromSource.parse;
-				// Override both preprocess and parse to ensure normalization happens
-				// Prettier calls preprocess first, but we also normalize in parse as a fallback
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-				wrappedParsers[parserName] = {
-					...originalParserFromSource,
-					parse: async (
-						text: Readonly<string>,
-						options: Readonly<ParserOptions<ApexNode>>,
-					): Promise<ApexNode> => {
-						// Normalize annotation names before parsing (fallback in case preprocess wasn't called)
-						const normalizedText =
-							normalizeAnnotationNamesInText(text);
-						return await originalParse(normalizedText, options);
-						throw new Error(
-							'Original parser does not have parse method',
-						);
-					},
-					preprocess: async (
-						text: Readonly<string>,
-						options: Readonly<ParserOptions<ApexNode>>,
-					): Promise<string> => {
-						// First apply original preprocess if it exists (just trims, synchronous)
-						let processed = text;
-						if (originalPreprocess) {
-							const originalResult = originalPreprocess(
-								processed,
-								options,
-							);
-							processed =
-								originalResult instanceof Promise
-									? await originalResult
-									: originalResult;
-						}
+		if (!Object.prototype.hasOwnProperty.call(parsers, parserName))
+			continue;
+		const originalParser = parsers[parserName];
+		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/strict-boolean-expressions
+		if (!originalParser?.parse) continue;
 
-						// Then normalize annotation names (must happen before parser sees them)
-						// so incorrectly cased annotations are normalized
-						processed = normalizeAnnotationNamesInText(processed);
-						// Finally apply our preprocess (for ApexDoc code blocks, async)
-						processed = await ourPreprocess(processed, options);
-						return processed;
-					},
-				} as unknown as ParserWithPreprocess;
-			}
-		}
+		const originalPreprocess = originalParser.preprocess;
+		const originalParse = originalParser.parse;
+
+		wrappedParsers[parserName] = {
+			...originalParser,
+			parse: async (
+				text: Readonly<string>,
+				options: Readonly<ParserOptions<ApexNode>>,
+			): Promise<ApexNode> => {
+				return await originalParse(
+					normalizeAnnotationNamesInText(text),
+					options,
+				);
+			},
+			preprocess: async (
+				text: Readonly<string>,
+				options: Readonly<ParserOptions<ApexNode>>,
+			): Promise<string> => {
+				const result = originalPreprocess
+					? originalPreprocess(text, options)
+					: text;
+				const preprocessed =
+					result instanceof Promise ? await result : result;
+				const normalized = normalizeAnnotationNamesInText(preprocessed);
+				return await ourPreprocess(normalized, options);
+			},
+		} as ParserWithPreprocess;
 	}
 
-	// Return the wrapped parsers - the type matches Plugin<ApexNode>['parsers']
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 	return wrappedParsers as unknown as Plugin<ApexNode>['parsers'];
 }
@@ -518,30 +433,17 @@ function wrapParsers(
  * Extends prettier-plugin-apex to enforce multiline formatting for
  * Lists and Maps with 2+ entries, and formats code in ApexDoc {@code} blocks.
  */
-// Helper to safely access plugin properties
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
-function getPluginProperty<T>(
-	plugin: unknown,
-	property: string,
-): T | undefined {
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	return (plugin as Record<string, unknown>)[property] as T | undefined;
-}
 
 // Create the plugin first (without wrapped parsers) so we can pass it to wrapParsers
 // This allows formatCodeBlock to use our wrapped printer for List/Map formatting
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+const apexPluginTyped = apexPlugin as unknown as Plugin<ApexNode>;
 const plugin: Plugin<ApexNode> = {
 	// Re-export languages from apex plugin
-	languages: getPluginProperty<Plugin<ApexNode>['languages']>(
-		apexPlugin,
-		'languages',
-	),
+	languages: apexPluginTyped.languages,
 
 	// Temporarily use original parsers - will be updated below
-	parsers: getPluginProperty<Plugin<ApexNode>['parsers']>(
-		apexPlugin,
-		'parsers',
-	),
+	parsers: apexPluginTyped.parsers,
 
 	// Provide our wrapped printer
 	printers: {
@@ -549,26 +451,14 @@ const plugin: Plugin<ApexNode> = {
 	},
 
 	// Re-export options from apex plugin (if any)
-	options: getPluginProperty<Plugin<ApexNode>['options']>(
-		apexPlugin,
-		'options',
-	),
+	options: apexPluginTyped.options,
 
 	// Re-export defaultOptions from apex plugin (if any)
-	defaultOptions: getPluginProperty<Plugin<ApexNode>['defaultOptions']>(
-		apexPlugin,
-		'defaultOptions',
-	),
+	defaultOptions: apexPluginTyped.defaultOptions,
 };
 
 // Now wrap parsers with the actual plugin instance so formatCodeBlock can use our wrapped printer
-const wrappedParsers = wrapParsers(
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	(apexPlugin as { parsers?: unknown }).parsers as
-		| Plugin<ApexNode>['parsers']
-		| undefined,
-	plugin,
-);
+const wrappedParsers = wrapParsers(apexPluginTyped.parsers, plugin);
 
 // Update the plugin with wrapped parsers
 plugin.parsers = wrappedParsers;
