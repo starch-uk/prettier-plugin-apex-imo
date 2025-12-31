@@ -490,4 +490,96 @@ describe('prettier-plugin-apex-imo integration', () => {
 			expect(result).toBe(expected);
 		});
 	});
+
+	describe('Annotation formatting', () => {
+		it('should normalize annotation names to PascalCase', async () => {
+			const input = loadFixture('annotation-single-param', 'input');
+			const expected = loadFixture('annotation-single-param', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should normalize annotation option names to camelCase', async () => {
+			const input = loadFixture('annotation-multiple-params', 'input');
+			const expected = loadFixture(
+				'annotation-multiple-params',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should format InvocableMethod with multiple parameters on multiple lines', async () => {
+			const input = loadFixture(
+				'annotation-invocable-multiline',
+				'input',
+			);
+			const expected = loadFixture(
+				'annotation-invocable-multiline',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should format SuppressWarnings with comma-separated string', async () => {
+			const input = loadFixture('annotation-suppress-warnings', 'input');
+			const expected = loadFixture(
+				'annotation-suppress-warnings',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should format annotations in ApexDoc {@code} blocks', async () => {
+			const input = loadFixture('annotation-apexdoc-code', 'input');
+			const expected = loadFixture('annotation-apexdoc-code', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should handle alternative spacing in annotations', async () => {
+			const input = loadFixture(
+				'annotation-alternative-spacing',
+				'input',
+			);
+			const expected = loadFixture(
+				'annotation-alternative-spacing',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should use smart wrapping for InvocableMethod with multiple parameters', async () => {
+			const input = loadFixture('annotation-smart-wrapping', 'input');
+			const expected = loadFixture('annotation-smart-wrapping', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should use page-width wrapping for long annotations', async () => {
+			const input = loadFixture(
+				'annotation-page-width-wrapping',
+				'input',
+			);
+			const expected = loadFixture(
+				'annotation-page-width-wrapping',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should normalize incorrect casing in annotations and modifiers', async () => {
+			const input = loadFixture('annotation-incorrect-casing', 'input');
+			const expected = loadFixture(
+				'annotation-incorrect-casing',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+	});
 });

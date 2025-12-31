@@ -50,3 +50,60 @@ export interface ApexMapPair {
 	key: ApexNode;
 	value: ApexNode;
 }
+
+/**
+ * Annotation node - represents @AnnotationName or @AnnotationName(key=value)
+ */
+export interface ApexAnnotationNode {
+	[key: string]: unknown;
+	'@class': 'apex.jorje.data.ast.Modifier$Annotation';
+	name: ApexIdentifier;
+	parameters: ApexAnnotationParameter[];
+}
+
+/**
+ * Annotation parameter - can be key-value pair or string
+ */
+export interface ApexAnnotationParameter {
+	[key: string]: unknown;
+	'@class':
+		| 'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue'
+		| 'apex.jorje.data.ast.AnnotationParameter$AnnotationString';
+}
+
+/**
+ * Annotation key-value pair (e.g., cacheable=true)
+ */
+export interface ApexAnnotationKeyValue extends ApexAnnotationParameter {
+	'@class': 'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue';
+	key: ApexIdentifier;
+	value: ApexAnnotationValue;
+}
+
+/**
+ * Annotation string parameter (e.g., for SuppressWarnings)
+ */
+export interface ApexAnnotationString extends ApexAnnotationParameter {
+	'@class': 'apex.jorje.data.ast.AnnotationParameter$AnnotationString';
+	value: string;
+}
+
+/**
+ * Annotation value - boolean or string
+ */
+export interface ApexAnnotationValue {
+	[key: string]: unknown;
+	'@class':
+		| 'apex.jorje.data.ast.AnnotationValue$FalseAnnotationValue'
+		| 'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue'
+		| 'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue';
+}
+
+/**
+ * Identifier node (used in annotation names and keys)
+ */
+export interface ApexIdentifier {
+	[key: string]: unknown;
+	'@class': string;
+	value: string;
+}

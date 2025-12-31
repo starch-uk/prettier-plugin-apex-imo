@@ -1,7 +1,17 @@
 import * as prettier from 'prettier';
 import * as apexPlugin from 'prettier-plugin-apex';
 import type { ParserOptions } from 'prettier';
-import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
+import type {
+	ApexNode,
+	ApexListInitNode,
+	ApexMapInitNode,
+	ApexAnnotationNode,
+	ApexAnnotationValue,
+} from './types.js';
+import {
+	APEX_ANNOTATIONS,
+	APEX_ANNOTATION_OPTION_NAMES,
+} from './refs/apex-annotations.js';
 
 // Prettier's default tabWidth is 2 (as documented in prettier's doc.d.ts)
 // This matches prettier's default and avoids hardcoding magic numbers
@@ -74,6 +84,67 @@ export function shouldForceMultiline(node: Readonly<ApexNode>): boolean {
 		return hasMultipleMapEntries(node);
 	}
 	return false;
+}
+
+/**
+ * Check if node is an annotation
+ */
+export function isAnnotation(
+	node: Readonly<ApexNode>,
+): node is Readonly<ApexAnnotationNode> {
+	return node['@class'] === 'apex.jorje.data.ast.Modifier$Annotation';
+}
+
+/**
+ * Normalize annotation name to PascalCase
+ */
+export function normalizeAnnotationName(name: string): string {
+	const lowerName = name.toLowerCase();
+	return APEX_ANNOTATIONS[lowerName] ?? name; // Fallback to original if not found
+}
+
+/**
+ * Normalize annotation option name to camelCase
+ */
+export function normalizeAnnotationOptionName(
+	annotationName: string,
+	optionName: string,
+): string {
+	const lowerAnnotation = annotationName.toLowerCase();
+	const lowerOption = optionName.toLowerCase();
+	const optionMap = APEX_ANNOTATION_OPTION_NAMES[lowerAnnotation];
+	const normalizedOption = optionMap[lowerOption];
+	if (normalizedOption) {
+		return normalizedOption;
+	}
+	return optionName; // Fallback to original if not found
+}
+
+/**
+ * Format annotation value as string
+ */
+export function formatAnnotationValue(
+	value: Readonly<ApexAnnotationValue>,
+): string {
+	const valueClass = value['@class'];
+	if (
+		valueClass === 'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue'
+	) {
+		return 'true';
+	}
+	if (
+		valueClass ===
+		'apex.jorje.data.ast.AnnotationValue$FalseAnnotationValue'
+	) {
+		return 'false';
+	}
+	// StringAnnotationValue is the only remaining case after True/False checks
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+	const stringValue = (value as unknown as { value: string }).value;
+	if (stringValue) {
+		return `'${stringValue}'`;
+	}
+	return "''";
 }
 
 /**
@@ -360,7 +431,12 @@ export async function formatCodeBlock(
 	try {
 		// Wrap code in a class context so it can be parsed as valid Apex
 		// This allows us to format code snippets that aren't complete files
-		const wrappedCode = `public class Temp { void method() { ${code} } }`;
+		// If the code starts with @, it's likely an annotation, so wrap it on a method declaration
+		const trimmedCode = code.trim();
+		const isAnnotationCode = trimmedCode.startsWith('@');
+		const wrappedCode = isAnnotationCode
+			? `public class Temp { ${code} void method() {} }`
+			: `public class Temp { void method() { ${code} } }`;
 
 		// Format the code using Prettier with Apex parser
 		// Use our plugin if provided (which includes the wrapped printer),
@@ -386,7 +462,40 @@ export async function formatCodeBlock(
 		// Find the method declaration line and calculate its indentation
 		let methodIndent = zero;
 		let methodBraceCount = zero; // Track nested braces to find the actual method closing brace
+		let classIndent = zero;
+		let inClass = false;
 		for (const line of lines) {
+			if (line.includes('public class Temp')) {
+				classIndent = getIndentLevel(line, tabWidth);
+				inClass = true;
+				continue;
+			}
+			if (isAnnotationCode && inClass && !inMethod) {
+				// For annotations, extract lines between class opening and method declaration
+				if (line.includes('void method()')) {
+					break;
+				}
+				// Skip class closing brace
+				if (line.trim() === '}') {
+					break;
+				}
+				const lineIndent = getIndentLevel(line, tabWidth);
+				const codeIndent = Math.max(
+					zero,
+					lineIndent - classIndent - tabWidth,
+				);
+				const indentChar = useTabs === true ? '\t' : ' ';
+				const indent =
+					codeIndent > zero
+						? useTabs === true
+							? '\t'.repeat(Math.floor(codeIndent / tabWidth))
+							: indentChar.repeat(codeIndent)
+						: '';
+				const codeContent = line.trimStart();
+				const finalLine = indent + codeContent;
+				codeLines.push(finalLine);
+				continue;
+			}
 			if (line.includes('void method() {')) {
 				// Calculate the indentation of the method declaration
 				methodIndent = getIndentLevel(line, tabWidth);
@@ -433,7 +542,9 @@ export async function formatCodeBlock(
 		return codeLines.join('\n').trimEnd();
 	} catch {
 		// If formatting fails, preserve original code
-		return code;
+		// Return a special marker to indicate formatting failed
+		// We'll use a prefix that's unlikely to appear in real code
+		return `__FORMAT_FAILED__${code}`;
 	}
 }
 

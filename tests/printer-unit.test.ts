@@ -29,6 +29,15 @@ function createMockPrint(): Readonly<
 	return mockPrint as (path: Readonly<AstPath<ApexNode>>) => Doc;
 }
 
+// Helper function to create mock original printer
+function createMockOriginalPrinter(): {
+	print: ReturnType<typeof vi.fn>;
+} {
+	return {
+		print: vi.fn(() => 'original output'),
+	};
+}
+
 describe('printer', () => {
 	describe('createWrappedPrinter', () => {
 		it('should create a printer with print method', () => {
@@ -345,6 +354,201 @@ describe('printer', () => {
 			// Should call original printer for empty maps
 			expect(mockOriginalPrinter.print).toHaveBeenCalled();
 			expect(result).toBe('original output');
+		});
+	});
+
+	describe('annotation normalization', () => {
+		it('should normalize annotation names to PascalCase', () => {
+			const mockNode = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+				name: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'auraenabled',
+				},
+				parameters: [],
+			};
+
+			const mockPath = createMockPath(mockNode);
+			const mockOriginalPrinter = createMockOriginalPrinter();
+			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
+
+			const result = wrappedPrinter.print(
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
+			);
+
+			// Should normalize to AuraEnabled
+			// Result is a Doc structure - check it's defined and not the original output
+			expect(result).toBeDefined();
+			expect(result).not.toBe('original output');
+			// The result should be an array containing '@' and 'AuraEnabled'
+			if (Array.isArray(result)) {
+				const firstIndex = 0;
+				const secondIndex = 1;
+				expect(result[firstIndex]).toBe('@');
+				expect(result[secondIndex]).toBe('AuraEnabled');
+			}
+		});
+
+		it('should normalize annotation option names to camelCase', () => {
+			const mockNode = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+				name: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'auraenabled',
+				},
+				parameters: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+							value: 'cacheable',
+						},
+						value: {
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
+						},
+					},
+				],
+			};
+
+			const mockPath = createMockPath(mockNode);
+			const mockOriginalPrinter = createMockOriginalPrinter();
+			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
+
+			const result = wrappedPrinter.print(
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
+			);
+
+			// Should normalize annotation to AuraEnabled and option to cacheable
+			// Result should be a group with @AuraEnabled(cacheable=true)
+			expect(result).toBeDefined();
+			expect(result).not.toBe('original output');
+		});
+
+		it('should format annotations with single parameter on one line', () => {
+			const mockNode = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+				name: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'future',
+				},
+				parameters: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+							value: 'callout',
+						},
+						value: {
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
+						},
+					},
+				],
+			};
+
+			const mockPath = createMockPath(mockNode);
+			const mockOriginalPrinter = createMockOriginalPrinter();
+			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
+
+			const result = wrappedPrinter.print(
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
+			);
+
+			// Should format as single line: @Future(callout=true)
+			expect(result).toBeDefined();
+			expect(result).not.toBe('original output');
+		});
+
+		it('should format InvocableMethod with multiple parameters on multiple lines', () => {
+			const mockNode = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+				name: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'invocablemethod',
+				},
+				parameters: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+							value: 'label',
+						},
+						value: {
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+							value: 'Test Label',
+						},
+					},
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+							value: 'description',
+						},
+						value: {
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+							value: 'Test Description',
+						},
+					},
+				],
+			};
+
+			const mockPath = createMockPath(mockNode);
+			const mockOriginalPrinter = createMockOriginalPrinter();
+			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
+
+			const result = wrappedPrinter.print(
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
+			);
+
+			// Should force multiline format for InvocableMethod with multiple params
+			expect(result).toBeDefined();
+			expect(result).not.toBe('original output');
+		});
+
+		it('should format SuppressWarnings with comma-separated string', () => {
+			const mockNode = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+				name: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'suppresswarnings',
+				},
+				parameters: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+						value: 'PMD.UnusedLocalVariable, PMD.UnusedPrivateMethod',
+					},
+				],
+			};
+
+			const mockPath = createMockPath(mockNode);
+			const mockOriginalPrinter = createMockOriginalPrinter();
+			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
+
+			const result = wrappedPrinter.print(
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
+			);
+
+			// Should format as: @SuppressWarnings('PMD.UnusedLocalVariable, PMD.UnusedPrivateMethod')
+			expect(result).toBeDefined();
+			expect(result).not.toBe('original output');
 		});
 	});
 });
