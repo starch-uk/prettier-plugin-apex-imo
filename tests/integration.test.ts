@@ -582,4 +582,36 @@ describe('prettier-plugin-apex-imo integration', () => {
 			expect(result).toBe(expected);
 		});
 	});
+
+	describe('Standard object type normalization', () => {
+		it('should normalize standard object types to correct casing', async () => {
+			const input = loadFixture(
+				'standard-object-type-normalization',
+				'input',
+			);
+			const expected = loadFixture(
+				'standard-object-type-normalization',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should not convert variable names that match standard object names', async () => {
+			const input = loadFixture('variable-name-not-type', 'input');
+			const expected = loadFixture('variable-name-not-type', 'output');
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it('should normalize standard object types in ApexDoc {@code} blocks', async () => {
+			const input = loadFixture('apexdoc-standard-object-type', 'input');
+			const expected = loadFixture(
+				'apexdoc-standard-object-type',
+				'output',
+			);
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+	});
 });

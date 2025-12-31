@@ -13,6 +13,7 @@ import {
 	APEX_ANNOTATIONS,
 	APEX_ANNOTATION_OPTION_NAMES,
 } from './refs/apex-annotations.js';
+import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 
 const DEFAULT_TAB_WIDTH = 2;
 
@@ -68,6 +69,16 @@ export function normalizeAnnotationOptionName(
 		if (normalized) return normalized;
 	}
 	return optionName;
+}
+
+/**
+ * Normalize a standard object type name to its correct casing
+ * @param typeName - The type name to normalize
+ * @returns The normalized type name if it's a standard object, otherwise returns the original
+ */
+export function normalizeStandardObjectType(typeName: string): string {
+	if (!typeName || typeof typeName !== 'string') return typeName;
+	return STANDARD_OBJECTS[typeName.toLowerCase()] ?? typeName;
 }
 
 export function formatAnnotationValue(
