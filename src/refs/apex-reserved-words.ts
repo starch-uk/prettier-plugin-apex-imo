@@ -1,16 +1,13 @@
 /**
- * Complete list of Apex reserved keywords
- * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_reserved_words.htm
- * This file contains all reserved keywords that cannot be used as identifiers in Apex
- * Reserved keywords are case-sensitive and must be used exactly as defined
+ * @file Complete list of Apex reserved keywords. Reference: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_reserved_words.htm. This file contains all reserved keywords that cannot be used as identifiers in Apex. Reserved keywords are case-sensitive and must be used exactly as defined.
  */
 
 /**
  * Array of Apex reserved keywords (lowercase)
  * These keywords cannot be used as identifiers for variables, methods, classes, or interfaces
- * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_reserved_words.htm
+ * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_reserved_words.htm.
  */
-export const APEX_RESERVED_WORDS: readonly string[] = [
+const APEX_RESERVED_WORDS: readonly string[] = [
 	// Access modifiers and scope
 	'global',
 	'public',
@@ -72,18 +69,18 @@ export const APEX_RESERVED_WORDS: readonly string[] = [
 
 /**
  * Set of Apex reserved keywords for fast lookup
- * Derived from APEX_RESERVED_WORDS array for O(1) lookup performance
+ * Derived from APEX_RESERVED_WORDS array for O(1) lookup performance.
  */
-export const APEX_RESERVED_WORDS_SET: ReadonlySet<string> = new Set(
+const APEX_RESERVED_WORDS_SET: ReadonlySet<string> = new Set(
 	APEX_RESERVED_WORDS,
 );
 
 /**
  * Array of Apex reserved keywords that can appear before type declarations
  * These are access modifiers and modifiers that can precede type names in declarations
- * Examples: "public String name", "static final Integer count", "global webservice Account acc"
+ * Examples: "public String name", "static final Integer count", "global webservice Account acc".
  */
-export const DECLARATION_MODIFIERS: readonly string[] = [
+const DECLARATION_MODIFIERS: readonly string[] = [
 	'public',
 	'private',
 	'protected',
@@ -97,9 +94,9 @@ export const DECLARATION_MODIFIERS: readonly string[] = [
 /**
  * Array of Apex reserved keywords that are type-related and should be normalized to lowercase
  * These keywords appear in type declarations and should always be lowercase
- * Examples: "enum MyEnum {}", "class MyClass", "interface MyInterface", "void method()"
+ * Examples: "enum MyEnum {}", "class MyClass", "interface MyInterface", "void method()".
  */
-export const TYPE_RELATED_RESERVED_WORDS: readonly string[] = [
+const TYPE_RELATED_RESERVED_WORDS: readonly string[] = [
 	'enum',
 	'class',
 	'interface',
@@ -109,10 +106,23 @@ export const TYPE_RELATED_RESERVED_WORDS: readonly string[] = [
 ] as const;
 
 /**
- * Check if a word is an Apex reserved keyword
- * @param word - The word to check (case-insensitive)
- * @returns true if the word is a reserved keyword, false otherwise
+ * Check if a word is an Apex reserved keyword.
+ * @param word - The word to check (case-insensitive).
+ * @returns True if the word is a reserved keyword, false otherwise.
+ * @example
+ * ```typescript
+ * isReservedWord('public'); // Returns true
+ * isReservedWord('MyClass'); // Returns false
+ * ```
  */
-export function isReservedWord(word: string): boolean {
+function isReservedWord(word: string): boolean {
 	return APEX_RESERVED_WORDS_SET.has(word.toLowerCase());
 }
+
+export {
+	APEX_RESERVED_WORDS,
+	APEX_RESERVED_WORDS_SET,
+	DECLARATION_MODIFIERS,
+	TYPE_RELATED_RESERVED_WORDS,
+	isReservedWord,
+};

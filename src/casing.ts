@@ -1,0 +1,253 @@
+/**
+ * @file Functions for normalizing Apex type names, including standard object types and primitive types.
+ */
+
+/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+import type { AstPath, Doc } from 'prettier';
+import type { ApexNode, ApexIdentifier } from './types.js';
+import { STANDARD_OBJECTS } from './refs/standard-objects.js';
+import { getNodeClassOptional } from './utils.js';
+
+const normalizeStandardObjectType = (typeName: string): string =>
+	typeof typeName === 'string' && typeName
+		? (STANDARD_OBJECTS[typeName.toLowerCase()] ?? typeName)
+		: typeName;
+
+const IDENTIFIER_CLASS = 'apex.jorje.data.ast.Identifier';
+
+const isIdentifier = (
+	node: Readonly<ApexNode> | null | undefined,
+): node is Readonly<ApexIdentifier> => {
+	if (!node || typeof node !== 'object') return false;
+	const nodeClass = getNodeClassOptional(node);
+	if (
+		nodeClass === IDENTIFIER_CLASS ||
+		(nodeClass?.includes('Identifier') ?? false)
+	)
+		return true;
+	return 'value' in node && typeof node['value'] === 'string';
+};
+
+const TYPE_CONTEXT_KEYS = ['type', 'typeref', 'returntype', 'table'] as const;
+const STACK_PARENT_OFFSET = 2;
+
+const hasFromExprInStack = (stack: readonly unknown[]): boolean =>
+	stack.some((a) => {
+		if (typeof a !== 'object' || a === null) return false;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Need to assert unknown to ApexNode for type checking
+		const aClass = getNodeClassOptional(a as Readonly<ApexNode>);
+		return aClass?.includes('FromExpr') ?? false;
+	});
+
+const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
+	const { key, stack } = path;
+	if (key === 'types') return true;
+	const isStackArray = Array.isArray(stack);
+	if (typeof key === 'string') {
+		const lowerKey = key.toLowerCase();
+		if (
+			TYPE_CONTEXT_KEYS.includes(
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+				lowerKey as (typeof TYPE_CONTEXT_KEYS)[number],
+			) ||
+			lowerKey.startsWith('type')
+		)
+			return true;
+		if (lowerKey === 'field' && isStackArray && hasFromExprInStack(stack))
+			return true;
+	}
+	if (isStackArray && stack.length >= STACK_PARENT_OFFSET) {
+		const stackLength = stack.length;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+		const parent = stack[
+			stackLength - STACK_PARENT_OFFSET
+		] as Readonly<ApexNode>;
+		const parentClass = getNodeClassOptional(parent);
+		if (parentClass === undefined) return false;
+		const hasTypesArray =
+			typeof parent === 'object' &&
+			'types' in parent &&
+			Array.isArray(
+				(parent as Readonly<ApexNode & { types?: unknown }>).types,
+			);
+		if (
+			parentClass.includes('TypeRef') ||
+			(parentClass.includes('Type') &&
+				!parentClass.includes('Variable')) ||
+			parentClass.includes('FromExpr') ||
+			hasTypesArray
+		) {
+			return key !== 'name' || !parentClass.includes('Variable');
+		}
+	}
+	return false;
+};
+
+interface ShouldNormalizeTypeParams {
+	readonly forceTypeContext: boolean;
+	readonly key: number | string | undefined;
+	readonly parentKey: string | undefined;
+	readonly path: Readonly<AstPath<ApexNode>>;
+}
+
+/**
+ * Determines whether a type should be normalized based on context.
+ * @param params - Parameters for determining if a type should be normalized.
+ * @param params.forceTypeContext - Whether to force type context normalization.
+ * @param params.key - The key of the current node.
+ * @param params.parentKey - The key of the parent node.
+ * @param params.path - The AST path to the current node.
+ * @returns True if the type should be normalized, false otherwise.
+ * @example
+ * ```typescript
+ * shouldNormalizeType({
+ *   forceTypeContext: true,
+ *   key: 'type',
+ *   parentKey: 'types',
+ *   path: astPath
+ * }); // Returns true
+ * ```
+ */
+function shouldNormalizeType(
+	params: Readonly<ShouldNormalizeTypeParams>,
+): boolean {
+	const { forceTypeContext, parentKey, key, path } = params;
+	return (
+		forceTypeContext ||
+		parentKey === 'types' ||
+		key === 'names' ||
+		isInTypeContext(path)
+	);
+}
+
+const EMPTY_STRING_LENGTH = 0;
+
+/**
+ * Normalizes a single identifier node's value and prints it.
+ * @param node - The identifier node to normalize.
+ * @param originalPrint - The original print function.
+ * @param subPath - The AST path to the node.
+ * @returns The formatted document for the normalized identifier.
+ * @example
+ * ```typescript
+ * normalizeSingleIdentifier(node, originalPrint, subPath);
+ * ```
+ */
+function normalizeSingleIdentifier(
+	node: Readonly<ApexIdentifier>,
+	originalPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+	subPath: Readonly<AstPath<ApexNode>>,
+): Doc {
+	const nodeValue = node.value;
+	if (nodeValue.length === EMPTY_STRING_LENGTH) return originalPrint(subPath);
+	const normalizedValue = normalizeStandardObjectType(nodeValue);
+	if (normalizedValue === nodeValue) return originalPrint(subPath);
+	try {
+		(node as { value: string }).value = normalizedValue;
+		return originalPrint(subPath);
+	} finally {
+		(node as { value: string }).value = nodeValue;
+	}
+}
+
+/**
+ * Normalizes an array of identifier names and prints them.
+ * @param node - The node containing the names array to normalize.
+ * @param originalPrint - The original print function.
+ * @param subPath - The AST path to the node.
+ * @returns The formatted document for the normalized names array.
+ * @example
+ * ```typescript
+ * normalizeNamesArray(node, originalPrint, subPath);
+ * ```
+ */
+function normalizeNamesArray(
+	node: Readonly<ApexNode & { names?: readonly ApexIdentifier[] }>,
+	originalPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+	subPath: Readonly<AstPath<ApexNode>>,
+): Doc {
+	const namesArray = node.names;
+	if (!Array.isArray(namesArray)) return originalPrint(subPath);
+	const originalValues: string[] = [];
+	let hasChanges = false;
+	try {
+		for (let i = 0; i < namesArray.length; i++) {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- namesArray is typed as readonly ApexIdentifier[]
+			const nameNode = namesArray[i];
+			if (typeof nameNode !== 'object' || !('value' in nameNode))
+				continue;
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+			const nameValue = (nameNode as { value?: unknown }).value;
+			if (typeof nameValue !== 'string' || !nameValue) continue;
+			originalValues[i] = nameValue;
+			const normalizedValue = normalizeStandardObjectType(nameValue);
+			if (normalizedValue !== nameValue) {
+				hasChanges = true;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+				(nameNode as { value: string }).value = normalizedValue;
+			}
+		}
+		if (hasChanges) return originalPrint(subPath);
+	} finally {
+		for (
+			let i = 0;
+			i < originalValues.length && i < namesArray.length;
+			i++
+		) {
+			const originalValue = originalValues[i];
+			// originalValues array may not have values at all indices
+			if (originalValue === undefined) continue;
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- namesArray is typed as readonly ApexIdentifier[]
+			const nameNode = namesArray[i];
+			if (typeof nameNode === 'object' && 'value' in nameNode) {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+				(nameNode as { value: string }).value = originalValue;
+			}
+		}
+	}
+	return originalPrint(subPath);
+}
+
+const createTypeNormalizingPrint =
+	(
+		originalPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		forceTypeContext = false,
+		parentKey?: string,
+	) =>
+	(subPath: Readonly<AstPath<ApexNode>>): Doc => {
+		const { node, key } = subPath;
+		const normalizedKey = key ?? undefined;
+		if (
+			!shouldNormalizeType({
+				forceTypeContext,
+				key: normalizedKey,
+				parentKey,
+				path: subPath,
+			}) ||
+			!isIdentifier(node)
+		)
+			return originalPrint(subPath);
+		const valueField = (node as { value?: unknown }).value;
+		if (typeof valueField === 'string') {
+			return normalizeSingleIdentifier(
+				node as ApexIdentifier,
+				originalPrint,
+				subPath,
+			);
+		}
+		if ('names' in node) {
+			return normalizeNamesArray(
+				node as ApexNode & { names?: readonly ApexIdentifier[] },
+				originalPrint,
+				subPath,
+			);
+		}
+		return originalPrint(subPath);
+	};
+
+export {
+	normalizeStandardObjectType,
+	isIdentifier,
+	isInTypeContext,
+	createTypeNormalizingPrint,
+};

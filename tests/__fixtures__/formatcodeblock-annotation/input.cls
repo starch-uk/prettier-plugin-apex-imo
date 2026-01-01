@@ -1,0 +1,2 @@
+@auraenabled(cacheable=true)
+

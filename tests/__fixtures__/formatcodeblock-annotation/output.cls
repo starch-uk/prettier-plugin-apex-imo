@@ -1,0 +1,2 @@
+@AuraEnabled(cacheable=true)
+

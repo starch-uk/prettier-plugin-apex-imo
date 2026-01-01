@@ -1,15 +1,13 @@
 /**
- * Complete list of Salesforce object type suffixes
- * Reference: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm
- * This file contains all standard Salesforce object type suffixes
+ * @file Complete list of Salesforce object type suffixes. Reference: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm. This file contains all standard Salesforce object type suffixes.
  */
 
 /**
  * Array of Salesforce object type suffixes
  * These suffixes are used to identify different types of Salesforce objects in type declarations
- * Suffixes are case-sensitive and should be matched exactly as defined
+ * Suffixes are case-sensitive and should be matched exactly as defined.
  */
-export const APEX_OBJECT_SUFFIXES: readonly string[] = [
+const APEX_OBJECT_SUFFIXES: readonly string[] = [
 	// Common object types
 	'__c', // Custom object
 	'__b', // Big object
@@ -45,27 +43,37 @@ export const APEX_OBJECT_SUFFIXES: readonly string[] = [
 
 /**
  * Set of Salesforce object type suffixes for fast lookup
- * Derived from APEX_OBJECT_SUFFIXES array for O(1) lookup performance
+ * Derived from APEX_OBJECT_SUFFIXES array for O(1) lookup performance.
  */
-export const APEX_OBJECT_SUFFIXES_SET: ReadonlySet<string> = new Set(
+const APEX_OBJECT_SUFFIXES_SET: ReadonlySet<string> = new Set(
 	APEX_OBJECT_SUFFIXES,
 );
 
 /**
- * Check if a string ends with a Salesforce object type suffix
- * @param text - The text to check
- * @returns true if the text ends with a known object type suffix, false otherwise
+ * Check if a string ends with a Salesforce object type suffix.
+ * @param text - The text to check.
+ * @returns True if the text ends with a known object type suffix, false otherwise.
+ * @example
+ * ```typescript
+ * hasObjectSuffix('Account__c'); // Returns true
+ * hasObjectSuffix('Account'); // Returns false
+ * ```
  */
-export function hasObjectSuffix(text: string): boolean {
+function hasObjectSuffix(text: string): boolean {
 	return APEX_OBJECT_SUFFIXES.some((suffix) => text.endsWith(suffix));
 }
 
 /**
- * Get the object type suffix from a string if it exists
- * @param text - The text to check
- * @returns The suffix if found, undefined otherwise
+ * Get the object type suffix from a string if it exists.
+ * @param text - The text to check.
+ * @returns The suffix if found, undefined otherwise.
+ * @example
+ * ```typescript
+ * getObjectSuffix('Account__c'); // Returns '__c'
+ * getObjectSuffix('Account'); // Returns undefined
+ * ```
  */
-export function getObjectSuffix(text: string): string | undefined {
+function getObjectSuffix(text: string): string | undefined {
 	// Sort suffixes by length (longest first) to match longer suffixes before shorter ones
 	// (e.g., __ChangeEvent should match before __c)
 	const sortedSuffixes = [...APEX_OBJECT_SUFFIXES].sort(
@@ -73,3 +81,10 @@ export function getObjectSuffix(text: string): string | undefined {
 	);
 	return sortedSuffixes.find((suffix) => text.endsWith(suffix));
 }
+
+export {
+	APEX_OBJECT_SUFFIXES,
+	APEX_OBJECT_SUFFIXES_SET,
+	hasObjectSuffix,
+	getObjectSuffix,
+};

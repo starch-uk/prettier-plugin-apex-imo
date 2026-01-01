@@ -1,50 +1,54 @@
 /**
- * Complete list of Apex primitive and collection types
- * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_primitive_data_types.htm
- * This file contains all primitive types and collection types that must be normalized to PascalCase
+ * @file Complete list of Apex primitive and collection types. Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_primitive_data_types.htm. This file contains all primitive types and collection types that must be normalized to PascalCase.
  */
 
 /**
  * Mapping of lowercase primitive and collection type names to their PascalCase equivalents
- * These types should always be normalized to PascalCase regardless of context
+ * These types should always be normalized to PascalCase regardless of context.
  */
-export const PRIMITIVE_AND_COLLECTION_TYPES: Record<string, string> = {
-	// Primitive types
-	string: 'String',
-	integer: 'Integer',
+const PRIMITIVE_AND_COLLECTION_TYPES: Record<string, string> = {
+	blob: 'Blob',
 	boolean: 'Boolean',
-	decimal: 'Decimal',
-	double: 'Double',
-	long: 'Long',
 	date: 'Date',
 	datetime: 'Datetime',
-	time: 'Time',
-	blob: 'Blob',
+	decimal: 'Decimal',
+	double: 'Double',
 	id: 'ID',
-	object: 'Object',
+	integer: 'Integer',
 	// Collection types
 	list: 'List',
-	set: 'Set',
+	long: 'Long',
 	map: 'Map',
+	object: 'Object',
+	set: 'Set',
 	// Salesforce-specific types
 	sobject: 'SObject',
+	// Primitive types
+	string: 'String',
+	time: 'Time',
 } as const;
 
 /**
  * Array of primitive and collection type keys (lowercase)
  * Used to check if a matched type should always be normalized regardless of context
- * Derived from PRIMITIVE_AND_COLLECTION_TYPES keys to avoid duplication
+ * Derived from PRIMITIVE_AND_COLLECTION_TYPES keys to avoid duplication.
  */
-export const PRIMITIVE_AND_COLLECTION_TYPE_KEYS: readonly string[] =
-	Object.keys(PRIMITIVE_AND_COLLECTION_TYPES) as readonly string[];
+const PRIMITIVE_AND_COLLECTION_TYPE_KEYS: readonly string[] = Object.keys(
+	PRIMITIVE_AND_COLLECTION_TYPES,
+) as readonly string[];
 
 /**
- * Get variable name for a type (helper for generating test variable names)
- * @param lowercaseType - The lowercase type name
- * @param collectionType - Optional collection type context
- * @returns A variable name appropriate for the type
+ * Get variable name for a type (helper for generating test variable names).
+ * @param lowercaseType - The type name in lowercase format (e.g., 'string', 'integer').
+ * @param [collectionType] - Optional collection type context. Must be one of: 'list', 'map', or 'set'.
+ * @returns A variable name appropriate for the type.
+ * @example
+ * ```typescript
+ * getVarNameForType('string', 'list'); // Returns 'strings'
+ * getVarNameForType('id', 'map'); // Returns 'idMap'
+ * ```
  */
-export function getVarNameForType(
+function getVarNameForType(
 	lowercaseType: string,
 	collectionType?: 'list' | 'map' | 'set',
 ): string {
@@ -60,41 +64,54 @@ export function getVarNameForType(
 }
 
 /**
- * Get primitive types (excluding collection types)
- * @returns Array of lowercase primitive type names
+ * Get primitive types (excluding collection types).
+ * @returns Array of lowercase primitive type names.
+ * @example
+ * ```typescript
+ * getPrimitiveTypes(); // Returns ['blob', 'boolean', 'date', ...]
+ * ```
  */
-export function getPrimitiveTypes(): string[] {
+function getPrimitiveTypes(): string[] {
 	return PRIMITIVE_AND_COLLECTION_TYPE_KEYS.filter(
 		(key) => !['list', 'set', 'map', 'sobject'].includes(key),
 	);
 }
 
 /**
- * Get collection types only
- * @returns Array of lowercase collection type names
+ * Get collection types only.
+ * @returns Array of lowercase collection type names.
+ * @example
+ * ```typescript
+ * getCollectionTypes(); // Returns ['list', 'set', 'map']
+ * ```
  */
-export function getCollectionTypes(): string[] {
+function getCollectionTypes(): string[] {
 	return ['list', 'set', 'map'];
 }
 
 /**
- * Constants for magic numbers used in test value generation
+ * Constants for magic numbers used in test value generation.
  */
 const magicNumbers = {
-	zero: 0,
 	one: 1,
-	two: 2,
 	thousand: 1000,
+	two: 2,
 	year: 2024,
+	zero: 0,
 } as const;
 
 /**
- * Generate a test value for a primitive type
- * @param type - The lowercase type name
- * @param index - Optional index for generating different values (default: 0)
- * @returns A string representation of a test value for the given type
+ * Generate a test value for a primitive type.
+ * @param type - The lowercase type name.
+ * @param [index] - Optional index for generating different values (default: 0).
+ * @returns A string representation of a test value for the given type.
+ * @example
+ * ```typescript
+ * generateTestValue('string', 0); // Returns "'value0'"
+ * generateTestValue('integer', 1); // Returns "2"
+ * ```
  */
-export function generateTestValue(
+function generateTestValue(
 	type: string,
 	index: number = magicNumbers.zero,
 ): string {
@@ -147,3 +164,12 @@ export function generateTestValue(
 			return `'value${indexStr}'`;
 	}
 }
+
+export {
+	PRIMITIVE_AND_COLLECTION_TYPES,
+	PRIMITIVE_AND_COLLECTION_TYPE_KEYS,
+	getVarNameForType,
+	getPrimitiveTypes,
+	getCollectionTypes,
+	generateTestValue,
+};

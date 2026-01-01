@@ -1,3 +1,7 @@
+/**
+ * @file Tests for the printer module.
+ */
+
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { describe, it, expect } from 'vitest';
 import {
@@ -5,227 +9,247 @@ import {
 	isMapInit,
 	hasMultipleListEntries,
 	hasMultipleMapEntries,
-} from '../src/utils.js';
-import type { ApexNode } from '../src/types.js';
+} from '../src/collections.js';
+import type {
+	ApexNode,
+	ApexListInitNode,
+	ApexMapInitNode,
+} from '../src/types.js';
 
 const nodeClassKey = '@class';
 
 describe('utils', () => {
 	describe('isListInit', () => {
-		it('should identify NewListLiteral nodes', () => {
-			expect(
-				isListInit({
+		it.each([
+			{
+				desc: 'identifies NewListLiteral nodes',
+				expected: true,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [],
-				}),
-			).toBe(true);
-		});
-
-		it('should identify NewSetLiteral nodes', () => {
-			expect(
-				isListInit({
+				} as Readonly<ApexNode>,
+			},
+			{
+				desc: 'identifies NewSetLiteral nodes',
+				expected: true,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewSetLiteral',
 					values: [],
-				}),
-			).toBe(true);
-		});
-
-		it('should reject other node types', () => {
-			expect(
-				isListInit({
+				} as Readonly<ApexNode>,
+			},
+			{
+				desc: 'rejects other node types',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [],
-				}),
-			).toBe(false);
-		});
+				} as Readonly<ApexNode>,
+			},
+		])(
+			'$desc',
+			({
+				node,
+				expected,
+			}: Readonly<{
+				node: Readonly<ApexNode>;
+				expected: boolean;
+			}>) => {
+				expect(isListInit(node)).toBe(expected);
+			},
+		);
 	});
 
 	describe('isMapInit', () => {
-		it('should identify NewMapLiteral nodes', () => {
-			expect(
-				isMapInit({
+		it.each([
+			{
+				desc: 'identifies NewMapLiteral nodes',
+				expected: true,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [],
-				}),
-			).toBe(true);
-		});
-
-		it('should reject other node types', () => {
-			expect(
-				isMapInit({
+				} as Readonly<ApexNode>,
+			},
+			{
+				desc: 'rejects other node types',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [],
-				}),
-			).toBe(false);
-		});
+				} as Readonly<ApexNode>,
+			},
+		])(
+			'$desc',
+			({
+				node,
+				expected,
+			}: Readonly<{
+				node: Readonly<ApexNode>;
+				expected: boolean;
+			}>) => {
+				expect(isMapInit(node)).toBe(expected);
+			},
+		);
 	});
 
 	describe('hasMultipleListEntries', () => {
-		it('should return false for empty list', () => {
-			expect(
-				hasMultipleListEntries({
+		it.each([
+			{
+				desc: 'returns false for empty list',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [],
-				}),
-			).toBe(false);
-		});
-
-		it('should return false for single item', () => {
-			expect(
-				hasMultipleListEntries({
+				} as Readonly<ApexListInitNode>,
+			},
+			{
+				desc: 'returns false for single item',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [
 						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 					],
-				}),
-			).toBe(false);
-		});
-
-		it('should return true for 2+ items', () => {
-			expect(
-				hasMultipleListEntries({
+				} as Readonly<ApexListInitNode>,
+			},
+			{
+				desc: 'returns true for 2+ items',
+				expected: true,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: [
 						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 					],
-				}),
-			).toBe(true);
-		});
-
-		it('should return true for set with 2+ items', () => {
-			expect(
-				hasMultipleListEntries({
+				} as Readonly<ApexListInitNode>,
+			},
+			{
+				desc: 'returns true for set with 2+ items',
+				expected: true,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewSetLiteral',
 					values: [
 						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
 					],
-				}),
-			).toBe(true);
-		});
-
-		it('should handle null/undefined values gracefully', () => {
-			const invalidValues: unknown = null;
-			expect(
-				hasMultipleListEntries({
+				} as Readonly<ApexListInitNode>,
+			},
+			{
+				desc: 'handles null/undefined values gracefully',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: invalidValues as ApexNode[],
-				}),
-			).toBe(false);
-		});
-
-		it('should handle non-array values gracefully', () => {
-			const invalidValues: unknown = 'not an array';
-			expect(
-				hasMultipleListEntries({
+					values: null as unknown as ApexNode[],
+				} as Readonly<ApexListInitNode>,
+			},
+			{
+				desc: 'handles non-array values gracefully',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: invalidValues as ApexNode[],
-				}),
-			).toBe(false);
-		});
+					values: 'not an array' as unknown as ApexNode[],
+				} as Readonly<ApexListInitNode>,
+			},
+		])(
+			'$desc',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- it.each provides readonly data
+			({
+				node,
+				expected,
+			}: Readonly<{
+				node: Readonly<ApexListInitNode>;
+				expected: boolean;
+			}>) => {
+				expect(hasMultipleListEntries(node)).toBe(expected);
+			},
+		);
 	});
 
 	describe('hasMultipleMapEntries', () => {
-		it('should return false for empty map', () => {
-			expect(
-				hasMultipleMapEntries({
+		const singlePair = [
+			{
+				key: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+				[nodeClassKey]: 'apex.jorje.data.ast.MapLiteralKeyValue',
+				value: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+			},
+		];
+		const twoPairs = [
+			...singlePair,
+			{
+				key: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+				[nodeClassKey]: 'apex.jorje.data.ast.MapLiteralKeyValue',
+				value: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+			},
+		];
+
+		it.each([
+			{
+				desc: 'returns false for empty map',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: [],
-				}),
-			).toBe(false);
-		});
-
-		it('should return false for single pair', () => {
-			expect(
-				hasMultipleMapEntries({
+				} as Readonly<ApexMapInitNode>,
+			},
+			{
+				desc: 'returns false for single pair',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: [
-						{
-							[nodeClassKey]:
-								'apex.jorje.data.ast.MapLiteralKeyValue',
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.LiteralExpr',
-							},
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.LiteralExpr',
-							},
-						},
-					],
-				}),
-			).toBe(false);
-		});
-
-		it('should return true for 2+ pairs', () => {
-			expect(
-				hasMultipleMapEntries({
+					pairs: singlePair,
+				} as Readonly<ApexMapInitNode>,
+			},
+			{
+				desc: 'returns true for 2+ pairs',
+				expected: true,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: [
-						{
-							[nodeClassKey]:
-								'apex.jorje.data.ast.MapLiteralKeyValue',
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.LiteralExpr',
-							},
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.LiteralExpr',
-							},
-						},
-						{
-							[nodeClassKey]:
-								'apex.jorje.data.ast.MapLiteralKeyValue',
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.LiteralExpr',
-							},
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.LiteralExpr',
-							},
-						},
-					],
-				}),
-			).toBe(true);
-		});
-
-		it('should handle null/undefined pairs gracefully', () => {
-			const invalidPairs: unknown = null;
-			expect(
-				hasMultipleMapEntries({
+					pairs: twoPairs,
+				} as Readonly<ApexMapInitNode>,
+			},
+			{
+				desc: 'handles null/undefined pairs gracefully',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: invalidPairs as ApexNode[],
-				}),
-			).toBe(false);
-		});
-
-		it('should handle non-array pairs gracefully', () => {
-			const invalidPairs: unknown = 'not an array';
-			expect(
-				hasMultipleMapEntries({
+					pairs: null as unknown as ApexNode[],
+				} as Readonly<ApexMapInitNode>,
+			},
+			{
+				desc: 'handles non-array pairs gracefully',
+				expected: false,
+				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
-					pairs: invalidPairs as ApexNode[],
-				}),
-			).toBe(false);
-		});
+					pairs: 'not an array' as unknown as ApexNode[],
+				} as Readonly<ApexMapInitNode>,
+			},
+		])(
+			'$desc',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- it.each provides readonly data
+			({
+				node,
+				expected,
+			}: Readonly<{
+				node: Readonly<ApexMapInitNode>;
+				expected: boolean;
+			}>) => {
+				expect(hasMultipleMapEntries(node)).toBe(expected);
+			},
+		);
 	});
 });

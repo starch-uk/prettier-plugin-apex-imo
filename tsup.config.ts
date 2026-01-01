@@ -1,12 +1,16 @@
+/**
+ * @file Configuration for tsup build tool.
+ */
+
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-	entry: ['src/index.ts'],
-	format: ['esm', 'cjs'],
-	dts: true,
 	clean: true,
-	sourcemap: true,
-	minify: false,
-	target: 'node20',
+	dts: true,
+	entry: ['src/index.ts'],
 	external: ['prettier', 'prettier-plugin-apex'],
+	format: ['esm', 'cjs'],
+	minify: false,
+	sourcemap: true,
+	target: 'node20',
 });
