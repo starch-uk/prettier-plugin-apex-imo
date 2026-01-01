@@ -305,7 +305,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
-	describe('Printer branch coverage', () => {
+	describe('Collection type name formatting', () => {
 		it.concurrent.each([
 			{
 				description:

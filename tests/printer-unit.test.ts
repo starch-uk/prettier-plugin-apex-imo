@@ -316,7 +316,7 @@ describe('printer', () => {
 	});
 
 	describe('annotation normalization', () => {
-		it('should normalize annotation names to PascalCase', () => {
+		it.concurrent('should normalize annotation names to PascalCase', () => {
 			const mockNode = {
 				name: {
 					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
@@ -349,274 +349,303 @@ describe('printer', () => {
 			}
 		});
 
-		it('should normalize annotation option names to camelCase', () => {
-			const mockNode = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'auraenabled',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [
-					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'cacheable',
-						},
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-						value: {
+		it.concurrent(
+			'should normalize annotation option names to camelCase',
+			() => {
+				const mockNode = {
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'auraenabled',
+					},
+					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+					parameters: [
+						{
+							key: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.Identifier',
+								value: 'cacheable',
+							},
 							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
+								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+							value: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
+							},
 						},
+					],
+				};
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = createMockOriginalPrinter();
+				const wrappedPrinter =
+					createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrappedPrinter.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				// Should normalize annotation to AuraEnabled and option to cacheable
+				// Result should be a group with @AuraEnabled(cacheable=true)
+				expect(result).toBeDefined();
+				expect(result).not.toBe('original output');
+			},
+		);
+
+		it.concurrent(
+			'should format annotations with single parameter on one line',
+			() => {
+				const mockNode = {
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'future',
 					},
-				],
-			};
-
-			const mockPath = createMockPath(mockNode);
-			const mockOriginalPrinter = createMockOriginalPrinter();
-			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
-
-			const result = wrappedPrinter.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
-
-			// Should normalize annotation to AuraEnabled and option to cacheable
-			// Result should be a group with @AuraEnabled(cacheable=true)
-			expect(result).toBeDefined();
-			expect(result).not.toBe('original output');
-		});
-
-		it('should format annotations with single parameter on one line', () => {
-			const mockNode = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'future',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [
-					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'callout',
-						},
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-						value: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+					parameters: [
+						{
+							key: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.Identifier',
+								value: 'callout',
+							},
 							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
+								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+							value: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
+							},
 						},
+					],
+				};
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = createMockOriginalPrinter();
+				const wrappedPrinter =
+					createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrappedPrinter.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				// Should format as single line: @Future(callout=true)
+				expect(result).toBeDefined();
+				expect(result).not.toBe('original output');
+			},
+		);
+
+		it.concurrent(
+			'should format InvocableMethod with multiple parameters on multiple lines',
+			() => {
+				const mockNode = {
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'invocablemethod',
 					},
-				],
-			};
-
-			const mockPath = createMockPath(mockNode);
-			const mockOriginalPrinter = createMockOriginalPrinter();
-			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
-
-			const result = wrappedPrinter.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
-
-			// Should format as single line: @Future(callout=true)
-			expect(result).toBeDefined();
-			expect(result).not.toBe('original output');
-		});
-
-		it('should format InvocableMethod with multiple parameters on multiple lines', () => {
-			const mockNode = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'invocablemethod',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [
-					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'label',
-						},
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-						value: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+					parameters: [
+						{
+							key: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.Identifier',
+								value: 'label',
+							},
 							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-							value: 'Test Label',
+								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+							value: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+								value: 'Test Label',
+							},
 						},
-					},
-					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'description',
-						},
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-						value: {
+						{
+							key: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.Identifier',
+								value: 'description',
+							},
 							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-							value: 'Test Description',
+								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+							value: {
+								[nodeClassKey]:
+									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+								value: 'Test Description',
+							},
 						},
+					],
+				};
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = createMockOriginalPrinter();
+				const wrappedPrinter =
+					createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrappedPrinter.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				// Should force multiline format for InvocableMethod with multiple params
+				expect(result).toBeDefined();
+				expect(result).not.toBe('original output');
+			},
+		);
+
+		it.concurrent(
+			'should format SuppressWarnings with comma-separated string',
+			() => {
+				const mockNode = {
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'suppresswarnings',
 					},
-				],
-			};
+					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+					parameters: [
+						{
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+							value: 'PMD.UnusedLocalVariable, PMD.UnusedPrivateMethod',
+						},
+					],
+				};
 
-			const mockPath = createMockPath(mockNode);
-			const mockOriginalPrinter = createMockOriginalPrinter();
-			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = createMockOriginalPrinter();
+				const wrappedPrinter =
+					createWrappedPrinter(mockOriginalPrinter);
 
-			const result = wrappedPrinter.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
+				const result = wrappedPrinter.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
 
-			// Should force multiline format for InvocableMethod with multiple params
-			expect(result).toBeDefined();
-			expect(result).not.toBe('original output');
-		});
-
-		it('should format SuppressWarnings with comma-separated string', () => {
-			const mockNode = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'suppresswarnings',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [
-					{
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-						value: 'PMD.UnusedLocalVariable, PMD.UnusedPrivateMethod',
-					},
-				],
-			};
-
-			const mockPath = createMockPath(mockNode);
-			const mockOriginalPrinter = createMockOriginalPrinter();
-			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
-
-			const result = wrappedPrinter.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
-
-			// Should format as: @SuppressWarnings('PMD.UnusedLocalVariable, PMD.UnusedPrivateMethod')
-			expect(result).toBeDefined();
-			expect(result).not.toBe('original output');
-		});
+				// Should format as: @SuppressWarnings('PMD.UnusedLocalVariable, PMD.UnusedPrivateMethod')
+				expect(result).toBeDefined();
+				expect(result).not.toBe('original output');
+			},
+		);
 	});
 
 	describe('type normalization', () => {
-		it('should normalize identifier in type context when value changes', () => {
-			const mockNode = {
-				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				value: 'account', // lowercase - should normalize to 'Account'
-			};
+		it.concurrent(
+			'should normalize identifier in type context when value changes',
+			() => {
+				const mockNode = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'account', // lowercase - should normalize to 'Account'
+				};
 
-			// Create path with 'type' key to indicate type context
-			const mockPath = {
-				call: vi.fn(() => ''),
-				key: 'type',
-				map: vi.fn(() => []),
-				node: mockNode,
-				stack: [],
-			} as unknown as AstPath<ApexNode>;
+				// Create path with 'type' key to indicate type context
+				const mockPath = {
+					call: vi.fn(() => ''),
+					key: 'type',
+					map: vi.fn(() => []),
+					node: mockNode,
+					stack: [],
+				} as unknown as AstPath<ApexNode>;
 
-			const mockOriginalPrinter = {
-				print: vi.fn((path, _options, _print) => {
-					// Verify the node value was normalized
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- path.node is checked
-					const normalizedNode = path.node as { value?: string };
-					expect(normalizedNode.value).toBe('Account');
-					return 'normalized output';
-				}),
-			};
+				const mockOriginalPrinter = {
+					print: vi.fn((path, _options, _print) => {
+						// Verify the node value was normalized
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- path.node is checked
+						const normalizedNode = path.node as { value?: string };
+						expect(normalizedNode.value).toBe('Account');
+						return 'normalized output';
+					}),
+				};
 
-			const wrapped = createWrappedPrinter(mockOriginalPrinter);
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const result = wrapped.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
 
-			// Should call original printer with normalized value
-			expect(mockOriginalPrinter.print).toHaveBeenCalled();
-			expect(result).toBe('normalized output');
-		});
+				// Should call original printer with normalized value
+				expect(mockOriginalPrinter.print).toHaveBeenCalled();
+				expect(result).toBe('normalized output');
+			},
+		);
 
-		it('should not normalize identifier when value does not change', () => {
-			const mockNode = {
-				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				value: 'Account', // Already normalized
-			};
+		it.concurrent(
+			'should not normalize identifier when value does not change',
+			() => {
+				const mockNode = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'Account', // Already normalized
+				};
 
-			const mockPath = {
-				call: vi.fn(() => ''),
-				key: 'type',
-				map: vi.fn(() => []),
-				node: mockNode,
-				stack: [],
-			} as unknown as AstPath<ApexNode>;
+				const mockPath = {
+					call: vi.fn(() => ''),
+					key: 'type',
+					map: vi.fn(() => []),
+					node: mockNode,
+					stack: [],
+				} as unknown as AstPath<ApexNode>;
 
-			const mockOriginalPrinter = {
-				print: vi.fn(() => 'original output'),
-			};
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
 
-			const wrapped = createWrappedPrinter(mockOriginalPrinter);
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const result = wrapped.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
 
-			// Should fall through to fallback (not call original printer with modified node)
-			expect(result).toBe('original output');
-		});
+				// Should fall through to fallback (not call original printer with modified node)
+				expect(result).toBe('original output');
+			},
+		);
 
-		it('should normalize identifier in types array context', () => {
-			const mockNode = {
-				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				value: 'contact', // lowercase - should normalize to 'Contact'
-			};
+		it.concurrent(
+			'should normalize identifier in types array context',
+			() => {
+				const mockNode = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'contact', // lowercase - should normalize to 'Contact'
+				};
 
-			const mockPath = {
-				call: vi.fn(() => ''),
-				key: 'types',
-				map: vi.fn(() => []),
-				node: mockNode,
-				stack: [],
-			} as unknown as AstPath<ApexNode>;
+				const mockPath = {
+					call: vi.fn(() => ''),
+					key: 'types',
+					map: vi.fn(() => []),
+					node: mockNode,
+					stack: [],
+				} as unknown as AstPath<ApexNode>;
 
-			const mockOriginalPrinter = {
-				print: vi.fn((path, _options, _print) => {
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- path.node is checked
-					const normalizedNode = path.node as { value?: string };
-					expect(normalizedNode.value).toBe('Contact');
-					return 'normalized output';
-				}),
-			};
+				const mockOriginalPrinter = {
+					print: vi.fn((path, _options, _print) => {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- path.node is checked
+						const normalizedNode = path.node as { value?: string };
+						expect(normalizedNode.value).toBe('Contact');
+						return 'normalized output';
+					}),
+				};
 
-			const wrapped = createWrappedPrinter(mockOriginalPrinter);
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const result = wrapped.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
 
-			expect(mockOriginalPrinter.print).toHaveBeenCalled();
-			expect(result).toBe('normalized output');
-		});
+				expect(mockOriginalPrinter.print).toHaveBeenCalled();
+				expect(result).toBe('normalized output');
+			},
+		);
 	});
 
 	describe('TypeRef handling', () => {
-		it('should handle TypeRef node with names array', () => {
+		it.concurrent('should handle TypeRef node with names array', () => {
 			const mockNode = {
 				names: [
 					{
@@ -657,72 +686,81 @@ describe('printer', () => {
 			expect(result).toBeDefined();
 		});
 
-		it('should pass through TypeRef node with empty names array', () => {
-			const mockNode = {
-				names: [],
-				[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
-			};
+		it.concurrent(
+			'should pass through TypeRef node with empty names array',
+			() => {
+				const mockNode = {
+					names: [],
+					[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
+				};
 
-			const mockPath = createMockPath(mockNode);
-			const mockOriginalPrinter = {
-				print: vi.fn(() => 'original output'),
-			};
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
 
-			const wrapped = createWrappedPrinter(mockOriginalPrinter);
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const result = wrapped.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
 
-			// Should fall through to fallback
-			expect(result).toBe('original output');
-		});
+				// Should fall through to fallback
+				expect(result).toBe('original output');
+			},
+		);
 
-		it('should pass through TypeRef node without names property', () => {
-			const mockNode = {
-				[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
-			};
+		it.concurrent(
+			'should pass through TypeRef node without names property',
+			() => {
+				const mockNode = {
+					[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
+				};
 
-			const mockPath = createMockPath(mockNode);
-			const mockOriginalPrinter = {
-				print: vi.fn(() => 'original output'),
-			};
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
 
-			const wrapped = createWrappedPrinter(mockOriginalPrinter);
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const result = wrapped.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
 
-			// Should fall through to fallback
-			expect(result).toBe('original output');
-		});
+				// Should fall through to fallback
+				expect(result).toBe('original output');
+			},
+		);
 
-		it('should pass through TypeRef node with non-array names', () => {
-			const mockNode = {
-				names: 'not an array',
-				[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
-			};
+		it.concurrent(
+			'should pass through TypeRef node with non-array names',
+			() => {
+				const mockNode = {
+					names: 'not an array',
+					[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
+				};
 
-			const mockPath = createMockPath(mockNode);
-			const mockOriginalPrinter = {
-				print: vi.fn(() => 'original output'),
-			};
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
 
-			const wrapped = createWrappedPrinter(mockOriginalPrinter);
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const result = wrapped.print(
-				mockPath,
-				createMockOptions(),
-				createMockPrint(),
-			);
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
 
-			// Should fall through to fallback
-			expect(result).toBe('original output');
-		});
+				// Should fall through to fallback
+				expect(result).toBe('original output');
+			},
+		);
 	});
 });

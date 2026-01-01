@@ -41,10 +41,12 @@ const printCollection = (
 	originalPrint: () => Doc,
 ): Doc => {
 	const { node } = path;
-	const isList = isListInit(node);
+	const nodeClass = getNodeClass(node);
+	const isList =
+		nodeClass === LIST_LITERAL_CLASS || nodeClass === SET_LITERAL_CLASS;
 	if (
-		(isList && !hasMultipleListEntries(node)) ||
-		(!isList && !hasMultipleMapEntries(node))
+		(isList && !hasMultipleListEntries(node as ApexListInitNode)) ||
+		(!isList && !hasMultipleMapEntries(node as ApexMapInitNode))
 	)
 		return originalPrint();
 	const typeNormalizingPrint = createTypeNormalizingPrint(
@@ -54,7 +56,6 @@ const printCollection = (
 	);
 	const printedTypes = path.map(typeNormalizingPrint, 'types' as never);
 	if (isList) {
-		const nodeClass = getNodeClass(node);
 		const isSet = nodeClass === SET_LITERAL_CLASS;
 		const typeSeparator: Doc = isSet ? [',', ' '] : '.';
 		const typeName = isSet ? 'Set' : 'List';

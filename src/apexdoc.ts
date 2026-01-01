@@ -27,14 +27,8 @@ interface CodeBlock {
 	commentIndent: number;
 }
 
-interface ReadonlyCodeBlock {
-	readonly startPos: number;
-	readonly endPos: number;
-	readonly code: string;
-	readonly lineNumber: number;
-	readonly column: number;
-	readonly commentIndent: number;
-}
+// eslint-disable-next-line @typescript-eslint/no-type-alias -- Using utility type Readonly<T> per optimization plan to reduce duplication
+type ReadonlyCodeBlock = Readonly<CodeBlock>;
 
 const CODE_TAG = '{@code';
 
@@ -89,11 +83,6 @@ const extractCodeFromBlock = (
 	text: Readonly<string>,
 	startPos: number,
 ): { code: string; endPos: number } | null => {
-	// Note: With valid comments, skipWhitespace can never return false
-	// because codeTagPos + CODE_TAG_LENGTH is always < commentText.length
-	// (commentText always has at least '*/' after '{@code', so length >= 11,
-	// and codeTagPos is at least 3, so codeTagPos + 6 is at most 9 < 11)
-	// This check is unreachable and has been removed for 100% coverage.
 	const codeStart = prettier.util.skipWhitespace(
 		text,
 		startPos + CODE_TAG_LENGTH,
@@ -119,7 +108,9 @@ const extractCodeFromBlock = (
 const findApexDocCodeBlocks = (text: Readonly<string>): CodeBlock[] => {
 	const blocks: CodeBlock[] = [];
 	for (const comment of findApexDocComments(text)) {
-		const commentText = text.substring(comment.start, comment.end);
+		const commentStart = comment.start;
+		const commentText = text.substring(commentStart, comment.end);
+		const commentIndent = getCommentIndent(text, commentStart);
 		for (
 			let searchPos = ARRAY_START_INDEX;
 			searchPos < commentText.length;
@@ -128,7 +119,7 @@ const findApexDocCodeBlocks = (text: Readonly<string>): CodeBlock[] => {
 			if (codeTagPos === NOT_FOUND_INDEX) break;
 			const extraction = extractCodeFromBlock(commentText, codeTagPos);
 			if (extraction) {
-				const absolutePos = comment.start + codeTagPos;
+				const absolutePos = commentStart + codeTagPos;
 				const beforeBlock = text.substring(
 					ARRAY_START_INDEX,
 					absolutePos,
@@ -138,8 +129,8 @@ const findApexDocCodeBlocks = (text: Readonly<string>): CodeBlock[] => {
 				blocks.push({
 					code: extraction.code,
 					column: absolutePos - lastNewlinePos - COLUMN_OFFSET,
-					commentIndent: getCommentIndent(text, comment.start),
-					endPos: comment.start + codeTagPos + extractionEndOffset,
+					commentIndent,
+					endPos: commentStart + codeTagPos + extractionEndOffset,
 					lineNumber:
 						(beforeBlock.match(/\n/g) ?? []).length +
 						LINE_NUMBER_OFFSET,
@@ -161,6 +152,7 @@ const extractAnnotationCode = (
 ): string[] => {
 	const codeLines: string[] = [];
 	let classIndent = 0;
+	const indentOffset = tabWidth;
 	for (const line of lines) {
 		if (line.includes('public class Temp')) {
 			classIndent = getIndentLevel(line, tabWidth);
@@ -172,7 +164,7 @@ const extractAnnotationCode = (
 		const lineIndent = getIndentLevel(line, tabWidth);
 		const relativeIndent = Math.max(
 			MIN_INDENT_LEVEL,
-			lineIndent - classIndent - tabWidth,
+			lineIndent - classIndent - indentOffset,
 		);
 		codeLines.push(
 			createIndent(relativeIndent, tabWidth, useTabs) + line.trimStart(),
@@ -190,6 +182,7 @@ const extractMethodCode = (
 	let methodIndent = 0;
 	let methodBraceCount = 0;
 	let inMethod = false;
+	const indentOffset = tabWidth;
 	for (const line of lines) {
 		if (line.includes('void method() {')) {
 			methodIndent = getIndentLevel(line, tabWidth);
@@ -203,7 +196,7 @@ const extractMethodCode = (
 			const lineIndent = getIndentLevel(line, tabWidth);
 			const relativeIndent = Math.max(
 				MIN_INDENT_LEVEL,
-				lineIndent - methodIndent - tabWidth,
+				lineIndent - methodIndent - indentOffset,
 			);
 			codeLines.push(
 				createIndent(relativeIndent, tabWidth, useTabs) +

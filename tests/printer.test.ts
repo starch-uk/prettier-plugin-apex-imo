@@ -20,7 +20,7 @@ const nodeClassKey = '@class';
 
 describe('utils', () => {
 	describe('isListInit', () => {
-		it.each([
+		it.concurrent.each([
 			{
 				desc: 'identifies NewListLiteral nodes',
 				expected: true,
@@ -63,7 +63,7 @@ describe('utils', () => {
 	});
 
 	describe('isMapInit', () => {
-		it.each([
+		it.concurrent.each([
 			{
 				desc: 'identifies NewMapLiteral nodes',
 				expected: true,
@@ -97,7 +97,7 @@ describe('utils', () => {
 	});
 
 	describe('hasMultipleListEntries', () => {
-		it.each([
+		it.concurrent.each([
 			{
 				desc: 'returns false for empty list',
 				expected: false,
@@ -192,7 +192,7 @@ describe('utils', () => {
 			},
 		];
 
-		it.each([
+		it.concurrent.each([
 			{
 				desc: 'returns false for empty map',
 				expected: false,

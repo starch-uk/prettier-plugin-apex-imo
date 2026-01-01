@@ -67,6 +67,9 @@ Vitest-specific guidance, best practices, and reference information.
 - **DO:** Consolidate duplicate test setup/teardown logic
 - **DO:** Use Vitest's features effectively, including appropriate use of
   `.concurrent` for independent tests that can run in parallel
+- **DO:** Convert `it.each` to `it.concurrent.each` when tests are independent
+- **DO:** Group individual independent tests into `it.concurrent.each` blocks
+  when they test the same function with different inputs
 - **DO:** Ensure tests are in the correct test file based on what they're
   testing (e.g., tests for `annotations.ts` should be in
   `tests/annotations.test.ts` or similar)
@@ -77,6 +80,7 @@ Vitest-specific guidance, best practices, and reference information.
 - **DO NOT:** Alter what is being tested (only how it's structured)
 - **DO NOT:** Hardcode string literals for test input/output - use fixtures from
   `__fixtures__` directories
+- **DO NOT:** Use `.concurrent` for tests that share state or have dependencies
 
 ## Pre-Optimization Analysis
 
@@ -92,8 +96,12 @@ Before starting optimizations, analyze the codebase to identify:
   input/output expectations instead of using fixtures from `__fixtures__`
   directories
 - **Opportunities for concurrent tests** - identify independent tests that could
-  benefit from `.concurrent` to improve execution speed, or identify tests
-  incorrectly marked as concurrent that share state or have dependencies
+  benefit from `.concurrent` to improve execution speed:
+    - Convert `it.each` to `it.concurrent.each` when tests are independent
+    - Group individual `it` tests into `it.concurrent.each` blocks when they
+      test the same function with different inputs
+    - Identify tests incorrectly marked as concurrent that share state or have
+      dependencies (remove `.concurrent` from these)
 - **Hardcoded constants that could use Prettier/prettier-plugin-apex values** -
   identify hardcoded constants, strings, or values that could be replaced with
   existing constants or functions from Prettier or prettier-plugin-apex
@@ -769,13 +777,20 @@ test("uses custom options", ({ printer }) => {
 
 ### Concurrent Tests (When Safe)
 
-**CRITICAL:** Consider appropriate use of `.concurrent` when optimizing tests. Concurrent tests can significantly improve test execution speed, but should only be used when tests are truly independent.
+**CRITICAL:** **MANDATORY during optimization** - Always consider appropriate use
+of `.concurrent` when optimizing tests. Concurrent tests can significantly
+improve test execution speed and should be applied wherever tests are truly
+independent.
 
 **When to use `.concurrent`:**
 - Tests are independent (no shared state, no dependencies between tests)
 - Tests don't modify global state or external resources
 - Tests are I/O-bound or CPU-bound and can benefit from parallelization
 - Tests use fixtures or test context properly (no shared mutable state)
+- **Convert `it.each` to `it.concurrent.each`** when all test cases are
+  independent
+- **Group individual `it` tests into `it.concurrent.each`** when they test the
+  same function with different inputs
 
 **When NOT to use `.concurrent`:**
 - Tests share mutable state or depend on execution order
@@ -784,6 +799,44 @@ test("uses custom options", ({ printer }) => {
 - Tests have interdependencies (one test's output affects another)
 
 ```typescript
+// ✅ Convert it.each to it.concurrent.each for independent tests
+// Before:
+it.each([
+  { input: 'class Foo{}', expected: 'class Foo {}' },
+  { input: 'interface Bar{}', expected: 'interface Bar {}' },
+])('formats $input', ({ input, expected }) => {
+  expect(format(input)).toBe(expected);
+});
+
+// After:
+it.concurrent.each([
+  { input: 'class Foo{}', expected: 'class Foo {}' },
+  { input: 'interface Bar{}', expected: 'interface Bar {}' },
+])('formats $input', ({ input, expected }) => {
+  expect(format(input)).toBe(expected);
+});
+
+// ✅ Group individual tests into it.concurrent.each
+// Before:
+it('should return true for apex parser', () => {
+  expect(isApexParser('apex')).toBe(true);
+});
+it('should return true for apex-anonymous parser', () => {
+  expect(isApexParser('apex-anonymous')).toBe(true);
+});
+it('should return false for non-apex parser', () => {
+  expect(isApexParser('typescript')).toBe(false);
+});
+
+// After:
+it.concurrent.each([
+  { description: 'should return true for apex parser', parser: 'apex', expected: true },
+  { description: 'should return true for apex-anonymous parser', parser: 'apex-anonymous', expected: true },
+  { description: 'should return false for non-apex parser', parser: 'typescript', expected: false },
+])('$description', ({ parser, expected }) => {
+  expect(isApexParser(parser)).toBe(expected);
+});
+
 // ✅ Run independent tests concurrently
 describe.concurrent("format", () => {
   it("formats classes", async ({ expect }) => {
@@ -810,8 +863,6 @@ describe.concurrent("bad example", () => {
     expect(sharedCounter).toBe(1); // ❌ Depends on execution order
   });
 });
-
-// Or at file level in vitest.config.ts
 ````
 
 ### Test Lifecycle Hooks
@@ -1031,14 +1082,16 @@ vi.mock('./module', { spy: true });
 - [ ] Test descriptions clearly state what is being tested
 - [ ] Related tests are grouped in `describe` blocks
 - [ ] Duplicate tests are consolidated with `it.each` or `it.for`
+- [ ] **`it.each` converted to `it.concurrent.each` when tests are independent**
+- [ ] **Individual independent tests grouped into `it.concurrent.each` blocks**
 - [ ] Setup/teardown is properly scoped (beforeEach vs beforeAll)
 - [ ] No test interdependencies
 - [ ] Appropriate matchers are used
 - [ ] Type safety is maintained in test utilities
 - [ ] No commented-out tests (remove or fix)
-- [ ] Concurrent tests use `expect` from test context
-- [ ] Appropriate use of `.concurrent` - independent tests use `.concurrent`,
-      tests with shared state or dependencies do not
+- [ ] Concurrent tests use `expect` from test context when needed
+- [ ] **Appropriate use of `.concurrent` - independent tests use `.concurrent`,
+      tests with shared state or dependencies do not**
 - [ ] Fixtures used for complex, reusable setup
 
 ### Coverage Ignore Comments
@@ -1167,10 +1220,15 @@ For each file being optimized:
 5. **Check for hardcoded test fixtures** (for `tests/*.test.ts` files) - replace
    hardcoded string literals for input/output expectations with fixtures from
    `__fixtures__` directories
-6. **Consider concurrent test optimization** (for `tests/*.test.ts` files) -
-   identify independent tests that could use `.concurrent` to improve execution
-   speed, or remove `.concurrent` from tests that share state or have
-   dependencies
+6. **Apply concurrent test optimization** (for `tests/*.test.ts` files) -
+   **MANDATORY:** Identify and convert independent tests to use `.concurrent`:
+    - Convert `it.each` to `it.concurrent.each` when all test cases are
+      independent
+    - Group individual `it` tests into `it.concurrent.each` blocks when they
+      test the same function with different inputs and are independent
+    - Remove `.concurrent` from tests that share state or have dependencies
+    - Ensure concurrent tests use `expect` from test context when needed
+    - See "Concurrent Tests (When Safe)" section below for detailed guidance
 7. **Check for unused exports** - verify all exports are actually imported and
    used elsewhere in the codebase (including tests)
 8. **Review comments** - update or remove outdated comments that no longer
