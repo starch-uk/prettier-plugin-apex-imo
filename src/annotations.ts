@@ -14,7 +14,7 @@ import type {
 import {
 	APEX_ANNOTATIONS,
 	APEX_ANNOTATION_OPTION_NAMES,
-} from './refs/apex-annotations.js';
+} from './refs/annotations.js';
 import { getNodeClass } from './utils.js';
 
 // Regex is used here for preprocessing text before parsing (annotation normalization).
