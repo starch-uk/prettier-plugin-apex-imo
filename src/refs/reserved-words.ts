@@ -1,12 +1,8 @@
 /**
- * @file Complete list of Apex reserved keywords. Reference: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_reserved_words.htm. This file contains all reserved keywords that cannot be used as identifiers in Apex. Reserved keywords are case-sensitive and must be used exactly as defined.
+ * @file Complete list of Apex reserved keywords. This file contains all reserved keywords that cannot be used as identifiers in Apex. Reserved keywords are case-sensitive and must be used exactly as defined.
+ * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_reserved_words.htm}
  */
 
-/**
- * Array of Apex reserved keywords (lowercase)
- * These keywords cannot be used as identifiers for variables, methods, classes, or interfaces
- * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_reserved_words.htm.
- */
 const APEX_RESERVED_WORDS: readonly string[] = [
 	// Access modifiers and scope
 	'global',
@@ -68,14 +64,6 @@ const APEX_RESERVED_WORDS: readonly string[] = [
 ] as const;
 
 /**
- * Set of Apex reserved keywords for fast lookup
- * Derived from APEX_RESERVED_WORDS array for O(1) lookup performance.
- */
-const APEX_RESERVED_WORDS_SET: ReadonlySet<string> = new Set(
-	APEX_RESERVED_WORDS,
-);
-
-/**
  * Array of Apex reserved keywords that can appear before type declarations
  * These are access modifiers and modifiers that can precede type names in declarations
  * Examples: "public String name", "static final Integer count", "global webservice Account acc".
@@ -105,24 +93,8 @@ const TYPE_RELATED_RESERVED_WORDS: readonly string[] = [
 	'virtual',
 ] as const;
 
-/**
- * Check if a word is an Apex reserved keyword.
- * @param word - The word to check (case-insensitive).
- * @returns True if the word is a reserved keyword, false otherwise.
- * @example
- * ```typescript
- * isReservedWord('public'); // Returns true
- * isReservedWord('MyClass'); // Returns false
- * ```
- */
-function isReservedWord(word: string): boolean {
-	return APEX_RESERVED_WORDS_SET.has(word.toLowerCase());
-}
-
 export {
 	APEX_RESERVED_WORDS,
-	APEX_RESERVED_WORDS_SET,
 	DECLARATION_MODIFIERS,
 	TYPE_RELATED_RESERVED_WORDS,
-	isReservedWord,
 };

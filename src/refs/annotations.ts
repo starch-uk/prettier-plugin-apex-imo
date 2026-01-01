@@ -1,5 +1,6 @@
 /**
- * @file Complete list of standard Apex annotations and their option mappings. Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation.htm. This file contains all standard Apex annotations that must be normalized to PascalCase.
+ * @file Complete list of standard Apex annotations and their option mappings. This file contains all standard Apex annotations that must be normalized to PascalCase.
+ * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation.htm}
  */
 
 /**
@@ -52,7 +53,7 @@ interface AnnotationOption {
 /**
  * Mapping of lowercase annotation names to their available options.
  * Each option is keyed by lowercase name and contains type information and preferred casing.
- * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation.htm.
+ * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation.htm}
  */
 const APEX_ANNOTATION_OPTIONS: Record<
 	string,
@@ -63,8 +64,8 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @param cacheable - Boolean indicating whether the method's return value can be cached on the client (API version 44.0+).
 	 * @param continuation - Boolean indicating whether the method supports continuations for long-running callouts (must be true for methods that return a Continuation object).
 	 * @param scope - String specifying the cache scope, valid value: 'global' (API version 55.0+, requires cacheable=true).
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_AuraEnabled.htm
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.lightning.meta/lightning/apex_continuations_auraenabled.htm.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_AuraEnabled.htm}
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.lightning.meta/lightning/apex_continuations_auraenabled.htm}
 	 */
 	auraenabled: {
 		cacheable: { preferredCase: 'cacheable', type: 'boolean' },
@@ -74,15 +75,15 @@ const APEX_ANNOTATION_OPTIONS: Record<
 
 	/**
 	 * \@Deprecated annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_deprecated.htm
 	 * No parameters - marks a method or class as deprecated.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_deprecated.htm}
 	 */
 	deprecated: {},
 
 	/**
 	 * \@Future annotation options.
 	 * @param callout - Boolean indicating whether the future method makes a callout to an external service.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_future.htm.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_future.htm}
 	 */
 	future: {
 		callout: { preferredCase: 'callout', type: 'boolean' },
@@ -90,36 +91,36 @@ const APEX_ANNOTATION_OPTIONS: Record<
 
 	/**
 	 * \@HttpDelete annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_delete.htm
 	 * No parameters - indicates that the method handles HTTP DELETE requests (must be in a RestResource class).
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_delete.htm}
 	 */
 	httpdelete: {},
 
 	/**
 	 * \@HttpGet annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_get.htm
 	 * No parameters - indicates that the method handles HTTP GET requests (must be in a RestResource class).
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_get.htm}
 	 */
 	httpget: {},
 
 	/**
 	 * \@HttpPatch annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_patch.htm
 	 * No parameters - indicates that the method handles HTTP PATCH requests (must be in a RestResource class).
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_patch.htm}
 	 */
 	httppatch: {},
 
 	/**
 	 * \@HttpPost annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_post.htm
 	 * No parameters - indicates that the method handles HTTP POST requests (must be in a RestResource class).
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_post.htm}
 	 */
 	httppost: {},
 
 	/**
 	 * \@HttpPut annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_put.htm
 	 * No parameters - indicates that the method handles HTTP PUT requests (must be in a RestResource class).
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_http_put.htm}
 	 */
 	httpput: {},
 
@@ -132,7 +133,7 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @param category - String specifying the category for the invocable method (default appears under Uncategorized).
 	 * @param configurationEditor - String specifying the custom property editor registered with the method for Flow Builder.
 	 * @param iconName - String specifying the name of the icon (SVG file from static resource or Salesforce Lightning Design System standard icon).
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_InvocableMethod.htm.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_InvocableMethod.htm}
 	 */
 	invocablemethod: {
 		callout: { preferredCase: 'callout', type: 'boolean' },
@@ -154,7 +155,7 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @param defaultValue - String providing a default value for the action at runtime (valid format depends on data type: Boolean 'true'/'false', Decimal valid decimal, Double with 'd' suffix, Integer valid integer, Long with 'l' suffix, String any valid string).
 	 * @param placeholderText - String providing examples or additional guidance about the invocable variable (valid for Double, Integer, String types).
 	 * @param required - Boolean indicating whether the variable is required (default is false, ignored for output variables, throws error when used with defaultValue).
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_InvocableVariable.htm.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_InvocableVariable.htm}
 	 */
 	invocablevariable: {
 		defaultvalue: { preferredCase: 'defaultValue', type: 'string' },
@@ -170,7 +171,7 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @param isParallel - Boolean indicating whether the test class can run in parallel with other tests.
 	 * @param onInstall - Boolean indicating whether the test method should be executed during package installation.
 	 * Note: seeAllData and isParallel cannot be used together on the same method.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_isTest.htm.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_isTest.htm}
 	 */
 	istest: {
 		isparallel: { preferredCase: 'isParallel', type: 'boolean' },
@@ -182,7 +183,7 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * \@JsonAccess annotation options.
 	 * @param serializable - String defining contexts in which the class can be serialized. Valid values: 'never', 'sameNamespace', 'samePackage', 'always'.
 	 * @param deserializable - String defining contexts in which the class can be deserialized. Valid values: 'never', 'sameNamespace', 'samePackage', 'always'.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_JsonAccess.htm.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_JsonAccess.htm}
 	 */
 	jsonaccess: {
 		deserializable: { preferredCase: 'deserializable', type: 'string' },
@@ -191,29 +192,29 @@ const APEX_ANNOTATION_OPTIONS: Record<
 
 	/**
 	 * \@NamespaceAccessible annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_NamespaceAccessible.htm
 	 * No parameters - allows access to the class or method across namespaces.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_NamespaceAccessible.htm}
 	 */
 	namespaceaccessible: {},
 
 	/**
 	 * \@ReadOnly annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_ReadOnly.htm
 	 * No parameters - allows methods to perform unrestricted queries against the Salesforce database.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_ReadOnly.htm}
 	 */
 	readonly: {},
 
 	/**
 	 * \@RemoteAction annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_RemoteAction.htm
 	 * No parameters - exposes methods to be called from JavaScript in Visualforce pages.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_RemoteAction.htm}
 	 */
 	remoteaction: {},
 
 	/**
 	 * \@RestResource annotation options.
 	 * @param urlMapping - String specifying the URL mapping for the RESTful web service (required).
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_rest_resource.htm.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_rest_resource.htm}
 	 */
 	restresource: {
 		urlmapping: { preferredCase: 'urlMapping', type: 'string' },
@@ -225,8 +226,8 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * Note: In Apex, use single quotes for string values: \@SuppressWarnings('PMD').
 	 * For multiple values in Apex, use comma-separated string: \@SuppressWarnings('PMD.UnusedLocalVariable, PMD.UnusedPrivateMethod').
 	 * Unlike Java, Apex does not use array syntax for multiple values.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_SuppressWarnings.htm
-	 * Reference: https://pmd.github.io/pmd/pmd_userdocs_suppressing_warnings.html.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_SuppressWarnings.htm}
+	 * @see {@link https://pmd.github.io/pmd/pmd_userdocs_suppressing_warnings.html}
 	 */
 	suppresswarnings: {
 		value: { preferredCase: 'value', type: 'string[]' },
@@ -234,15 +235,15 @@ const APEX_ANNOTATION_OPTIONS: Record<
 
 	/**
 	 * \@TestSetup annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_testsetup.htm
 	 * No parameters - indicates that the method is a test setup method, which creates test data for test methods in the class.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_testsetup.htm}
 	 */
 	testsetup: {},
 
 	/**
 	 * \@TestVisible annotation options.
-	 * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_testvisible.htm
 	 * No parameters - allows test methods to access private or protected members of a class.
+	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_testvisible.htm}
 	 */
 	testvisible: {},
 } as const;
@@ -278,8 +279,8 @@ const APEX_ANNOTATION_KEYS: readonly string[] = Object.keys(
 
 /**
  * Annotations that are valid on methods only.
- * Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation.htm
  * Some annotations require specific method signatures (e.g., \@Future requires static void).
+ * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation.htm}
  */
 const METHOD_ONLY_ANNOTATIONS = [
 	'future',

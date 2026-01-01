@@ -1,5 +1,6 @@
 /**
- * @file Complete list of Salesforce object type suffixes. Reference: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm. This file contains all standard Salesforce object type suffixes.
+ * @file Complete list of Salesforce object type suffixes. This file contains all standard Salesforce object type suffixes.
+ * @see {@link https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm}
  */
 
 /* eslint-disable @typescript-eslint/naming-convention -- Salesforce suffixes must maintain their exact format with underscores */

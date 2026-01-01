@@ -6,12 +6,87 @@
 import type { AstPath, Doc } from 'prettier';
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
+import { APEX_OBJECT_SUFFIXES } from './refs/object-suffixes.js';
 import { getNodeClassOptional } from './utils.js';
+
+/**
+ * Normalizes the casing of object type suffixes in a type name.
+ * @param typeName - The type name to normalize.
+ * @returns The type name with normalized suffix casing.
+ * @example
+ * ```typescript
+ * normalizeObjectSuffix('MyCustomObject__C'); // Returns 'MyCustomObject__c'
+ * normalizeObjectSuffix('Knowledge__datacategoryselection'); // Returns 'Knowledge__DataCategorySelection'
+ * ```
+ */
+const SLICE_START_INDEX = 0;
+
+const normalizeObjectSuffix = (typeName: string): string => {
+	if (!typeName || typeof typeName !== 'string') return typeName;
+	// Check each suffix (sorted by length descending to match longest first)
+	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
+		([, a], [, b]) => b.length - a.length,
+	);
+	for (const [, normalizedSuffix] of suffixes) {
+		const lowerSuffix = normalizedSuffix.toLowerCase();
+		const lowerTypeName = typeName.toLowerCase();
+		if (lowerTypeName.endsWith(lowerSuffix)) {
+			// Use the lowercase suffix length for slicing since we matched using lowercase
+			const prefix = typeName.slice(
+				SLICE_START_INDEX,
+				typeName.length - lowerSuffix.length,
+			);
+			return prefix + normalizedSuffix;
+		}
+	}
+	return typeName;
+};
 
 const normalizeStandardObjectType = (typeName: string): string =>
 	typeof typeName === 'string' && typeName
 		? (STANDARD_OBJECTS[typeName.toLowerCase()] ?? typeName)
 		: typeName;
+
+/**
+ * Normalizes a type name by first checking if it's a standard object, then normalizing any object suffix.
+ * If the type has a suffix, the prefix is normalized as a standard object (if applicable), then the suffix is normalized.
+ * @param typeName - The type name to normalize.
+ * @returns The normalized type name.
+ * @example
+ * ```typescript
+ * normalizeTypeName('account'); // Returns 'Account'
+ * normalizeTypeName('MyCustomObject__C'); // Returns 'MyCustomObject__c'
+ * normalizeTypeName('account__c'); // Returns 'Account__c'
+ * ```
+ */
+const normalizeTypeName = (typeName: string): string => {
+	if (!typeName || typeof typeName !== 'string') return typeName;
+	// Check if it's a pure standard object (no suffix)
+	const standardNormalized = normalizeStandardObjectType(typeName);
+	// If it was normalized as a standard object, it doesn't have a suffix, so return it
+	if (standardNormalized !== typeName) return standardNormalized;
+	// Otherwise, check if it has a suffix
+	// Find the suffix and normalize prefix + suffix separately
+	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
+		([, a], [, b]) => b.length - a.length,
+	);
+	const lowerTypeName = typeName.toLowerCase();
+	for (const [, normalizedSuffix] of suffixes) {
+		const lowerSuffix = normalizedSuffix.toLowerCase();
+		if (lowerTypeName.endsWith(lowerSuffix)) {
+			const prefix = typeName.slice(
+				SLICE_START_INDEX,
+				typeName.length - lowerSuffix.length,
+			);
+			// Normalize the prefix as a standard object (if applicable)
+			const normalizedPrefix = normalizeStandardObjectType(prefix);
+			// Combine normalized prefix with normalized suffix
+			return normalizedPrefix + normalizedSuffix;
+		}
+	}
+	// No suffix found, return as-is (already checked if it's a standard object)
+	return typeName;
+};
 
 const IDENTIFIER_CLASS = 'apex.jorje.data.ast.Identifier';
 
@@ -140,7 +215,7 @@ function normalizeSingleIdentifier(
 ): Doc {
 	const nodeValue = node.value;
 	if (nodeValue.length === EMPTY_STRING_LENGTH) return originalPrint(subPath);
-	const normalizedValue = normalizeStandardObjectType(nodeValue);
+	const normalizedValue = normalizeTypeName(nodeValue);
 	if (normalizedValue === nodeValue) return originalPrint(subPath);
 	try {
 		(node as { value: string }).value = normalizedValue;
@@ -180,7 +255,7 @@ function normalizeNamesArray(
 			const nameValue = (nameNode as { value?: unknown }).value;
 			if (typeof nameValue !== 'string' || !nameValue) continue;
 			originalValues[i] = nameValue;
-			const normalizedValue = normalizeStandardObjectType(nameValue);
+			const normalizedValue = normalizeTypeName(nameValue);
 			if (normalizedValue !== nameValue) {
 				hasChanges = true;
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
@@ -247,6 +322,8 @@ const createTypeNormalizingPrint =
 
 export {
 	normalizeStandardObjectType,
+	normalizeObjectSuffix,
+	normalizeTypeName,
 	isIdentifier,
 	isInTypeContext,
 	createTypeNormalizingPrint,

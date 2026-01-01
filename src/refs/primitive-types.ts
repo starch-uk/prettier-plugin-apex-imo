@@ -1,5 +1,6 @@
 /**
- * @file Complete list of Apex primitive and collection types. Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_primitive_data_types.htm. This file contains all primitive types and collection types that must be normalized to PascalCase.
+ * @file Complete list of Apex primitive and collection types. This file contains all primitive types and collection types that must be normalized to PascalCase.
+ * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_primitive_data_types.htm}
  */
 
 /**

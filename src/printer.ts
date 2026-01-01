@@ -13,7 +13,7 @@ import type {
 } from './types.js';
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
-	normalizeStandardObjectType,
+	normalizeTypeName,
 	createTypeNormalizingPrint,
 	isIdentifier,
 	isInTypeContext,
@@ -88,7 +88,7 @@ export const createWrappedPrinter = (
 			}
 		}
 		if (isIdentifier(node) && isInTypeContext(path)) {
-			const normalizedValue = normalizeStandardObjectType(node.value);
+			const normalizedValue = normalizeTypeName(node.value);
 			if (normalizedValue !== node.value)
 				return originalPrinter.print(
 					{

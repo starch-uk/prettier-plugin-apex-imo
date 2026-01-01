@@ -491,4 +491,29 @@ describe('prettier-plugin-apex-imo integration', () => {
 			},
 		);
 	});
+
+	describe('Object suffix normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize object type suffixes to correct casing',
+				fixture: 'object-suffix-normalization',
+			},
+			{
+				description:
+					'should normalize object type suffixes in ApexDoc {@code} blocks',
+				fixture: 'apexdoc-object-suffix-normalization',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
 });

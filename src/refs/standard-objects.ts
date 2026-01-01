@@ -1,8 +1,8 @@
 /**
- * @file Complete list of standard Salesforce objects. Reference: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm. This file contains all 1640+ standard Salesforce objects for type normalization.
+ * @file Complete list of standard Salesforce objects. This file contains all 1640+ standard Salesforce objects for type normalization.
+ * @see {@link https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm}
  */
 
-// Convert PascalCase object names to lowercase keys for the typeMap
 export const STANDARD_OBJECTS: Record<string, string> = {
 	// A
 	abnexperiment: 'AbnExperiment',

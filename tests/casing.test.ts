@@ -6,11 +6,14 @@
 import { describe, it, expect, test } from 'vitest';
 import {
 	normalizeStandardObjectType,
+	normalizeObjectSuffix,
+	normalizeTypeName,
 	isIdentifier,
 	isInTypeContext,
 	createTypeNormalizingPrint,
 } from '../src/casing.js';
 import { STANDARD_OBJECTS } from '../src/refs/standard-objects.js';
+import { APEX_OBJECT_SUFFIXES } from '../src/refs/object-suffixes.js';
 import type { ApexNode, ApexIdentifier } from '../src/types.js';
 import { createMockPath, createMockPrint } from './test-utils.js';
 
@@ -80,6 +83,155 @@ describe('casing', () => {
 				expect(values.length).toBe(uniqueValues.size);
 			});
 		});
+	});
+
+	describe('normalizeObjectSuffix', () => {
+		it.concurrent(
+			'should return unchanged for types without suffixes',
+			() => {
+				expect(normalizeObjectSuffix('MyCustomClass')).toBe(
+					'MyCustomClass',
+				);
+				expect(normalizeObjectSuffix('Account')).toBe('Account');
+			},
+		);
+
+		it.concurrent('should handle empty string', () => {
+			expect(normalizeObjectSuffix('')).toBe('');
+		});
+
+		it.concurrent('should handle null and undefined inputs', () => {
+			// @ts-expect-error - Testing invalid input
+			expect(normalizeObjectSuffix(null)).toBe(null);
+			// @ts-expect-error - Testing invalid input
+			expect(normalizeObjectSuffix(undefined)).toBe(undefined);
+		});
+
+		describe('all object suffixes', () => {
+			// Test all suffixes normalize correctly with mixed case input
+			// Using .concurrent for parallel execution of independent tests
+			test.concurrent.each(Object.entries(APEX_OBJECT_SUFFIXES))(
+				'should normalize mixed case suffix %s to %s',
+				(lowercaseKey, expectedSuffix) => {
+					// Test with a prefix to ensure we're matching the suffix correctly
+					const prefix = 'MyCustomObject';
+					// Test mixed case variation (alternating uppercase/lowercase)
+					const alternateModulo = 2;
+					const alternateStartIndex = 0;
+					const mixedCaseSuffix = lowercaseKey
+						.split('')
+						.map((char, i) =>
+							i % alternateModulo === alternateStartIndex
+								? char.toUpperCase()
+								: char,
+						)
+						.join('');
+					const typeNameWithMixedSuffix = prefix + mixedCaseSuffix;
+					const expectedTypeName = prefix + expectedSuffix;
+					expect(normalizeObjectSuffix(typeNameWithMixedSuffix)).toBe(
+						expectedTypeName,
+					);
+					// Test idempotency - correct suffix should normalize to itself
+					expect(normalizeObjectSuffix(expectedTypeName)).toBe(
+						expectedTypeName,
+					);
+				},
+			);
+
+			it('should have all values in proper format', () => {
+				// Suffixes can contain underscores and mixed case
+				// Most are lowercase like '__c', but some are PascalCase like '__ChangeEvent'
+				const suffixFormatRegex = /^[a-zA-Z_]+$/;
+				for (const [, value] of Object.entries(APEX_OBJECT_SUFFIXES)) {
+					expect(value).toMatch(suffixFormatRegex);
+				}
+			});
+
+			it('should have all keys in lowercase format', () => {
+				for (const key of Object.keys(APEX_OBJECT_SUFFIXES)) {
+					expect(key).toBe(key.toLowerCase());
+				}
+			});
+
+			it('should not have duplicate entries', () => {
+				const values = Object.values(APEX_OBJECT_SUFFIXES);
+				const uniqueValues = new Set(values);
+				expect(values.length).toBe(uniqueValues.size);
+			});
+		});
+
+		it.concurrent('should handle suffixes at the end of type names', () => {
+			expect(normalizeObjectSuffix('MyObject__C')).toBe('MyObject__c');
+			expect(normalizeObjectSuffix('MyObject__c')).toBe('MyObject__c');
+			expect(normalizeObjectSuffix('MyObject__CHANGEEVENT')).toBe(
+				'MyObject__ChangeEvent',
+			);
+			expect(
+				normalizeObjectSuffix('Knowledge__DATACATEGORYSELECTION'),
+			).toBe('Knowledge__DataCategorySelection');
+		});
+
+		it.concurrent(
+			'should match longest suffix first (e.g., __DataCategorySelection before __c)',
+			() => {
+				// If a type ends with __DataCategorySelection, it should match that suffix
+				// not __c which is shorter
+				const typeName = 'Knowledge__DataCategorySelection';
+				expect(normalizeObjectSuffix(typeName)).toBe(typeName);
+				// Even if mixed case
+				expect(
+					normalizeObjectSuffix('Knowledge__DATACATEGORYSELECTION'),
+				).toBe('Knowledge__DataCategorySelection');
+			},
+		);
+	});
+
+	describe('normalizeTypeName', () => {
+		it.concurrent(
+			'should normalize standard objects and then suffixes',
+			() => {
+				// Test that standard object normalization happens first, then suffix normalization
+				expect(normalizeTypeName('account__C')).toBe('Account__c');
+				expect(normalizeTypeName('contact__c')).toBe('Contact__c');
+				expect(normalizeTypeName('MyCustomObject__C')).toBe(
+					'MyCustomObject__c',
+				);
+			},
+		);
+
+		it.concurrent(
+			'should handle types with only standard object normalization',
+			() => {
+				expect(normalizeTypeName('account')).toBe('Account');
+				expect(normalizeTypeName('contact')).toBe('Contact');
+			},
+		);
+
+		it.concurrent(
+			'should handle types with only suffix normalization',
+			() => {
+				expect(normalizeTypeName('MyCustomObject__C')).toBe(
+					'MyCustomObject__c',
+				);
+				expect(normalizeTypeName('MyCustomObject__CHANGEEVENT')).toBe(
+					'MyCustomObject__ChangeEvent',
+				);
+			},
+		);
+
+		it.concurrent('should handle empty string', () => {
+			expect(normalizeTypeName('')).toBe('');
+		});
+
+		it.concurrent(
+			'should return unchanged for types without normalization needs',
+			() => {
+				expect(normalizeTypeName('MyCustomClass')).toBe(
+					'MyCustomClass',
+				);
+				expect(normalizeTypeName('String')).toBe('String');
+			},
+		);
 	});
 
 	describe('isIdentifier', () => {
