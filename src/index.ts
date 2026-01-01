@@ -19,51 +19,45 @@ if (
 	apexPrinter === null ||
 	apexPrinter === undefined ||
 	typeof apexPrinter !== 'object' ||
-	!('print' in apexPrinter) ||
 	typeof (apexPrinter as { print?: unknown }).print !== 'function'
-) {
+)
 	throw new Error(
 		'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. The apex printer was not found.',
 	);
-}
 const wrappedPrinter = createWrappedPrinter(
 	apexPrinter as Parameters<typeof createWrappedPrinter>[0],
 );
 
-function normalizeAnnotationNamesInText(text: string): string {
-	return text
-		.replace(
-			/@([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/g,
-			(_match, name: string, params: string) => {
-				const normalizedName = normalizeAnnotationName(name);
-				const normalizedParams = params.replace(
-					/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g,
-					(m, opt: string) => {
-						const normalized = normalizeAnnotationOptionName(
-							normalizedName,
-							opt,
-						);
-						return normalized !== opt ? `${normalized}=` : m;
-					},
-				);
-				return `@${normalizedName}(${normalizedParams})`;
-			},
-		)
-		.replace(
-			/@([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_(])/g,
-			(_match, name: string) => `@${normalizeAnnotationName(name)}`,
-		);
-}
+const normalizeAnnotationNamesInText = (text: string): string =>
+	text.replace(
+		/@([a-zA-Z_][a-zA-Z0-9_]*)(\s*\(([^)]*)\)|(?![a-zA-Z0-9_(]))/g,
+		(_match, name: string, params?: string) => {
+			const normalizedName = normalizeAnnotationName(name);
+			if (params === undefined || params.length === 0)
+				return `@${normalizedName}`;
+			return `@${normalizedName}${params.replace(
+				/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g,
+				(m, opt: string) => {
+					const normalized = normalizeAnnotationOptionName(
+						normalizedName,
+						opt,
+					);
+					return normalized !== opt ? `${normalized}=` : m;
+				},
+			)}`;
+		},
+	);
 
-function createPreprocess(pluginInstance: Readonly<Plugin<ApexNode>>) {
-	return async function preprocess(
+const createPreprocess =
+	(pluginInstance: Readonly<Plugin<ApexNode>>) =>
+	async (
 		text: Readonly<string>,
 		options: Readonly<ParserOptions<ApexNode>>,
-	): Promise<string> {
+	): Promise<string> => {
 		if (options.parser !== 'apex' && options.parser !== 'apex-anonymous')
 			return text;
 		const codeBlocks = findApexDocCodeBlocks(text);
-		if (codeBlocks.length === 0) return text;
+		if (!codeBlocks.length) return text;
 		let processedText = text;
 		for (let i = codeBlocks.length - 1; i >= 0; i--) {
 			const block = codeBlocks[i];
@@ -82,40 +76,30 @@ function createPreprocess(pluginInstance: Readonly<Plugin<ApexNode>>) {
 			if (
 				!formattedCode ||
 				formattedCode.trim() === '' ||
-				formattedCode.startsWith('__FORMAT_FAILED__')
+				formattedCode.startsWith('__FORMAT_FAILED__') ||
+				(formattedCode === block.code &&
+					processedText
+						.substring(block.startPos, block.endPos)
+						.includes('\n'))
 			)
 				continue;
-			if (
-				formattedCode === block.code &&
-				processedText
-					.substring(block.startPos, block.endPos)
-					.includes('\n')
-			)
-				continue;
-			const indentedCode = applyCommentIndentation(
-				formattedCode,
-				block,
-				options,
-			);
 			const { tabWidth, useTabs } = options;
 			const closingIndent =
 				useTabs === true
 					? '\t'.repeat(Math.floor(block.commentIndent / tabWidth))
 					: ' '.repeat(block.commentIndent);
-			const newBlock = `{@code\n${indentedCode}\n${closingIndent} * }`;
 			processedText =
 				processedText.substring(0, block.startPos) +
-				newBlock +
+				`{@code\n${applyCommentIndentation(formattedCode, block, options)}\n${closingIndent} * }` +
 				processedText.substring(block.endPos);
 		}
 		return processedText;
 	};
-}
 
-function wrapParsers(
+const wrapParsers = (
 	parsers: Readonly<Plugin<ApexNode>['parsers']>,
 	pluginInstance: Readonly<Plugin<ApexNode>>,
-): Plugin<ApexNode>['parsers'] {
+): Plugin<ApexNode>['parsers'] => {
 	if (!parsers) return parsers;
 	const ourPreprocess = createPreprocess(pluginInstance);
 	const wrappedParsers: Record<string, unknown> = {};
@@ -123,50 +107,40 @@ function wrapParsers(
 		if (!Object.prototype.hasOwnProperty.call(parsers, parserName))
 			continue;
 		const originalParser = parsers[parserName];
-		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/strict-boolean-expressions
-		if (originalParser?.parse) {
-			const originalPreprocess = originalParser.preprocess;
-			wrappedParsers[parserName] = {
-				...originalParser,
-				parse: async (
-					text: Readonly<string>,
-					options: Readonly<ParserOptions<ApexNode>>,
-				): Promise<ApexNode> => {
-					return await originalParser.parse(
-						normalizeAnnotationNamesInText(text),
-						options,
-					);
-				},
-				preprocess: async (
-					text: Readonly<string>,
-					options: Readonly<ParserOptions<ApexNode>>,
-				): Promise<string> => {
-					const preprocessed = originalPreprocess
-						? await (originalPreprocess(text, options) instanceof
-							Promise
-								? originalPreprocess(text, options)
-								: Promise.resolve(
-										originalPreprocess(text, options),
-									))
-						: text;
-					return await ourPreprocess(
-						normalizeAnnotationNamesInText(preprocessed),
-						options,
-					);
-				},
-			};
-		}
+		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+		if (typeof originalParser?.parse !== 'function') continue;
+		const { preprocess: originalPreprocess } = originalParser;
+		wrappedParsers[parserName] = {
+			...originalParser,
+			parse: async (
+				text: Readonly<string>,
+				options: Readonly<ParserOptions<ApexNode>>,
+			): Promise<ApexNode> =>
+				originalParser.parse(
+					normalizeAnnotationNamesInText(text),
+					options,
+				),
+			preprocess: async (
+				text: Readonly<string>,
+				options: Readonly<ParserOptions<ApexNode>>,
+			): Promise<string> =>
+				ourPreprocess(
+					normalizeAnnotationNamesInText(
+						originalPreprocess
+							? await originalPreprocess(text, options)
+							: text,
+					),
+					options,
+				),
+		};
 	}
 	return wrappedParsers as Plugin<ApexNode>['parsers'];
-}
+};
 
 const apexPluginTyped = apexPlugin as unknown as Plugin<ApexNode>;
 const plugin: Plugin<ApexNode> = {
-	languages: apexPluginTyped.languages,
-	parsers: apexPluginTyped.parsers,
+	...apexPluginTyped,
 	printers: { apex: wrappedPrinter },
-	options: apexPluginTyped.options,
-	defaultOptions: apexPluginTyped.defaultOptions,
 };
 plugin.parsers = wrapParsers(apexPluginTyped.parsers, plugin);
 export default plugin;
