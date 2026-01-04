@@ -290,13 +290,16 @@ const createWrappedPrinter = (
 						
 						// If assignmentDoc exists, create breakable structure
 						if (assignmentDoc) {
-							// Create breakable structure: [name, ' =', group(indent([softline, assignment]))]
-							// Keep name and '=' outside the group so Prettier can break after '='
-							// Group only the assignment part to keep it together as one unit
-							// The softline allows breaking, and indent handles the wrapped line
+							// Create breakable structure matching prettier-plugin-apex pattern
+							// Use separate string literals for spaces like prettier-plugin-apex does:
+							// prettier-plugin-apex uses: [" ", "=", " ", assignmentDocs] for simple case
+							// For wrapping, we use: [name, " ", "=", " ", group(indent([softline, assignment]))]
+							// The space after = goes outside the group - when group breaks, softline provides newline
 							return [
 								nameDoc,
-								' =',
+								' ',
+								'=',
+								' ',
 								group(indent([softline, assignmentDoc])),
 							];
 						}
