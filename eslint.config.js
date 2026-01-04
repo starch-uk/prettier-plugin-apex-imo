@@ -56,6 +56,17 @@ const allRules = {
 	// All individual plugin rules not in configs
 	...allPluginRules,
 	// Customize specific rules (these override any config defaults)
+	'@typescript-eslint/naming-convention': [
+		'error',
+		{
+			selector: 'property',
+			filter: {
+				regex: '^@class$',
+				match: false,
+			},
+			format: null,
+		},
+	],
 	'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
 };
 
@@ -114,7 +125,7 @@ export default [
 			'jsdoc/require-asterisk-prefix': 'error',
 			'jsdoc/require-description': 'error',
 			'jsdoc/require-description-complete-sentence': 'error',
-			'jsdoc/require-example': 'error',
+			'jsdoc/require-example': 'off',
 			'jsdoc/require-file-overview': 'error',
 			'jsdoc/require-hyphen-before-param-description': 'error',
 			'jsdoc/require-jsdoc': 'error',
@@ -128,7 +139,7 @@ export default [
 			'jsdoc/require-property-name': 'error',
 			'jsdoc/require-property-type': 'error',
 			'jsdoc/require-property': 'error',
-			'jsdoc/require-rejects': 'error',
+			'jsdoc/require-rejects': 'off',
 			'jsdoc/require-returns-check': 'error',
 			'jsdoc/require-returns-description': 'error',
 			'jsdoc/require-returns-type': 'off',

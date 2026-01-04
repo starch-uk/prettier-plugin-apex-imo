@@ -41,8 +41,11 @@ This ensures documentation stays in sync with the actual codebase and prevents c
 Refer to documentation files in `docs/*.md`:
 - `docs/APEXDOC.md` - ApexDoc quick reference for AI agents
 - `docs/ESLINT.md` - ESLint reference and configuration
-- `docs/HUSKY9.md` - Husky v9 reference and setup
+- `docs/HUSKY.md` - Husky reference and setup
+- `docs/JORJE.md` - Jorje AST library reference (technical, style, philosophy) for AI agents
 - `docs/PNPM.md` - pnpm reference and usage
+- `docs/PRETTIER.md` - Prettier architecture, APIs, and usage patterns reference
+- `docs/PRETTIERAPEX.md` - Prettier Plugin Apex reference implementation documentation
 - `docs/VITEST.md` - Vitest reference and configuration
 
 ## External Code Inspection
@@ -51,7 +54,7 @@ For reference implementation inspection, the following repositories can be check
 - **prettier**: https://github.com/prettier/prettier.git
 - **prettier-plugin-apex**: https://github.com/dangmai/prettier-plugin-apex.git
 
-These can be cloned to temporary directories for code inspection and reference when implementing features or debugging issues.
+This can be cloned to temporary directories for code inspection and reference when implementing features or debugging issues.
 
 # pnpm Command Permissions
 
@@ -62,6 +65,53 @@ These can be cloned to temporary directories for code inspection and reference w
 3. pnpm commands should be run with full permissions from the start to prevent sandbox errors and retries
 
 This applies to ALL pnpm commands, not just install commands.
+
+# Running Specific Tests
+
+**CRITICAL**: When running specific tests, you MUST follow the patterns documented in `docs/VITEST.md`:
+
+1. **Use `vitest run` for single-run mode** (not watch mode):
+   - `pnpm exec vitest run [filters]` - runs once and exits
+   - `pnpm exec vitest [filters]` - runs in watch mode (default in dev)
+   - Always use `vitest run` when running specific tests to avoid watch mode issues
+
+2. **Run specific test files** using file paths or patterns:
+   - `pnpm exec vitest run tests/apexdoc.test.ts` - run a specific test file
+   - `pnpm exec vitest run tests/apexdoc` - run tests matching pattern (finds `apexdoc.test.ts`)
+   - `pnpm exec vitest run apexdoc` - run tests matching pattern from any location
+   - Patterns use tinyglobby and are relative to the project root
+
+3. **Run specific test suites or tests**:
+   - Using `.only` modifier in code:
+     - Use `test.only()` or `describe.only()` to run only specific tests
+     - Remember to remove `.only` before committing
+   - Using `-t` flag to filter by test name:
+     - **CRITICAL**: When test names contain spaces, escape them with `\s` instead of using quotes
+     - **DO NOT** use: `pnpm exec vitest run tests/integration.test.ts -t "should wrap field"`
+     - **DO THIS**: `pnpm exec vitest run tests/integration.test.ts -t "should\swrap\sfield"`
+     - The `-t` flag accepts a regex pattern, so spaces must be escaped as `\s`
+
+4. **Common test commands**:
+   - All tests: `pnpm exec vitest run` or `pnpm run test`
+   - Specific file: `pnpm exec vitest run tests/apexdoc.test.ts` or `pnpm run test -- tests/apexdoc.test.ts`
+   - Pattern match: `pnpm exec vitest run apexdoc` or `pnpm run test -- apexdoc`
+   - With coverage: `pnpm exec vitest run --coverage [filters]` or `pnpm run test:coverage -- [filters]`
+   - Watch mode: `pnpm exec vitest [filters]` or `pnpm run test:watch -- [filters]`
+   - Note: When using `pnpm run test`, pass filters after `--` to avoid pnpm interpreting them as script arguments
+
+5. **Important notes**:
+   - Always use `pnpm exec vitest` instead of calling `vitest` directly to ensure correct environment
+   - Use `vitest run` (single run) when debugging or running specific tests to avoid watch mode complications
+   - Test filters support glob patterns and are case-sensitive
+   - Multiple filters can be provided: `pnpm exec vitest run tests/apexdoc tests/casing`
+
+6. **When debugging specific tests**:
+   - Clear debug logs first using `delete_file` tool - **NEVER** use shell commands like `> .cursor/debug.log` or `rm .cursor/debug.log`
+   - Run specific test: `pnpm exec vitest run tests/apexdoc.test.ts`
+   - Use `--no-file-parallelism` if needed: `pnpm exec vitest run --no-file-parallelism tests/apexdoc.test.ts`
+   - Use `--reporter=verbose` for detailed output: `pnpm exec vitest run --reporter=verbose tests/apexdoc.test.ts`
+
+**Reference**: See `docs/VITEST.md` for complete Vitest CLI documentation and all available options.
 
 # Test Files Must Use Fixtures
 
@@ -111,3 +161,38 @@ This ensures:
 - Integration tests and unit tests follow the same patterns
 - Tests are secure and protected against path traversal attacks
 - Tests are precise and catch exact formatting differences
+
+# Debugging Guidelines
+
+**CRITICAL**: When debugging issues:
+
+1. **ALWAYS** clear the `.cursor/debug.log` file before each test run to ensure clean logs
+   - Use the `delete_file` tool to clear the log file - **NEVER** use shell commands like `rm`, `touch`, `>`, etc.
+   - This prevents log pollution from previous test runs and makes debugging easier
+
+2. **AUTONOMOUS OPERATIONS - DO NOT ASK USER TO DO THESE**:
+   - **YOU MUST** run tests yourself using `run_terminal_cmd` - never ask the user to run tests
+   - **YOU MUST** read log files yourself using `read_file` - never ask the user to check logs
+   - **YOU MUST** check test output yourself - never ask the user to verify output
+   - **YOU MUST** clear debug logs yourself using `delete_file` - never ask the user to clear logs
+   - **YOU MUST** verify structure/data yourself - never ask the user to verify
+   - **YOU MUST** review debug logs yourself - never ask the user to review logs
+   - **YOU MUST** check test results yourself - never ask the user to check results
+   - Tests can be run without requiring user input or approval
+   - Log files (like `.cursor/debug.log`) can be read directly to analyze issues
+   - No need to wait for user confirmation before running tests or reading logs during debugging sessions
+   - This enables efficient iterative debugging cycles
+
+3. **When to use `<reproduction_steps>` blocks**:
+   - **ONLY** include steps that require user interaction (e.g., restarting a server, clicking UI elements, providing input, manually editing files outside the workspace)
+   - **NEVER** include steps you can do autonomously (running tests, reading logs, checking output, clearing logs, reviewing debug logs, checking test results)
+   - If all debugging can be done autonomously, **DO NOT** include a `<reproduction_steps>` block
+   - The `<reproduction_steps>` block is for user actions, not agent actions
+
+4. **Examples of things you should NEVER ask the user to do**:
+   - Clear the debug log: `> .cursor/debug.log` or `rm .cursor/debug.log` - **YOU DO THIS** using `delete_file`
+   - Run the failing test: `pnpm exec vitest run tests/integration.test.ts -t "..."` - **YOU DO THIS** using `run_terminal_cmd`
+   - Check the output - it should show X instead of Y - **YOU DO THIS** by reading the test output yourself
+   - Review the debug logs to see if something is being used - **YOU DO THIS** by reading `.cursor/debug.log` yourself
+   - Check test results - **YOU DO THIS** by running tests and reading the output yourself
+   - Verify structure/data - **YOU DO THIS** by reading files and inspecting data yourself

@@ -88,7 +88,7 @@ prettier-plugin-apex-imo/
 │   └── PULL_REQUEST_TEMPLATE.md # Pull request template
 ├── docs/                     # Additional documentation
 │   ├── ESLINT.md            # ESLint reference
-│   ├── HUSKY9.md            # Husky v9 reference
+│   ├── HUSKY.md             # Husky reference
 │   └── PNPM.md              # pnpm reference
 ├── package.json
 ├── tsconfig.json

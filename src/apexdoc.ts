@@ -5,16 +5,22 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import * as prettier from 'prettier';
-import * as apexPlugin from 'prettier-plugin-apex';
 import type { ParserOptions, Plugin } from 'prettier';
 import type { ApexNode } from './types.js';
 import {
 	findApexDocComments,
 	getCommentIndent,
 	createIndent,
-	getIndentLevel,
+	normalizeBlockComment,
+	ARRAY_START_INDEX,
+	INDEX_ONE,
+	INDEX_TWO,
+	EMPTY,
 } from './comments.js';
-import { createWrappedPrinter } from './printer.js';
+import {
+	APEXDOC_ANNOTATIONS,
+	APEXDOC_GROUP_NAMES,
+} from './refs/apexdoc-annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
 
@@ -30,80 +36,26 @@ interface CodeBlock {
 // eslint-disable-next-line @typescript-eslint/no-type-alias -- Using utility type Readonly<T> per optimization plan to reduce duplication
 type ReadonlyCodeBlock = Readonly<CodeBlock>;
 
-const CODE_TAG = '{@code';
+import {
+	CODE_TAG,
+	CODE_TAG_LENGTH,
+	EMPTY_CODE_TAG,
+	extractCodeFromBlock,
+	extractAnnotationCode,
+	extractMethodCode,
+} from './apexdoc-code.js';
 
-/**
- * Length of '{@code'.
- */
-const CODE_TAG_LENGTH = 6;
-const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
-const ARRAY_START_INDEX = 0;
-const STRING_OFFSET = 1;
 const NOT_FOUND_INDEX = -1;
 const LINE_NUMBER_OFFSET = 1;
 const COLUMN_OFFSET = 1;
-const MIN_INDENT_LEVEL = 0;
+const INDEX_THREE = 3;
+const INDEX_FOUR = 4;
+const MAX_ANNOTATION_LINE_LENGTH = 20;
+const PARSE_INT_RADIX = 10;
 
-/**
- * Creates a plugin instance with the wrapped printer for code block formatting.
- * This ensures that lists and maps are always formatted multi-line as expected.
- * @returns A plugin instance with the wrapped printer.
- * @example
- * ```typescript
- * const plugin = createCodeBlockPlugin();
- * const formatted = await prettier.format(code, { plugins: [plugin] });
- * ```
- */
-const createCodeBlockPlugin = (): Plugin<ApexNode> => {
-	const apexPrinter = (apexPlugin as { printers?: { apex?: unknown } })
-		.printers?.apex;
-	if (
-		typeof apexPrinter !== 'object' ||
-		apexPrinter === null ||
-		typeof (apexPrinter as { print?: unknown }).print !== 'function'
-	) {
-		// Fallback to raw plugin if printer is not available
-		return apexPlugin as unknown as Plugin<ApexNode>;
-	}
-	const wrappedPrinter = createWrappedPrinter(
-		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- type parameter index must be literal 0
-		apexPrinter as Parameters<typeof createWrappedPrinter>[0],
-	);
-	const apexPluginTyped = apexPlugin as unknown as Plugin<ApexNode>;
-	return {
-		...apexPluginTyped,
-		printers: { apex: wrappedPrinter },
-	};
-};
-
-const codeBlockPlugin = createCodeBlockPlugin();
-
-const extractCodeFromBlock = (
-	text: Readonly<string>,
-	startPos: number,
-): { code: string; endPos: number } | null => {
-	const codeStart = prettier.util.skipWhitespace(
-		text,
-		startPos + CODE_TAG_LENGTH,
-	) as number;
-	let braceCount = INITIAL_BRACE_COUNT;
-	let pos = codeStart;
-	while (pos < text.length && braceCount > ARRAY_START_INDEX) {
-		if (text[pos] === '{') braceCount++;
-		else if (text[pos] === '}') braceCount--;
-		pos++;
-	}
-	if (braceCount !== ARRAY_START_INDEX) return null;
-	const rawCode = text.substring(codeStart, pos - STRING_OFFSET);
-	const code = rawCode.includes('*')
-		? rawCode
-				.split('\n')
-				.map((line) => line.replace(/^\s*\*\s?/, '').trimStart())
-				.join('\n')
-		: rawCode;
-	return { code: code.trim(), endPos: pos };
-};
+// Code blocks are now handled via embed function in printer.ts, not via preprocessor
+// This removes the circular dependency between apexdoc.ts and printer.ts
 
 const findApexDocCodeBlocks = (text: Readonly<string>): CodeBlock[] => {
 	const blocks: CodeBlock[] = [];
@@ -145,68 +97,6 @@ const findApexDocCodeBlocks = (text: Readonly<string>): CodeBlock[] => {
 	return blocks;
 };
 
-const extractAnnotationCode = (
-	lines: readonly string[],
-	tabWidth: number,
-	useTabs: boolean | null | undefined,
-): string[] => {
-	const codeLines: string[] = [];
-	let classIndent = 0;
-	const indentOffset = tabWidth;
-	for (const line of lines) {
-		if (line.includes('public class Temp')) {
-			classIndent = getIndentLevel(line, tabWidth);
-			continue;
-		}
-		// Note: formatCodeBlock always wraps code in 'public class Temp { ... }',
-		// so the class is always on the first line. We can process lines directly.
-		if (line.includes('void method()') || line.trim() === '}') break;
-		const lineIndent = getIndentLevel(line, tabWidth);
-		const relativeIndent = Math.max(
-			MIN_INDENT_LEVEL,
-			lineIndent - classIndent - indentOffset,
-		);
-		codeLines.push(
-			createIndent(relativeIndent, tabWidth, useTabs) + line.trimStart(),
-		);
-	}
-	return codeLines;
-};
-
-const extractMethodCode = (
-	lines: readonly string[],
-	tabWidth: number,
-	useTabs: boolean | null | undefined,
-): string[] => {
-	const codeLines: string[] = [];
-	let methodIndent = 0;
-	let methodBraceCount = 0;
-	let inMethod = false;
-	const indentOffset = tabWidth;
-	for (const line of lines) {
-		if (line.includes('void method() {')) {
-			methodIndent = getIndentLevel(line, tabWidth);
-			inMethod = true;
-			methodBraceCount = INITIAL_BRACE_COUNT;
-		} else if (inMethod) {
-			methodBraceCount +=
-				(line.match(/\{/g) ?? []).length -
-				(line.match(/\}/g) ?? []).length;
-			if (!methodBraceCount && line.trim() === '}') break;
-			const lineIndent = getIndentLevel(line, tabWidth);
-			const relativeIndent = Math.max(
-				MIN_INDENT_LEVEL,
-				lineIndent - methodIndent - indentOffset,
-			);
-			codeLines.push(
-				createIndent(relativeIndent, tabWidth, useTabs) +
-					line.trimStart(),
-			);
-		}
-	}
-	return codeLines;
-};
-
 const formatCodeBlock = async (
 	code: Readonly<string>,
 	options: Readonly<ParserOptions>,
@@ -216,29 +106,1399 @@ const formatCodeBlock = async (
 		const trimmedCode = code.trim();
 		const isAnnotationCode = trimmedCode.startsWith('@');
 		const { tabWidth, useTabs } = options;
+		// Detect blank lines in original code that should be preserved
+		// Look for patterns like "}\n\n@" or "}\n\n  public" or "}\n\n  @"
+		const originalLines = code.split('\n');
+		const blankLinePositions = new Set<number>();
+		for (
+			let i = ARRAY_START_INDEX;
+			i < originalLines.length - INDEX_ONE;
+			i++
+		) {
+			const currentLine = originalLines[i]?.trim() ?? '';
+			const nextLine = originalLines[i + INDEX_ONE]?.trim() ?? '';
+			// Check if there's a blank line between closing brace and next declaration
+			if (
+				currentLine === '}' &&
+				originalLines[i + INDEX_ONE]?.trim() === '' &&
+				i + INDEX_TWO < originalLines.length &&
+				(nextLine.startsWith('@') ||
+					nextLine.startsWith('public') ||
+					nextLine.startsWith('private') ||
+					nextLine.startsWith('static') ||
+					nextLine.startsWith('  @') ||
+					nextLine.startsWith('  public') ||
+					nextLine.startsWith('  private') ||
+					nextLine.startsWith('  static'))
+			) {
+				blankLinePositions.add(i + INDEX_ONE);
+			}
+		}
 		// Always use a plugin with the wrapped printer to ensure multi-line list formatting
-		// If a plugin is provided, use it; otherwise use the codeBlockPlugin with wrapped printer
-		const pluginToUse = plugin ?? codeBlockPlugin;
-		const formatted = await prettier.format(
-			isAnnotationCode
-				? `public class Temp { ${code} void method() {} }`
-				: `public class Temp { void method() { ${code} } }`,
-			{
-				parser: 'apex',
-				tabWidth,
-				...(useTabs !== undefined && { useTabs }),
-				plugins: [pluginToUse],
-				printWidth: options.printWidth,
-			},
-		);
+		// If a plugin is provided, use it; otherwise import and use the wrapped plugin from index.ts
+		// Note: Code blocks are now primarily handled via embed function, but formatCodeBlock
+		// is still used as a fallback or for direct formatting calls
+		const pluginToUse: Plugin<ApexNode> = plugin
+			? (plugin as Plugin<ApexNode>)
+			: // Import the wrapped plugin to ensure multiline collection formatting
+				// Use dynamic import to avoid circular dependency issues
+				(await import('./index.js')).default;
+		const wrappedCode = isAnnotationCode
+			? `public class Temp { ${code} void method() {} }`
+			: `public class Temp { void method() { ${code} } }`;
+		const formatted = await prettier.format(wrappedCode, {
+			parser: 'apex',
+			tabWidth,
+			...(useTabs !== undefined && { useTabs }),
+			plugins: [pluginToUse],
+			printWidth: options.printWidth,
+		});
 		const lines = formatted.split('\n');
 		const codeLines = isAnnotationCode
 			? extractAnnotationCode(lines, tabWidth, useTabs)
 			: extractMethodCode(lines, tabWidth, useTabs);
-		return codeLines.join('\n').trimEnd();
+		// Re-add blank lines where they existed in the original code
+		const resultLines: string[] = [];
+		for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
+			resultLines.push(codeLines[i] ?? '');
+			// Check if we should add a blank line after this line
+			if (i < codeLines.length - INDEX_ONE) {
+				const currentLine = codeLines[i]?.trim() ?? '';
+				const nextLine = codeLines[i + INDEX_ONE]?.trim() ?? '';
+				// Add blank line if current line ends with } and next line starts with @, public, private, or static
+				if (
+					currentLine === '}' &&
+					(nextLine.startsWith('@') ||
+						nextLine.startsWith('public') ||
+						nextLine.startsWith('private') ||
+						nextLine.startsWith('static'))
+				) {
+					resultLines.push('');
+				}
+			}
+		}
+		const result = resultLines.join('\n').trimEnd();
+		return result;
 	} catch {
 		return `${FORMAT_FAILED_PREFIX}${code}`;
 	}
+};
+
+/**
+ * Normalizes a single ApexDoc comment value.
+ * This function handles all normalization including annotation casing, spacing, and wrapping.
+ * Normalizes a single ApexDoc comment by formatting annotations, code blocks, and text.
+ * @param commentValue - The comment text (e.g., comment block).
+ * @param commentIndent - The indentation level of the comment in spaces.
+ * @param options - Parser options including printWidth, tabWidth, and useTabs.
+ * @returns The normalized comment value.
+ * @example
+ * normalizeSingleApexDocComment('  * @param x The parameter', 2, { printWidth: 80, tabWidth: 2, useTabs: false })
+ */
+const normalizeSingleApexDocComment = (
+	commentValue: Readonly<string>,
+	commentIndent: number,
+	options: Readonly<ParserOptions>,
+): string => {
+	const { printWidth, tabWidth } = options;
+	const tabWidthValue = tabWidth;
+
+	// First, apply basic block comment normalization (markers, asterisks, indentation)
+	// This normalizes the structure, but code block content indentation will be preserved
+	// by the embed function and then by ApexDoc-specific code below
+	let normalizedComment = normalizeBlockComment(commentValue, commentIndent, {
+		tabWidth: tabWidthValue,
+		useTabs: options.useTabs,
+	});
+
+	// Cache repeated calculations
+	const baseIndent = createIndent(
+		commentIndent,
+		tabWidthValue,
+		options.useTabs,
+	);
+	const commentPrefix = `${baseIndent} * `;
+
+	// Now apply ApexDoc-specific normalization
+	// Track code block indentation using a stack for proper nesting support
+	// Each entry stores the detected indentation string for that code block level
+	// The indentation is detected from the embed function's output (respects tabWidth/useTabs)
+	const originalLines = commentValue.split('\n');
+	const lines = normalizedComment.split('\n');
+	const normalizedLines: string[] = [];
+	// Stack to track accumulating indentation for code blocks
+	// Each entry stores the indentation string for that code block level
+	const codeBlockIndentStackEarly: string[] = [];
+	let inCodeBlockEarly = false;
+	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
+		const line = lines[i] ?? '';
+		const originalLine = originalLines[i] ?? '';
+		// Skip the first line (/**) and last line (*/)
+		if (i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE) {
+			normalizedLines.push(line);
+			continue;
+		}
+		// Track code block boundaries using brace counting for proper nesting support
+		const normalizedLineForCodeBlock = line.replace(
+			/^(\s*)\*+(\s*)/,
+			'$1*$2',
+		);
+		const trimmedLineForCodeBlockEarly = normalizedLineForCodeBlock
+			.replace(/^\s*\*\s*/, '')
+			.trim();
+		if (line.includes('{@code')) {
+			inCodeBlockEarly = true;
+			// Push empty string - will detect indentation from first continuation line
+			codeBlockIndentStackEarly.push('');
+			// Count opening brace in {@code tag
+			let codeBlockBraceCount = INITIAL_BRACE_COUNT;
+			// Count braces in the rest of the line
+			for (const char of trimmedLineForCodeBlockEarly.substring(
+				trimmedLineForCodeBlockEarly.indexOf('{@code') +
+					'{@code'.length,
+			)) {
+				if (char === '{') codeBlockBraceCount++;
+				if (char === '}') codeBlockBraceCount--;
+			}
+			// Store brace count in the stack entry (as a string representation)
+			codeBlockIndentStackEarly[
+				codeBlockIndentStackEarly.length - INDEX_ONE
+			] = String(codeBlockBraceCount);
+		}
+		if (inCodeBlockEarly) {
+			// Get current brace count from stack
+			const currentBraceCount = Number.parseInt(
+				codeBlockIndentStackEarly[
+					codeBlockIndentStackEarly.length - INDEX_ONE
+				] ?? '1',
+				PARSE_INT_RADIX,
+			);
+			let newBraceCount = currentBraceCount;
+			// Count braces in this line
+			for (const char of trimmedLineForCodeBlockEarly) {
+				if (char === '{') newBraceCount++;
+				if (char === '}') newBraceCount--;
+			}
+			// Update brace count in stack
+			codeBlockIndentStackEarly[
+				codeBlockIndentStackEarly.length - INDEX_ONE
+			] = String(newBraceCount);
+			// Code block ends when brace count reaches 0
+			if (newBraceCount === ARRAY_START_INDEX) {
+				inCodeBlockEarly = false;
+				codeBlockIndentStackEarly.pop();
+			}
+		}
+		// For code block content lines, preserve spacing after asterisk from embed function
+		// This includes closing braces which need to preserve their indentation to align with opening braces
+		// Use the original line to get the spacing that the embed function added
+		const originalAsteriskMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(originalLine);
+		const normalizedAsteriskMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(line);
+		if (
+			inCodeBlockEarly &&
+			!line.includes('{@code') &&
+			originalAsteriskMatch &&
+			normalizedAsteriskMatch
+		) {
+			// Code block content line - preserve embed indentation from original line
+			// originalAsteriskMatch groups: [0]=full match, [1]=leading whitespace, [2]=asterisk, [3]=whitespace after asterisk, [4]=rest of line
+			const originalAfterAsterisk =
+				originalAsteriskMatch[INDEX_THREE] ?? '';
+			const restOfLine = normalizedAsteriskMatch[INDEX_FOUR] ?? '';
+			// originalAfterAsterisk includes: 1 space (from '* ') + embed indentation (if any)
+			// Preserve the full indentation: baseIndent + asterisk + originalAfterAsterisk + restOfLine
+			normalizedLines.push(
+				`${baseIndent} *${originalAfterAsterisk}${restOfLine}`,
+			);
+		} else {
+			// Normal line - keep as-is (already normalized by normalizeBlockComment)
+			normalizedLines.push(line);
+		}
+	}
+	normalizedComment = normalizedLines.join('\n');
+
+	// Normalize annotation names (e.g., @Param -> @param) and split multiple annotations on same line
+	// First, split lines with multiple annotations onto separate lines
+	const annotationSplitLines = normalizedComment.split('\n');
+	const splitLines: string[] = [];
+	for (const line of annotationSplitLines) {
+		// Match all annotations on the line: * @annotation1 value1 @annotation2 value2
+		// Also match annotations that appear after text (e.g., "text. * @param" or "text * @param")
+		const annotationMatches = [
+			...line.matchAll(
+				/(\s*\*\s*|\s+(?!\{)|\s*\*\s*\.\s*\*\s*)@([a-zA-Z_][a-zA-Z0-9_]*)(\s+[^\n@]*?)(?=\s*@|\s*\*|\s*$)/g,
+			),
+		];
+		if (annotationMatches.length > INDEX_ONE) {
+			// Multiple annotations on same line - split them
+			// Ensure consistent indentation using baseIndent
+			const consistentPrefix = commentPrefix;
+			for (const match of annotationMatches) {
+				const annotationName = match[INDEX_TWO] ?? '';
+				const content = (match[INDEX_THREE] ?? '').trim();
+				const lowerName = annotationName.toLowerCase();
+				if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
+					splitLines.push(
+						content.length > EMPTY
+							? `${consistentPrefix}@${lowerName} ${content}`
+							: `${consistentPrefix}@${lowerName}`,
+					);
+				} else {
+					// For non-ApexDoc annotations, preserve original but normalize indentation
+					const originalLine = match[ARRAY_START_INDEX];
+					const linePrefixMatch = /^(\s*\*\s*)/.exec(originalLine);
+					if (linePrefixMatch) {
+						const restOfLine = originalLine
+							.substring(
+								linePrefixMatch[ARRAY_START_INDEX].length,
+							)
+							.trimStart();
+						splitLines.push(`${consistentPrefix}${restOfLine}`);
+					} else {
+						splitLines.push(originalLine);
+					}
+				}
+			}
+		} else if (annotationMatches.length === INDEX_ONE) {
+			// Single annotation on line - check if there's text before it
+			const [match] = annotationMatches;
+			if (!match) {
+				splitLines.push(line);
+				continue;
+			}
+			const annotationStart = match.index;
+			// Check if there's non-whitespace text before the annotation
+			const beforeAnnotation = line.substring(
+				ARRAY_START_INDEX,
+				annotationStart,
+			);
+			const textAfterAsterisk = beforeAnnotation
+				.replace(/^\s*\*\s*/, '')
+				.trim();
+			const hasTextBefore = textAfterAsterisk.length > EMPTY;
+			if (hasTextBefore) {
+				// Split: text line + annotation line
+				const consistentPrefix = commentPrefix;
+				// Extract text before annotation - preserve the comment structure
+				// Find the asterisk position to preserve indentation
+				const asteriskMatch = /^(\s*)(\*)(\s*)/.exec(beforeAnnotation);
+				if (asteriskMatch) {
+					// Preserve the original indentation and asterisk, just add the text
+					const asterisk = asteriskMatch[INDEX_TWO] ?? '';
+					const textLine = `${baseIndent}${asterisk} ${textAfterAsterisk}`;
+					splitLines.push(textLine);
+				} else {
+					// No asterisk found, use consistent prefix
+					splitLines.push(`${consistentPrefix}${textAfterAsterisk}`);
+				}
+				// Extract annotation - handle case where prefix includes period
+				const annotationName = match[INDEX_TWO] ?? '';
+				const content = (match[INDEX_THREE] ?? '').trim();
+				const lowerName = annotationName.toLowerCase();
+				if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
+					const annotationLine =
+						content.length > EMPTY
+							? `${consistentPrefix}@${lowerName} ${content}`
+							: `${consistentPrefix}@${lowerName}`;
+					splitLines.push(annotationLine);
+				} else {
+					// For non-ApexDoc annotations, preserve original but remove period prefix if present
+					const annotationPart = line.substring(annotationStart);
+					const cleanedAnnotation = annotationPart
+						.replace(/^\.\s*\*\s*/, '* ')
+						.trimStart();
+					splitLines.push(cleanedAnnotation);
+				}
+			} else {
+				splitLines.push(line);
+			}
+		} else {
+			splitLines.push(line);
+		}
+	}
+	normalizedComment = splitLines.join('\n');
+
+	// Normalize annotation names (e.g., @Param -> @param)
+	// Match @ followed by annotation name, either at start of line (after optional whitespace and *)
+	// or in the middle of a line (after whitespace, but not {)
+	// Also handle cases where @ appears directly after * without space
+	// CRITICAL: Skip annotations inside code blocks - they should use normal annotation normalization
+	// (PascalCase) not ApexDoc normalization (lowercase)
+	const annotationRegex =
+		/(\s*\*\s*|\s*\*|\s+(?!\{))@([a-zA-Z_][a-zA-Z0-9_]*)(\s|$)/g;
+	const consistentPrefixForNormalize = commentPrefix;
+	// Process line-by-line to track code blocks and skip annotation normalization inside them
+	// CRITICAL: Annotations inside code blocks are already normalized by the embed function
+	// (using normal annotation normalization to PascalCase), so we must skip them here
+	const linesForNormalize = normalizedComment.split('\n');
+	const codeBlockIndentStackForNormalize: string[] = [];
+	const annotationNormalizedLinesForRegex: string[] = [];
+	for (let i = ARRAY_START_INDEX; i < linesForNormalize.length; i++) {
+		const line = linesForNormalize[i] ?? '';
+		const trimmedLine = line.replace(/^\s*\*\s*/, '').trim();
+
+		// Track code block boundaries using brace counting
+		if (trimmedLine.includes('{@code')) {
+			codeBlockIndentStackForNormalize.push('');
+			let codeBlockBraceCount = INITIAL_BRACE_COUNT;
+			for (const char of trimmedLine.substring(
+				trimmedLine.indexOf('{@code') + '{@code'.length,
+			)) {
+				if (char === '{') codeBlockBraceCount++;
+				if (char === '}') codeBlockBraceCount--;
+			}
+			codeBlockIndentStackForNormalize[
+				codeBlockIndentStackForNormalize.length - INDEX_ONE
+			] = String(codeBlockBraceCount);
+		}
+
+		const inCodeBlock =
+			codeBlockIndentStackForNormalize.length > ARRAY_START_INDEX;
+
+		if (inCodeBlock) {
+			const currentBraceCount = Number.parseInt(
+				codeBlockIndentStackForNormalize[
+					codeBlockIndentStackForNormalize.length - INDEX_ONE
+				] ?? '1',
+				PARSE_INT_RADIX,
+			);
+			let newBraceCount = currentBraceCount;
+			for (const char of trimmedLine) {
+				if (char === '{') newBraceCount++;
+				if (char === '}') newBraceCount--;
+			}
+			codeBlockIndentStackForNormalize[
+				codeBlockIndentStackForNormalize.length - INDEX_ONE
+			] = String(newBraceCount);
+			if (newBraceCount === ARRAY_START_INDEX) {
+				codeBlockIndentStackForNormalize.pop();
+			}
+		}
+
+		// Only normalize annotations if NOT inside a code block
+		// Annotations inside code blocks should use normal annotation normalization (PascalCase)
+		// which is already applied by the embed function
+		if (inCodeBlock) {
+			annotationNormalizedLinesForRegex.push(line);
+		} else {
+			// eslint-disable-next-line jsdoc/convert-to-jsdoc-comments -- Regular inline comment, not JSDoc
+			// Apply annotation normalization regex to this line
+			const normalizeAnnotationMatch = (
+				match: string,
+				prefix: string,
+				annotationName: string,
+				suffix: string,
+			) /* eslint-disable-line @typescript-eslint/max-params -- Regex replace callback requires 4 parameters */ : string => {
+				const lowerName = annotationName.toLowerCase();
+				// Check if it's a valid ApexDoc annotation
+				if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
+					// Preserve newline from original prefix if present, otherwise use consistent prefix
+					const normalizedPrefix = prefix.includes('\n')
+						? `\n${consistentPrefixForNormalize}`
+						: consistentPrefixForNormalize;
+					return `${normalizedPrefix}@${lowerName}${suffix}`;
+				}
+				return match;
+			};
+			const normalizedLine = line.replace(
+				annotationRegex,
+				normalizeAnnotationMatch,
+			);
+			annotationNormalizedLinesForRegex.push(normalizedLine);
+		}
+	}
+	normalizedComment = annotationNormalizedLinesForRegex.join('\n');
+	// Normalize extra whitespace around annotations (e.g., "  @author   Developer  " -> "@author Developer")
+	// Match lines with annotations and normalize spacing and indentation
+	const annotationLines = normalizedComment.split('\n');
+	const consistentPrefixForSpacing = commentPrefix;
+	// Use a stack to track code block nesting levels and their indentation
+	// Each entry stores the detected indentation string for that code block level
+	// The indentation is detected from the embed function's output (respects tabWidth/useTabs)
+	const codeBlockIndentStack: string[] = [];
+	const annotationNormalizedLines = annotationLines.map((line, lineIndex) => {
+		// Skip first and last lines (/** and */)
+		if (
+			lineIndex === ARRAY_START_INDEX ||
+			lineIndex === annotationLines.length - INDEX_ONE
+		) {
+			// Normalize comment end if it has extra asterisks
+			if (
+				lineIndex === annotationLines.length - INDEX_ONE &&
+				line.includes('**/')
+			) {
+				return line.replace(/\*{2,}\//, '*/');
+			}
+			return line;
+		}
+		// Track code block boundaries using stack
+		const trimmedLineForCodeBlock = line.replace(/^\s*\*\s*/, '').trim();
+		const isCodeBlockStart = line.includes('{@code');
+		// Check if next line is also a closing brace to distinguish code content from {@code} closing brace
+		// Only the {@code} closing brace should end the code block, not code content closing braces
+		// The {@code} closing brace is the LAST standalone '}' (not '};' or '},' etc.)
+		const nextLine = annotationLines[lineIndex + INDEX_ONE];
+		const nextTrimmed = nextLine?.replace(/^\s*\*\s*/, '').trim() ?? '';
+		// isCodeBlockEnd is true only if:
+		// 1. We're in a code block (stack not empty)
+		// 2. This line is just '}' (standalone closing brace)
+		// 3. The next line is NOT also just '}' (if next is '}', this is code content, next is {@code} closing)
+		// 4. The next line does not start with '}' (if it starts with '}', it's code content like '};' or '},')
+
+		/**
+		 * Next line should not start with '}' (not '};' or '},' etc.).
+		 */
+		const isCodeBlockEnd =
+			codeBlockIndentStack.length > ARRAY_START_INDEX &&
+			trimmedLineForCodeBlock === '}' &&
+			nextTrimmed !== '}' &&
+			!nextTrimmed.startsWith('}');
+		// Update stack based on code block boundaries
+		if (isCodeBlockStart) {
+			// Push empty string - will detect indentation from first continuation line
+			codeBlockIndentStack.push('');
+		}
+		if (isCodeBlockEnd) {
+			codeBlockIndentStack.pop();
+		}
+		const inCodeBlock = codeBlockIndentStack.length > ARRAY_START_INDEX;
+		// For code block content lines, preserve spacing after asterisk (don't normalize)
+		// The embed function produces code with configurable indentation (tabWidth/useTabs)
+		// Only exclude the actual {@code} closing brace, not code content closing braces
+		if (inCodeBlock && !isCodeBlockStart && !isCodeBlockEnd) {
+			// Inside code block - preserve the line structure, just normalize base indent and asterisks
+			let normalizedLine = line;
+			const asteriskMatch = /^(\s*)(\*+)(\s*)(.*)$/.exec(line);
+			const asteriskMatchValue = asteriskMatch?.[ARRAY_START_INDEX];
+			// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- asteriskMatchValue is string | undefined from regex exec
+			if (asteriskMatchValue) {
+				// Normalize multiple asterisks to single asterisk, but preserve spacing after asterisk
+				const afterAsterisk = asteriskMatch[INDEX_THREE] ?? '';
+				const content = asteriskMatch[INDEX_FOUR] ?? '';
+				// Preserve the indentation from afterAsterisk (embed function preserves relative indentation)
+				// consistentPrefixForSpacing is "   * " (includes 1 space after asterisk)
+				// afterAsterisk already contains the correct indentation (1 space + additional if any)
+				normalizedLine = `${consistentPrefixForSpacing.slice(ARRAY_START_INDEX, NOT_FOUND_INDEX)}${afterAsterisk}${content}`;
+			} else {
+				// Line has no asterisk - add one with preserved spacing
+				const trimmed = line.trimStart();
+				if (trimmed.startsWith('*')) {
+					const afterAsteriskMatch = /^(\s*)/.exec(
+						trimmed.substring(INDEX_ONE),
+					);
+					const afterAsterisk =
+						afterAsteriskMatch?.[INDEX_ONE] ?? ' ';
+					const restContent = trimmed
+						.substring(INDEX_ONE)
+						.trimStart();
+					normalizedLine = `${consistentPrefixForSpacing.slice(ARRAY_START_INDEX, NOT_FOUND_INDEX)}${afterAsterisk}${restContent}`;
+				} else {
+					normalizedLine = `${consistentPrefixForSpacing}${trimmed}`;
+				}
+			}
+			return normalizedLine;
+		}
+		// First, ensure the line has normalized asterisks (in case normalization at lines 513-574 didn't catch it)
+		// This is a safety check to ensure all lines are normalized
+		let normalizedLine = line;
+		const asteriskMatch = /^(\s*)(\*+)(\s*)/.exec(line);
+		const asteriskMatchValue = asteriskMatch?.[ARRAY_START_INDEX];
+		// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- asteriskMatchValue is string | undefined from regex exec
+		if (asteriskMatchValue) {
+			// Normalize multiple asterisks to single asterisk
+			let restOfLine = line.substring(
+				asteriskMatch[ARRAY_START_INDEX].length,
+			);
+			restOfLine = restOfLine.replace(/^\s*\*+\s*/, '');
+			normalizedLine = `${consistentPrefixForSpacing}${restOfLine.trimStart()}`;
+		} else {
+			// Line has no asterisk - add one
+			const trimmed = line.trimStart();
+			if (trimmed.startsWith('*')) {
+				// Line has asterisk but no leading whitespace - normalize it
+				const afterAsterisk = trimmed.substring(INDEX_ONE).trimStart();
+				normalizedLine = `${consistentPrefixForSpacing}${afterAsterisk}`;
+			} else {
+				normalizedLine = `${consistentPrefixForSpacing}${trimmed}`;
+			}
+		}
+		// Now process annotations on the normalized line
+		// Normalize spacing for all annotations on the line (even if multiple)
+		// The splitting logic will handle separating them later
+		const annotationWithSpacingRegex =
+			/(\s*\*\s*|\s+(?!\{))@([a-zA-Z_][a-zA-Z0-9_]*)(\s+)([^\n@]*?)(?=\s*@|\s*\*|\s*$)/g;
+
+		// Process all annotations on the line from right to left to avoid index shifting
+		const matches: {
+			index: number;
+			length: number;
+			prefix: string;
+			annotationName: string;
+			content: string;
+		}[] = [];
+
+		for (const match of normalizedLine.matchAll(
+			annotationWithSpacingRegex,
+		)) {
+			const prefix = match[INDEX_ONE] ?? '';
+			const annotationName = match[INDEX_TWO] ?? '';
+			const content = match[INDEX_FOUR] ?? '';
+			const lowerName = annotationName.toLowerCase();
+			if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
+				matches.push({
+					annotationName: lowerName,
+					content,
+					index: match.index,
+					length: match[ARRAY_START_INDEX].length,
+					prefix,
+				});
+			}
+		}
+
+		// Replace from right to left to maintain correct indices
+		if (matches.length > ARRAY_START_INDEX) {
+			let resultLine = normalizedLine;
+			for (
+				let i = matches.length - INDEX_ONE;
+				i >= ARRAY_START_INDEX;
+				i--
+			) {
+				const match = matches[i];
+				if (!match) continue;
+
+				// Normalize content: trim and normalize multiple spaces to single space
+				const trimmedContent = match.content.trim();
+				const normalizedContent = trimmedContent.replace(/\s+/g, ' ');
+
+				// Build normalized annotation
+				// If annotation is at start of line, use consistent prefix
+				// Otherwise preserve the original prefix
+				const isAtLineStart =
+					match.index === ARRAY_START_INDEX ||
+					resultLine
+						.substring(ARRAY_START_INDEX, match.index)
+						.trim() === '';
+				const annotationPrefix = isAtLineStart
+					? consistentPrefixForSpacing
+					: match.prefix;
+
+				const normalizedAnnotation =
+					normalizedContent.length > EMPTY
+						? `${annotationPrefix}@${match.annotationName} ${normalizedContent}`
+						: `${annotationPrefix}@${match.annotationName}`;
+
+				// Replace in result line
+				resultLine =
+					resultLine.substring(ARRAY_START_INDEX, match.index) +
+					normalizedAnnotation +
+					resultLine.substring(match.index + match.length);
+			}
+			return resultLine;
+		}
+
+		// Fallback: Match single annotation at end of line
+		const singleAnnotationRegex =
+			/(\s*\*\s*|\s+(?!\{))@([a-zA-Z_][a-zA-Z0-9_]*)(\s+)([^\n@]*?)(\s*)$/;
+		const singleMatch = singleAnnotationRegex.exec(normalizedLine);
+		if (singleMatch) {
+			const [, , annotationName, , content] = singleMatch;
+			const lowerName = annotationName?.toLowerCase() ?? '';
+			if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
+				// Normalize content: trim and normalize multiple spaces to single space
+				const trimmedContent = (content ?? '').trim();
+				const normalizedContent = trimmedContent.replace(/\s+/g, ' ');
+				// Use consistent prefix for all annotations
+				// Use single space after annotation if there's content
+				return normalizedContent.length > EMPTY
+					? `${consistentPrefixForSpacing}@${lowerName} ${normalizedContent}`
+					: `${consistentPrefixForSpacing}@${lowerName}`;
+			}
+		}
+		return normalizedLine;
+	});
+	// Now split lines that contain both text and annotations (e.g., " * text * @param value")
+	// into separate lines
+	const finalLines: string[] = [];
+	for (const line of annotationNormalizedLines) {
+		// Check if line contains both text and annotations
+		// Match patterns like " * text * @param value" or " * text. * @param value * @return value"
+		const annotationInMiddleRegex =
+			/(\*\s*@[a-zA-Z_][a-zA-Z0-9_]*\s+[^\*]*?)(?=\s*\*|$)/g;
+		const annotationMatches = [...line.matchAll(annotationInMiddleRegex)];
+		if (annotationMatches.length > ARRAY_START_INDEX) {
+			// Check if there's text before the first annotation
+			const [firstMatch] = annotationMatches;
+			if (
+				firstMatch?.index !== undefined &&
+				firstMatch.index > ARRAY_START_INDEX
+			) {
+				// There's text before the first annotation - split the line
+				let lastIndex = ARRAY_START_INDEX;
+				for (const match of annotationMatches) {
+					// Add text before annotation
+					const textBefore = line
+						.substring(lastIndex, match.index)
+						.trim();
+					if (textBefore.length > EMPTY) {
+						// Ensure it has the comment prefix
+						const prefixedText = textBefore.startsWith('*')
+							? textBefore
+							: `${consistentPrefixForSpacing}${textBefore}`;
+						finalLines.push(prefixedText);
+					}
+					// Add annotation - ensure it has the correct prefix
+					const annotationPart = match[ARRAY_START_INDEX].trim();
+					if (annotationPart.length > EMPTY) {
+						// The annotation part should already have * at the start, but ensure it has the full prefix
+						if (annotationPart.startsWith('*')) {
+							// Extract the content after the asterisk
+							const annotationContent = annotationPart
+								.substring(INDEX_ONE)
+								.trimStart();
+							finalLines.push(
+								`${consistentPrefixForSpacing}${annotationContent}`,
+							);
+						} else {
+							finalLines.push(
+								`${consistentPrefixForSpacing}${annotationPart}`,
+							);
+						}
+					}
+					lastIndex = match.index + match[ARRAY_START_INDEX].length;
+				}
+				// Add remaining text after last annotation
+				const textAfter = line.substring(lastIndex).trim();
+				if (textAfter.length > EMPTY) {
+					const prefixedText = textAfter.startsWith('*')
+						? textAfter
+						: `${consistentPrefixForSpacing}${textAfter}`;
+					finalLines.push(prefixedText);
+				}
+			} else {
+				// No text before first annotation - line starts with annotation, keep as-is
+				finalLines.push(line);
+			}
+		} else {
+			// No annotations in middle - keep line as-is
+			finalLines.push(line);
+		}
+	}
+	normalizedComment = finalLines.join('\n');
+
+	// Normalize @group values
+	// Match @group followed by whitespace and a group name
+	const groupRegex = /(\s*\*\s*@group\s+)([a-zA-Z_][a-zA-Z0-9_]*)(\s|$)/g;
+	normalizedComment = normalizedComment.replace(
+		groupRegex,
+		// eslint-disable-next-line @typescript-eslint/max-params -- Regex replace callback requires 4 parameters
+		(match, prefix, groupName, suffix) => {
+			const lowerGroupName = String(groupName).toLowerCase();
+
+			const properCase = APEXDOC_GROUP_NAMES[lowerGroupName];
+			// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- properCase is string | undefined from Record lookup
+			if (properCase) {
+				// eslint-disable-next-line @typescript-eslint/restrict-template-expressions -- prefix and suffix are strings from regex match
+				return `${prefix}${properCase}${suffix}`;
+			}
+			return match;
+		},
+	);
+
+	/**
+	 * Wraps a long annotation line to fit within the print width.
+	 * @param lineToWrap - The annotation line that may need wrapping.
+	 * @param wrapCommentIndent - The indentation level of the comment.
+	 * @param wrapOptions - Parser options including printWidth, tabWidth, and useTabs.
+	 * @returns The wrapped line(s) split by newlines if wrapping occurred, otherwise returns the original line unchanged.
+	 * @example
+	 * wrapAnnotationLine(' * @param veryLongParameterName description', 2, { printWidth: 80, tabWidth: 2, useTabs: false })
+	 */
+	const wrapAnnotationLine = (
+		lineToWrap: Readonly<string>,
+		wrapCommentIndent: number,
+		wrapOptions: Readonly<ParserOptions>,
+	): string => {
+		const {
+			printWidth: wrapPrintWidth,
+			tabWidth: wrapTabWidth,
+			useTabs: wrapUseTabs,
+		} = wrapOptions;
+		if (!wrapPrintWidth) return lineToWrap;
+
+		const wrapBaseIndent = createIndent(
+			wrapCommentIndent,
+			wrapTabWidth,
+			wrapUseTabs,
+		);
+		const wrapCommentPrefix = wrapBaseIndent + ' * ';
+		const lineLength = lineToWrap.length;
+
+		if (lineLength < wrapPrintWidth) return lineToWrap;
+
+		// Find the annotation part (e.g., " * @param input")
+		const annotationMatch = /^(\s*\*\s*@\w+\s+[^\s]+)/.exec(lineToWrap);
+		const annotationMatchValue = annotationMatch?.[INDEX_ONE];
+		// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- annotationMatchValue is string | undefined from regex exec
+		if (!annotationMatchValue) {
+			return lineToWrap;
+		}
+
+		const annotationPart = annotationMatch[INDEX_ONE];
+		if (annotationPart === undefined) {
+			return lineToWrap;
+		}
+		const remainingText = lineToWrap
+			.substring(annotationPart.length)
+			.trim();
+		if (remainingText.length === EMPTY) return lineToWrap;
+
+		// Calculate available width for the remaining text on the first line
+		const annotationPartLength = annotationPart.length;
+		const availableWidth = wrapPrintWidth - annotationPartLength;
+
+		if (availableWidth < MAX_ANNOTATION_LINE_LENGTH) {
+			// If annotation itself is too long, wrap after annotation
+			return `${annotationPart}\n${wrapCommentPrefix}${remainingText}`;
+		}
+
+		// Try to wrap the remaining text
+		const words = remainingText.split(/\s+/);
+		const wrappedLines: string[] = [];
+		let currentLine = annotationPart;
+
+		for (const word of words) {
+			const testLine = `${currentLine} ${word}`;
+			if (testLine.length < wrapPrintWidth) {
+				currentLine = testLine;
+			} else {
+				if (currentLine !== annotationPart) {
+					wrappedLines.push(currentLine);
+				}
+				// Start new line with comment prefix and word
+				currentLine = `${wrapCommentPrefix}${word}`;
+			}
+		}
+
+		if (
+			annotationPart &&
+			(currentLine !== annotationPart || wrappedLines.length === EMPTY)
+		) {
+			wrappedLines.push(currentLine);
+		}
+
+		return wrappedLines.join('\n');
+	};
+
+	// Wrap long annotation lines based on printWidth
+	// Also join consecutive non-annotation text lines into single lines so Prettier
+	// can wrap them as paragraphs instead of wrapping each line individually
+	if (printWidth) {
+		const annotationLinesForWrap = normalizedComment.split('\n');
+		const wrappedLines: string[] = [];
+		const baseIndentForWrap = createIndent(
+			commentIndent,
+			tabWidthValue,
+			options.useTabs,
+		);
+		const wrapCommentPrefix = baseIndentForWrap + ' * ';
+		let currentTextBlock: string[] = [];
+		// Track code block indentation using a stack (shared with earlier normalization)
+		// Each entry stores the detected indentation string for that code block level
+		const codeBlockIndentStackForWrap: string[] = [];
+		let insideCodeBlock = false;
+		for (
+			let lineIndex = ARRAY_START_INDEX;
+			lineIndex < annotationLinesForWrap.length;
+			lineIndex++
+		) {
+			const annotationLine = annotationLinesForWrap[lineIndex] ?? '';
+			// Check if line contains an annotation anywhere (not just at start)
+			// Match * followed by @annotation anywhere in the line
+			const isAnnotation = /\*\s*@[a-zA-Z_]/.test(annotationLine);
+			const isCodeBlockStart = annotationLine.includes('{@code');
+			const isCommentEnd = annotationLine.trim() === '*/';
+			const isCommentStart = annotationLine.trim() === '/**';
+
+			// Code block ends when we see a closing } that's on its own line
+			// But we need to be careful - the closing } might be part of the code content
+			// We'll detect it by checking if the line is just " * }" (after trimming asterisk and spaces)
+			const trimmedLine = annotationLine.replace(/^\s*\*\s*/, '').trim();
+			// Check if this is the closing brace of a code block
+			// It should be just "}" on its own line (after removing comment markers)
+			// However, if the next line is also just "}", then this is the code content closing brace,
+			// and the next line is the {@code} closing brace - we should only end on the next one
+			// Also, if the next line starts with "}" (like "};" or "},"), then this is code content, not the {@code} closing brace
+			const nextLine = annotationLinesForWrap[lineIndex + INDEX_ONE];
+			const nextTrimmed = nextLine?.replace(/^\s*\*\s*/, '').trim() ?? '';
+			const isCodeBlockEnd =
+				insideCodeBlock &&
+				!isCommentEnd &&
+				!isCommentStart &&
+				!isCodeBlockStart &&
+				trimmedLine === '}' &&
+				// Only end code block if next line is NOT also just a closing brace
+				// (this handles the case where we have " * }" followed by " * }" - the second one ends the code block)
+				// AND next line does NOT start with "}" (if it starts with "}", it's code content like "};" or "},")
+				nextTrimmed !== '}' &&
+				!nextTrimmed.startsWith('}');
+			const isCodeBlock =
+				isCodeBlockStart || (insideCodeBlock && !isCodeBlockEnd);
+
+			// Track code block state using stack
+			if (isCodeBlockStart) {
+				insideCodeBlock = true;
+				// Push empty string - will detect indentation from first continuation line
+				codeBlockIndentStackForWrap.push('');
+			}
+			if (isCodeBlockEnd) {
+				insideCodeBlock = false;
+				codeBlockIndentStackForWrap.pop();
+			}
+
+			// If we hit an annotation, code block, or comment boundary, flush the current text block
+			if (isAnnotation || isCodeBlock || isCommentEnd || isCommentStart) {
+				if (currentTextBlock.length > EMPTY) {
+					// For text blocks with multiple lines, preserve line breaks
+					// (don't join lines that are already on separate lines)
+					// This preserves the original line structure for malformed comments
+					if (currentTextBlock.length > INDEX_ONE) {
+						// Process each line, wrapping if it exceeds printWidth
+						// The actual prefix might be normalized to " * " (3 chars), but the expected output uses "   * " (5 chars)
+						// We need to use the expected prefix length for effectiveWidth calculation
+						// The expected prefix is based on commentIndent, which should be 2 for "   * " (5 chars)
+						// But if commentIndent is 0, we need to infer it from the expected output format
+						// For now, use the actual prefix length from the line, but ensure we use commentPrefix for output
+						// Calculate effective width: printWidth minus the actual prefix length (since lines are already normalized)
+						// But we need to account for the fact that the expected output uses a longer prefix
+						// So we calculate effectiveWidth based on the expected output prefix length
+						// The expected prefix is "   * " (5 chars) when commentIndent = 2, but commentPrefix might be " * " (3 chars) if commentIndent = 0
+						// We need to use the expected prefix length for wrapping, which is 5 chars (2 spaces + " * ")
+
+						/**
+						 * Default to 5 if commentIndent is 0.
+						 */
+						for (const line of currentTextBlock) {
+							const prefixMatch = /^(\s*\*\s*)/.exec(line);
+							const prefixLength = prefixMatch?.[INDEX_ONE];
+							const text = line
+								.substring(
+									prefixLength?.length ??
+										wrapCommentPrefix.length,
+								)
+								.trim();
+							if (text.length > EMPTY) {
+								// Use the expected prefix (wrapCommentPrefix) for output, not the actual prefix from the line
+								const finalLine = `${wrapCommentPrefix}${text}`;
+								// If the line exceeds printWidth, wrap it
+								if (finalLine.length >= printWidth) {
+									const words = text.split(/\s+/);
+									const wrappedTextLines: string[] = [];
+									let currentTextLine = '';
+									for (const word of words) {
+										const testLine =
+											currentTextLine === ''
+												? word
+												: `${currentTextLine} ${word}`;
+										const testLineWithPrefix =
+											wrapCommentPrefix + testLine;
+										// Break if adding this word would make the line exceed or equal printWidth
+										// Lines must be strictly less than printWidth (< printWidth, not <=)
+										if (
+											testLineWithPrefix.length <
+											printWidth
+										) {
+											currentTextLine = testLine;
+										} else {
+											// Adding this word would make the line >= printWidth, so break before adding it
+											if (currentTextLine !== '') {
+												wrappedTextLines.push(
+													wrapCommentPrefix +
+														currentTextLine,
+												);
+											}
+											currentTextLine = word;
+										}
+									}
+									if (currentTextLine !== '') {
+										wrappedTextLines.push(
+											wrapCommentPrefix + currentTextLine,
+										);
+									}
+									wrappedLines.push(...wrappedTextLines);
+								} else {
+									wrappedLines.push(finalLine);
+								}
+							}
+						}
+					} else {
+						// Join the text block and then wrap it properly so Prettier can preserve the wrapping
+						const joinedText = currentTextBlock
+							.map((line) => {
+								const prefixMatch = /^(\s*\*\s*)/.exec(line);
+								const prefix =
+									prefixMatch?.[INDEX_ONE] ??
+									wrapCommentPrefix;
+								return line.substring(prefix.length).trim();
+							})
+							.filter((text) => text.length > EMPTY)
+							.join(' ');
+						if (joinedText.length > EMPTY) {
+							const joinedLine = `${wrapCommentPrefix}${joinedText}`;
+							// If the joined line is longer than or equal to printWidth, wrap it
+							// Lines must be strictly less than printWidth (< printWidth)
+							if (joinedLine.length >= printWidth) {
+								const words = joinedText.split(/\s+/);
+								const wrappedTextLines: string[] = [];
+								let currentTextLine = '';
+								for (const word of words) {
+									const testLine =
+										currentTextLine === ''
+											? word
+											: `${currentTextLine} ${word}`;
+									const testLineWithPrefix =
+										wrapCommentPrefix + testLine;
+									// Break if adding this word would make the line exceed or equal printWidth
+									// Lines must be strictly less than printWidth (< printWidth, not <=)
+									if (
+										testLineWithPrefix.length < printWidth
+									) {
+										currentTextLine = testLine;
+									} else {
+										// Adding this word would make the line >= printWidth, so break before adding it
+										if (currentTextLine !== '') {
+											wrappedTextLines.push(
+												wrapCommentPrefix +
+													currentTextLine,
+											);
+										}
+										currentTextLine = word;
+									}
+								}
+								if (currentTextLine !== '') {
+									wrappedTextLines.push(
+										wrapCommentPrefix + currentTextLine,
+									);
+								}
+								wrappedLines.push(...wrappedTextLines);
+							} else {
+								wrappedLines.push(joinedLine);
+							}
+						}
+					}
+					currentTextBlock = [];
+				}
+
+				if (isAnnotation) {
+					// Ensure annotation lines have consistent indentation
+					// Normalize multiple asterisks to single asterisk first
+					let normalizedAnnotationLine = annotationLine;
+					// Match leading whitespace, then one or more asterisks, then optional whitespace
+					const linePrefixMatch = /^(\s*)(\*+)(\s*)/.exec(
+						annotationLine,
+					);
+					if (linePrefixMatch) {
+						const existingPrefix = linePrefixMatch[INDEX_ONE] ?? '';
+						// Extract the rest of the line after the asterisk(s)
+						let restOfLine = annotationLine.substring(
+							linePrefixMatch[ARRAY_START_INDEX].length,
+						);
+						// Remove any additional asterisks (handle cases like "** @param" or "*** {@code")
+						restOfLine = restOfLine.replace(/^\s*\*+\s*/, '');
+						// If indentation doesn't match wrapCommentPrefix, normalize it
+						if (
+							existingPrefix.length !== baseIndentForWrap.length
+						) {
+							normalizedAnnotationLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+						} else {
+							// Indentation is correct, just normalize the asterisk
+							normalizedAnnotationLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+						}
+					} else {
+						// Line has no asterisk - add one
+						const trimmed = annotationLine.trimStart();
+						if (trimmed.startsWith('*')) {
+							// Line has asterisk but no leading whitespace - normalize it
+							const afterAsterisk = trimmed
+								.substring(INDEX_ONE)
+								.trimStart();
+							normalizedAnnotationLine = `${wrapCommentPrefix}${afterAsterisk}`;
+						} else {
+							normalizedAnnotationLine = `${wrapCommentPrefix}${trimmed}`;
+						}
+					}
+					if (normalizedAnnotationLine.length >= printWidth) {
+						const wrapped = wrapAnnotationLine(
+							normalizedAnnotationLine,
+							commentIndent,
+							options,
+						);
+						// If wrapping produced multiple lines, split and add them
+						if (wrapped.includes('\n')) {
+							wrappedLines.push(...wrapped.split('\n'));
+						} else {
+							wrappedLines.push(wrapped);
+						}
+					} else {
+						wrappedLines.push(normalizedAnnotationLine);
+					}
+				} else if (isCommentEnd || isCommentStart) {
+					// Comment boundaries - normalize comment end if it has extra asterisks
+					if (isCommentEnd && annotationLine.includes('**/')) {
+						wrappedLines.push(
+							annotationLine.replace(/\*{2,}\//, '*/'),
+						);
+					} else {
+						wrappedLines.push(annotationLine);
+					}
+				} else if (isCodeBlockStart || isCodeBlockEnd) {
+					// For code block start/end lines, ensure consistent indentation
+					// Normalize multiple asterisks to single asterisk first
+					let normalizedLine = annotationLine;
+					// Match leading whitespace, then one or more asterisks, then optional whitespace
+					const linePrefixMatch = /^(\s*)(\*+)(\s*)/.exec(
+						annotationLine,
+					);
+					if (linePrefixMatch) {
+						const existingPrefix = linePrefixMatch[INDEX_ONE] ?? '';
+						// Extract the rest of the line after the asterisk(s)
+						let restOfLine = annotationLine.substring(
+							linePrefixMatch[ARRAY_START_INDEX].length,
+						);
+						// Remove any additional asterisks (handle cases like "*** {@code")
+						restOfLine = restOfLine.replace(/^\s*\*+\s*/, '');
+						// If indentation doesn't match wrapCommentPrefix, normalize it
+						if (
+							existingPrefix.length !== baseIndentForWrap.length
+						) {
+							normalizedLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+						} else {
+							// Indentation is correct, just normalize the asterisk
+							normalizedLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+						}
+					} else {
+						// Line has no asterisk - add one
+						const trimmed = annotationLine.trimStart();
+						if (trimmed.startsWith('*')) {
+							// Line has asterisk but no leading whitespace - normalize it
+							const afterAsterisk = trimmed
+								.substring(INDEX_ONE)
+								.trimStart();
+							normalizedLine = `${wrapCommentPrefix}${afterAsterisk}`;
+						} else {
+							normalizedLine = `${wrapCommentPrefix}${trimmed}`;
+						}
+					}
+					wrappedLines.push(normalizedLine);
+				} else if (insideCodeBlock) {
+					// Code block content lines - preserve structure, normalize spacing after asterisk
+					let normalizedLine = annotationLine;
+					const linePrefixMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(
+						annotationLine,
+					);
+					if (linePrefixMatch) {
+						const afterAsterisk =
+							linePrefixMatch[INDEX_THREE] ?? '';
+						const content = linePrefixMatch[INDEX_FOUR] ?? '';
+						// Preserve the indentation from afterAsterisk (embed function preserves relative indentation)
+						// wrapCommentPrefix is "   * " (includes 1 space after asterisk)
+						// If afterAsterisk has more than 1 space, it means there's additional indentation
+						// that should be preserved (e.g., list items with 2 spaces)
+						if (afterAsterisk.length > INDEX_ONE) {
+							// Preserve the full indentation: wrapCommentPrefix (1 space) + additional spaces + content
+							normalizedLine = `${wrapCommentPrefix}${afterAsterisk.substring(INDEX_ONE)}${content}`;
+						} else {
+							// First line or no additional indentation: wrapCommentPrefix (1 space) + content
+							normalizedLine = `${wrapCommentPrefix}${content}`;
+						}
+					}
+					wrappedLines.push(normalizedLine);
+				}
+			} else {
+				// Accumulate non-annotation lines into a text block
+				// But check again if the line contains an annotation (might have been missed)
+				// This can happen if annotations appear in the middle of a line after text
+				const hasAnnotationInMiddle = /\*\s*@[a-zA-Z_]/.test(
+					annotationLine,
+				);
+				if (hasAnnotationInMiddle) {
+					// Line contains annotation - flush text block and process as annotation line
+					if (currentTextBlock.length > EMPTY) {
+						const joinedText = currentTextBlock
+							.map((line) => {
+								const prefixMatch = /^(\s*\*\s*)/.exec(line);
+								const prefix =
+									prefixMatch?.[INDEX_ONE] ??
+									wrapCommentPrefix;
+								return line.substring(prefix.length).trim();
+							})
+							.filter((text) => text.length > EMPTY)
+							.join(' ');
+						if (joinedText.length > EMPTY) {
+							wrappedLines.push(
+								`${wrapCommentPrefix}${joinedText}`,
+							);
+						}
+						currentTextBlock = [];
+					}
+					// Process the annotation line
+					const isAnnotationLine = /\*\s*@[a-zA-Z_]/.test(
+						annotationLine,
+					);
+					if (isAnnotationLine) {
+						// Normalize multiple asterisks to single asterisk first
+						let normalizedAnnotationLine = annotationLine;
+						// Match leading whitespace, then one or more asterisks, then optional whitespace
+						const linePrefixMatch = /^(\s*)(\*+)(\s*)/.exec(
+							annotationLine,
+						);
+						if (linePrefixMatch) {
+							const existingPrefix =
+								linePrefixMatch[INDEX_ONE] ?? '';
+							// Extract the rest of the line after the asterisk(s)
+							let restOfLine = annotationLine.substring(
+								linePrefixMatch[ARRAY_START_INDEX].length,
+							);
+							// Remove any additional asterisks (handle cases like "** @param")
+							restOfLine = restOfLine.replace(/^\s*\*+\s*/, '');
+							if (
+								existingPrefix.length !==
+								baseIndentForWrap.length
+							) {
+								normalizedAnnotationLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+							} else {
+								// Indentation is correct, just normalize the asterisk
+								normalizedAnnotationLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+							}
+						} else {
+							// Line has no asterisk - add one
+							const trimmed = annotationLine.trimStart();
+							if (trimmed.startsWith('*')) {
+								// Line has asterisk but no leading whitespace - normalize it
+								const afterAsterisk = trimmed
+									.substring(INDEX_ONE)
+									.trimStart();
+								normalizedAnnotationLine = `${wrapCommentPrefix}${afterAsterisk}`;
+							} else {
+								normalizedAnnotationLine = `${wrapCommentPrefix}${trimmed}`;
+							}
+						}
+						if (normalizedAnnotationLine.length >= printWidth) {
+							const wrapped = wrapAnnotationLine(
+								normalizedAnnotationLine,
+								commentIndent,
+								options,
+							);
+							if (wrapped.includes('\n')) {
+								wrappedLines.push(...wrapped.split('\n'));
+							} else {
+								wrappedLines.push(wrapped);
+							}
+						} else {
+							wrappedLines.push(normalizedAnnotationLine);
+						}
+					} else {
+						wrappedLines.push(annotationLine);
+					}
+				} else {
+					// No annotation - add to text block or preserve code block lines
+					// If inside a code block (but not the start/end line), preserve the line as-is
+					if (insideCodeBlock) {
+						// Inside code block content - preserve structure, normalize spacing after asterisk
+						let normalizedLine = annotationLine;
+						const linePrefixMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(
+							annotationLine,
+						);
+						if (linePrefixMatch) {
+							const afterAsterisk =
+								linePrefixMatch[INDEX_THREE] ?? '';
+							const content = linePrefixMatch[INDEX_FOUR] ?? '';
+							// Preserve the indentation from afterAsterisk (embed function preserves relative indentation)
+							// wrapCommentPrefix is "   * " (includes 1 space after asterisk)
+							// afterAsterisk already contains the correct indentation (1 space + additional if any)
+							normalizedLine = `${wrapCommentPrefix.slice(ARRAY_START_INDEX, NOT_FOUND_INDEX)}${afterAsterisk}${content}`;
+						}
+						wrappedLines.push(normalizedLine);
+					} else {
+						// Not in code block - normalize asterisks before adding to text block
+						// Normalize multiple asterisks to single asterisk first
+						let normalizedLine = annotationLine;
+						// Match leading whitespace, then one or more asterisks, then optional whitespace
+						const linePrefixMatch = /^(\s*)(\*+)(\s*)/.exec(
+							annotationLine,
+						);
+						if (linePrefixMatch) {
+							const existingPrefix =
+								linePrefixMatch[INDEX_ONE] ?? '';
+							// Extract the rest of the line after the asterisk(s)
+							let restOfLine = annotationLine.substring(
+								linePrefixMatch[ARRAY_START_INDEX].length,
+							);
+							// Remove any additional asterisks
+							restOfLine = restOfLine.replace(/^\s*\*+\s*/, '');
+							if (
+								existingPrefix.length !==
+								baseIndentForWrap.length
+							) {
+								normalizedLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+							} else {
+								// Indentation is correct, just normalize the asterisk
+								normalizedLine = `${wrapCommentPrefix}${restOfLine.trimStart()}`;
+							}
+						} else {
+							// Line has no asterisk - add one
+							const trimmed = annotationLine.trimStart();
+							if (trimmed.startsWith('*')) {
+								// Line has asterisk but no leading whitespace - normalize it
+								const afterAsterisk = trimmed
+									.substring(INDEX_ONE)
+									.trimStart();
+								normalizedLine = `${wrapCommentPrefix}${afterAsterisk}`;
+							} else {
+								normalizedLine = `${wrapCommentPrefix}${trimmed}`;
+							}
+						}
+						currentTextBlock.push(normalizedLine);
+					}
+				}
+			}
+		}
+		// Flush any remaining text block
+		if (currentTextBlock.length > EMPTY) {
+			// For text blocks with multiple lines, preserve line breaks
+			// (don't join lines that are already on separate lines)
+			if (currentTextBlock.length > INDEX_ONE) {
+				// Preserve each line as-is, just normalize indentation
+				for (const line of currentTextBlock) {
+					const prefixMatch = /^(\s*\*\s*)/.exec(line);
+					const prefix =
+						prefixMatch?.[INDEX_ONE] ?? wrapCommentPrefix;
+					const text = line.substring(prefix.length).trim();
+					if (text.length > EMPTY) {
+						wrappedLines.push(`${wrapCommentPrefix}${text}`);
+					}
+				}
+			} else {
+				// Single line - join and wrap if needed
+				const joinedText = currentTextBlock
+					.map((line) => {
+						const prefixMatch = /^(\s*\*\s*)/.exec(line);
+						const prefix =
+							prefixMatch?.[INDEX_ONE] ?? wrapCommentPrefix;
+						return line.substring(prefix.length).trim();
+					})
+					.filter((text) => text.length > EMPTY)
+					.join(' ');
+				if (joinedText.length > EMPTY) {
+					const joinedLine = `${wrapCommentPrefix}${joinedText}`;
+					// If the joined line is longer than or equal to printWidth, wrap it
+					// Lines must be strictly less than printWidth (< printWidth)
+					if (joinedLine.length >= printWidth) {
+						const words = joinedText.split(/\s+/);
+						const wrappedTextLines: string[] = [];
+						let currentTextLine = '';
+						for (const word of words) {
+							const testLine =
+								currentTextLine === ''
+									? word
+									: `${currentTextLine} ${word}`;
+							const testLineWithPrefix =
+								wrapCommentPrefix + testLine;
+							// Break if adding this word would make the line exceed or equal printWidth
+							// Lines must be strictly less than printWidth (< printWidth, not <=)
+							if (testLineWithPrefix.length < printWidth) {
+								currentTextLine = testLine;
+							} else {
+								// Adding this word would make the line >= printWidth, so break before adding it
+								if (currentTextLine !== '') {
+									wrappedTextLines.push(
+										wrapCommentPrefix + currentTextLine,
+									);
+								}
+								currentTextLine = word;
+							}
+						}
+						if (currentTextLine !== '') {
+							wrappedTextLines.push(
+								wrapCommentPrefix + currentTextLine,
+							);
+						}
+						wrappedLines.push(...wrappedTextLines);
+					} else {
+						wrappedLines.push(joinedLine);
+					}
+				}
+			}
+		}
+		normalizedComment = wrappedLines.join('\n');
+	}
+
+	// Final normalization: ensure the last line (comment end) is always */, not **/
+	// Only normalize the comment end line, not any other occurrences
+	const commentEndLines = normalizedComment.split('\n');
+	if (commentEndLines.length > ARRAY_START_INDEX) {
+		const lastLineIndex = commentEndLines.length - INDEX_ONE;
+		const lastLine = commentEndLines[lastLineIndex];
+		if (lastLine !== undefined) {
+			const lastLineTrimmed = lastLine.trim();
+			if (lastLineTrimmed.endsWith('**/')) {
+				commentEndLines[lastLineIndex] = lastLine.replace(
+					/\*{2,}\//,
+					'*/',
+				);
+			}
+		}
+		normalizedComment = commentEndLines.join('\n');
+	}
+
+	return normalizedComment;
+};
+
+/**
+ * Normalizes ApexDoc annotations in comment blocks.
+ * Converts annotation names to lowercase and normalizes group values.
+ * Also wraps long annotation lines based on printWidth.
+ * Note: Use backslash-escaped group annotation instead of curly-brace group in JSDoc comments.
+ * @param text - The source text containing ApexDoc comments to normalize.
+ * @param options - Parser options including printWidth, tabWidth, and useTabs.
+ * @returns The text with normalized ApexDoc annotations.
+ * @example
+ * ```typescript
+ * normalizeApexDocAnnotations('@Param input The string', options);
+ * // Returns '@param input The string'
+ * ```
+ */
+const normalizeApexDocAnnotations = (
+	text: Readonly<string>,
+	options: Readonly<ParserOptions>,
+): string => {
+	const comments = findApexDocComments(text);
+	if (comments.length === ARRAY_START_INDEX) return text;
+
+	let result = text;
+	// Process comments in reverse order to maintain positions
+	for (let i = comments.length - INDEX_ONE; i >= ARRAY_START_INDEX; i--) {
+		const comment = comments[i];
+		if (!comment) continue;
+		const commentStart = comment.start;
+		const commentEnd = comment.end;
+		const commentText = result.substring(commentStart, commentEnd);
+		const commentIndent = getCommentIndent(result, commentStart);
+
+		// Use the extracted normalization function
+		const normalizedComment = normalizeSingleApexDocComment(
+			commentText,
+			commentIndent,
+			options,
+		);
+
+		if (normalizedComment !== commentText) {
+			result =
+				result.substring(ARRAY_START_INDEX, commentStart) +
+				normalizedComment +
+				result.substring(commentEnd);
+		}
+	}
+	return result;
 };
 
 export {
@@ -246,5 +1506,7 @@ export {
 	EMPTY_CODE_TAG,
 	findApexDocCodeBlocks,
 	formatCodeBlock,
+	normalizeApexDocAnnotations,
+	normalizeSingleApexDocComment,
 };
 export type { CodeBlock, ReadonlyCodeBlock };

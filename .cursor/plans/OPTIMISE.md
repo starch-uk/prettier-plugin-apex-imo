@@ -23,6 +23,43 @@ After optimization:
 - [ ] Code is formatted
 - [ ] Functionality preserved
 
+## Reference Documentation
+
+**CRITICAL:** Before and during optimization, consult the following
+documentation files in `docs/*.md` for comprehensive reference information, best
+practices, and project-specific guidance:
+
+- **`docs/APEXDOC.md`** - ApexDoc quick reference for AI agents. Consult when
+  working with ApexDoc comment formatting, annotation processing, or
+  documentation-related code.
+
+- **`docs/ESLINT.md`** - ESLint reference and configuration. Consult when
+  resolving linting issues, understanding ESLint rules, or configuring ESLint
+  settings. This document contains comprehensive ESLint guidance that should be
+  followed when fixing linting errors.
+
+- **`docs/JORJE.md`** - Jorje AST library reference (technical, style,
+  philosophy) for AI agents. Consult when working with AST nodes, understanding
+  the Jorje parser structure, or manipulating AST trees. Essential for AST-based
+  optimizations.
+
+- **`docs/PRETTIER.md`** - Prettier architecture, APIs, and usage patterns
+  reference. Consult when delegating formatting to Prettier base, understanding
+  Prettier's printer API, or working with Prettier's core functionality.
+
+- **`docs/PRETTIERAPEX.md`** - Prettier Plugin Apex reference implementation
+  documentation. Consult when delegating formatting to `prettier-plugin-apex`,
+  understanding how the plugin extends Prettier, or working with Apex-specific
+  formatting logic.
+
+- **`docs/VITEST.md`** - Vitest reference and configuration. Consult when
+  optimizing test files, understanding Vitest features, or configuring test
+  settings. **MANDATORY** when working with test files.
+
+These documentation files contain essential information that should be
+referenced throughout the optimization process to ensure code quality,
+maintainability, and adherence to project standards.
+
 ## Objective
 
 Aggressively refactor all source files to reduce code size, increase reliance on
@@ -189,15 +226,19 @@ Apply the following techniques aggressively:
     - Use spread operators for object/array operations
 
 3. **Delegation to Prettier base and prettier-plugin-apex**
+    - **IMPORTANT:** Consult `docs/PRETTIER.md` for Prettier architecture, APIs,
+      and usage patterns. Consult `docs/PRETTIERAPEX.md` for Prettier Plugin
+      Apex reference implementation documentation.
     - **Prefer Prettier and prettier-plugin-apex constants/functions over
       hardcoded values** - use existing constants, utilities, and functions from
       these libraries instead of hardcoding values (e.g., use Prettier's
       built-in constants for formatting options, use prettier-plugin-apex
       utilities for AST manipulation)
     - Identify areas where Prettier base can handle formatting (Prettier is the
-      foundation/core)
+      foundation/core) - see `docs/PRETTIER.md` for guidance
     - Identify areas where `prettier-plugin-apex` can handle formatting (it
-      extends Prettier base as a plugin)
+      extends Prettier base as a plugin) - see `docs/PRETTIERAPEX.md` for
+      guidance
     - Reduce custom formatting logic where possible
     - Leverage existing Prettier base utilities and printer functionality
     - Use Prettier base's built-in formatting capabilities instead of
@@ -224,6 +265,9 @@ Apply the following techniques aggressively:
       functions
 
 5. **AST Manipulation (Preferred Approach)**
+    - **IMPORTANT:** Consult `docs/JORJE.md` for Jorje AST library reference
+      (technical, style, philosophy). Essential for understanding AST node
+      structure, Jorje parser behavior, and AST manipulation patterns.
     - **AST manipulation is strongly preferred over regex-based text
       processing**
     - Work with the Abstract Syntax Tree provided by `prettier-plugin-apex`
@@ -243,6 +287,9 @@ Apply the following techniques aggressively:
       possible
 
 6. **ESLint Disable Comments (Minimize and Scope Appropriately)**
+    - **IMPORTANT:** Consult `docs/ESLINT.md` for comprehensive ESLint reference
+      and configuration guidance when resolving linting issues or understanding
+      ESLint rules.
     - **Use ESLint disable comments as little as possible** - prefer fixing the
       underlying issue
     - **Keep scope as small as possible within reason** - use inline comments
@@ -549,6 +596,10 @@ const isClassOrInterface = or(
 - Use `never` return type for exhaustiveness checking
 
 ### AST Best Practices
+
+**IMPORTANT:** Consult `docs/JORJE.md` for comprehensive Jorje AST library
+reference when working with AST nodes, understanding the Jorje parser structure,
+or manipulating AST trees.
 
 - **Use `Visitor` pattern** with type-safe node handlers
 - **Leverage `prettier-plugin-apex`'s existing type definitions**
@@ -1319,6 +1370,9 @@ If linting errors are found:
    fix
 
 #### Common Linting Issues and How to Fix Them
+
+**IMPORTANT:** Consult `docs/ESLINT.md` for comprehensive ESLint reference and
+configuration guidance when resolving these issues.
 
 **Resolving ESLint Rule Conflicts:**
 

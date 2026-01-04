@@ -236,6 +236,61 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
+	describe('PageWidth wrapping for nested collections', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should break Map assignment when exceeding pageWidth',
+				fixture: 'map-assignment-pagewidth',
+			},
+			{
+				description:
+					'should wrap nested Map collections when exceeding pageWidth',
+				fixture: 'nested-collection-pagewidth',
+			},
+			{
+				description:
+					'should wrap nested List collections when exceeding pageWidth',
+				fixture: 'nested-list-pagewidth',
+			},
+			{
+				description:
+					'should wrap nested Set collections when exceeding pageWidth',
+				fixture: 'nested-set-pagewidth',
+			},
+			{
+				description:
+					'should wrap List containing Map when exceeding pageWidth',
+				fixture: 'list-map-pagewidth',
+			},
+			{
+				description:
+					'should wrap Set containing Map when exceeding pageWidth',
+				fixture: 'set-map-pagewidth',
+			},
+			{
+				description:
+					'should wrap List containing List when exceeding pageWidth',
+				fixture: 'list-list-pagewidth',
+			},
+			{
+				description:
+					'should wrap Set containing List when exceeding pageWidth',
+				fixture: 'set-list-pagewidth',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input, { printWidth: 80 });
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
 	describe('Real-world scenarios', () => {
 		it.concurrent.each([
 			{
@@ -404,6 +459,131 @@ describe('prettier-plugin-apex-imo integration', () => {
 		});
 	});
 
+	describe('ApexDoc annotation normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize ApexDoc annotations to lowercase and group names to proper case',
+				fixture: 'apexdoc-annotation-normalization',
+			},
+			{
+				description:
+					'should handle multiple annotations on same line, inconsistent spacing, code blocks between annotations, and comprehensive casing',
+				fixture: 'apexdoc-annotation-comprehensive',
+			},
+			{
+				description:
+					'should wrap long ApexDoc annotation lines based on printWidth setting',
+				fixture: 'apexdoc-printwidth-wrapping',
+			},
+			{
+				description:
+					'should normalize @deprecated to @Deprecated inside {@code} blocks but keep @deprecated lowercase in ApexDoc annotations',
+				fixture: 'apexdoc-code-block-deprecated',
+			},
+			{
+				description:
+					'should handle complex test class inside {@code} block with @IsTest, inner classes, helper methods, @example annotation with long description, and printWidth wrapping',
+				fixture: 'apexdoc-complex-test-class',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('ApexDoc malformed comment blocks', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize ApexDoc comments with missing asterisks on some lines',
+				fixture: 'apexdoc-malformed-no-asterisks',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with missing asterisks and code blocks',
+				fixture: 'apexdoc-malformed-no-asterisks-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent indentation',
+				fixture: 'apexdoc-malformed-inconsistent-indent',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent indentation and code blocks',
+				fixture: 'apexdoc-malformed-inconsistent-indent-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks on lines',
+				fixture: 'apexdoc-malformed-extra-asterisks-start',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks and code blocks',
+				fixture: 'apexdoc-malformed-extra-asterisks-start-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks before closing',
+				fixture: 'apexdoc-malformed-extra-asterisks-end',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks before closing and code blocks',
+				fixture: 'apexdoc-malformed-extra-asterisks-end-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with multiple asterisks at line start',
+				fixture: 'apexdoc-malformed-multiple-asterisks',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with multiple asterisks and code blocks',
+				fixture: 'apexdoc-malformed-multiple-asterisks-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent asterisk spacing',
+				fixture: 'apexdoc-malformed-asterisk-spacing',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent asterisk spacing and code blocks',
+				fixture: 'apexdoc-malformed-asterisk-spacing-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with mixed malformations',
+				fixture: 'apexdoc-malformed-mixed',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with mixed malformations and code blocks',
+				fixture: 'apexdoc-malformed-mixed-code',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
 	describe('Annotation formatting', () => {
 		it.concurrent.each([
 			{
@@ -503,6 +683,31 @@ describe('prettier-plugin-apex-imo integration', () => {
 				description:
 					'should normalize object type suffixes in ApexDoc {@code} blocks',
 				fixture: 'apexdoc-object-suffix-normalization',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Field and variable declaration wrapping', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should wrap long field and variable declarations across multiple lines',
+				fixture: 'wrapping-tests',
+			},
+			{
+				description:
+					'should wrap field and variable declarations with assignments across multiple lines',
+				fixture: 'wrapping-assignments',
 			},
 		])(
 			'$description',

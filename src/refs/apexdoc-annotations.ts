@@ -3,7 +3,7 @@
  * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_doc_format.htm}
  */
 
-export const APEXDOC_ANNOTATIONS: readonly string[] = [
+const APEXDOC_ANNOTATIONS: readonly string[] = [
 	'param',
 	'return',
 	'throws',
@@ -15,3 +15,18 @@ export const APEXDOC_ANNOTATIONS: readonly string[] = [
 	'group',
 	'example',
 ] as const;
+
+/**
+ * Mapping of lowercase group names to their proper case.
+ * Used for normalizing \@group annotation values.
+ */
+const APEXDOC_GROUP_NAMES: Readonly<Record<string, string>> = {
+	class: 'Class',
+	enum: 'Enum',
+	interface: 'Interface',
+	method: 'Method',
+	property: 'Property',
+	variable: 'Variable',
+} as const;
+
+export { APEXDOC_ANNOTATIONS, APEXDOC_GROUP_NAMES };

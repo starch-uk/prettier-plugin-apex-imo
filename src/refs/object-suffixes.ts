@@ -3,8 +3,6 @@
  * @see {@link https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm}
  */
 
-/* eslint-disable @typescript-eslint/naming-convention -- Salesforce suffixes must maintain their exact format with underscores */
-
 /**
  * Record of Salesforce object type suffixes
  * These suffixes are used to identify different types of Salesforce objects in type declarations

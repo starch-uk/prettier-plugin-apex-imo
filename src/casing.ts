@@ -27,9 +27,9 @@ const normalizeObjectSuffix = (typeName: string): string => {
 	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
 		([, a], [, b]) => b.length - a.length,
 	);
+	const lowerTypeName = typeName.toLowerCase();
 	for (const [, normalizedSuffix] of suffixes) {
 		const lowerSuffix = normalizedSuffix.toLowerCase();
-		const lowerTypeName = typeName.toLowerCase();
 		if (lowerTypeName.endsWith(lowerSuffix)) {
 			// Use the lowercase suffix length for slicing since we matched using lowercase
 			const prefix = typeName.slice(
@@ -120,14 +120,19 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const isStackArray = Array.isArray(stack);
 	if (typeof key === 'string') {
 		const lowerKey = key.toLowerCase();
+		// Check for type-related keys first (most common case)
+		// Variable declarations use 'type' key, constructor calls use 'type' in NewExpression
 		if (
+			lowerKey === 'type' ||
+			lowerKey === 'typeref' ||
 			TYPE_CONTEXT_KEYS.includes(
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 				lowerKey as (typeof TYPE_CONTEXT_KEYS)[number],
 			) ||
 			lowerKey.startsWith('type')
-		)
+		) {
 			return true;
+		}
 		if (lowerKey === 'field' && isStackArray && hasFromExprInStack(stack))
 			return true;
 	}
@@ -145,11 +150,15 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 			Array.isArray(
 				(parent as Readonly<ApexNode & { types?: unknown }>).types,
 			);
+		// Check for variable declaration types and constructor calls
+		// Variable declarations have a 'type' key, and constructor calls are in 'NewExpression' nodes
 		if (
 			parentClass.includes('TypeRef') ||
 			(parentClass.includes('Type') &&
 				!parentClass.includes('Variable')) ||
 			parentClass.includes('FromExpr') ||
+			parentClass.includes('NewExpression') ||
+			parentClass.includes('NewObject') ||
 			hasTypesArray
 		) {
 			return key !== 'name' || !parentClass.includes('Variable');
@@ -187,12 +196,19 @@ function shouldNormalizeType(
 	params: Readonly<ShouldNormalizeTypeParams>,
 ): boolean {
 	const { forceTypeContext, parentKey, key, path } = params;
-	return (
+	// Explicitly check for type-related keys (variable declarations, constructor calls)
+	const isTypeKey =
+		typeof key === 'string' &&
+		(key.toLowerCase() === 'type' ||
+			key.toLowerCase() === 'typeref' ||
+			key === 'types');
+	const result =
 		forceTypeContext ||
 		parentKey === 'types' ||
 		key === 'names' ||
-		isInTypeContext(path)
-	);
+		isTypeKey ||
+		isInTypeContext(path);
+	return result;
 }
 
 const EMPTY_STRING_LENGTH = 0;
@@ -210,7 +226,10 @@ const EMPTY_STRING_LENGTH = 0;
  */
 function normalizeSingleIdentifier(
 	node: Readonly<ApexIdentifier>,
-	originalPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+	originalPrint: (
+		path: Readonly<AstPath<ApexNode>>,
+		...extraArgs: unknown[]
+	) => Doc,
 	subPath: Readonly<AstPath<ApexNode>>,
 ): Doc {
 	const nodeValue = node.value;
@@ -238,7 +257,10 @@ function normalizeSingleIdentifier(
  */
 function normalizeNamesArray(
 	node: Readonly<ApexNode & { names?: readonly ApexIdentifier[] }>,
-	originalPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+	originalPrint: (
+		path: Readonly<AstPath<ApexNode>>,
+		...extraArgs: unknown[]
+	) => Doc,
 	subPath: Readonly<AstPath<ApexNode>>,
 ): Doc {
 	const namesArray = node.names;
@@ -285,23 +307,28 @@ function normalizeNamesArray(
 
 const createTypeNormalizingPrint =
 	(
-		originalPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		originalPrint: (
+			path: Readonly<AstPath<ApexNode>>,
+			...extraArgs: unknown[]
+		) => Doc,
 		forceTypeContext = false,
 		parentKey?: string,
 	) =>
-	(subPath: Readonly<AstPath<ApexNode>>): Doc => {
+	(subPath: Readonly<AstPath<ApexNode>>, ...extraArgs: unknown[]): Doc => {
+		// Prettier's path.call may pass extra arguments (index, options)
+		// but our print function only needs the path - ignore extra args
+		// Pass extra args through to originalPrint in case it needs them
 		const { node, key } = subPath;
 		const normalizedKey = key ?? undefined;
-		if (
-			!shouldNormalizeType({
-				forceTypeContext,
-				key: normalizedKey,
-				parentKey,
-				path: subPath,
-			}) ||
-			!isIdentifier(node)
-		)
-			return originalPrint(subPath);
+		const shouldNormalize = shouldNormalizeType({
+			forceTypeContext,
+			key: normalizedKey,
+			parentKey,
+			path: subPath,
+		});
+		const isIdent = isIdentifier(node);
+		// Only pass path - originalPrint will receive extra args from Prettier if needed
+		if (!shouldNormalize || !isIdent) return originalPrint(subPath);
 		const valueField = (node as { value?: unknown }).value;
 		if (typeof valueField === 'string') {
 			return normalizeSingleIdentifier(

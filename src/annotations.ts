@@ -16,6 +16,7 @@ import {
 	APEX_ANNOTATION_OPTION_NAMES,
 } from './refs/annotations.js';
 import { getNodeClass } from './utils.js';
+import { findApexDocComments } from './comments.js';
 
 // Regex is used here for preprocessing text before parsing (annotation normalization).
 // AST manipulation isn't feasible at this stage since we're normalizing annotation names
@@ -24,6 +25,7 @@ const ANNOTATION_REGEX =
 	/@([a-zA-Z_][a-zA-Z0-9_]*)(\s*\(([^)]*)\)|(?![a-zA-Z0-9_(]))/g;
 const ANNOTATION_OPTION_REGEX = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
 const ZERO_LENGTH = 0;
+const INDEX_ONE = 1;
 
 const { group, indent, hardline, softline, join } = doc.builders;
 
@@ -146,11 +148,30 @@ const printAnnotation = (
 	];
 };
 
+const createAnnotationReplacer =
+	() =>
+	(_match: string, name: string, params?: string): string => {
+		const normalizedName = normalizeAnnotationName(name);
+		if (params === undefined || params.length === ZERO_LENGTH)
+			return `@${normalizedName}`;
+		return `@${normalizedName}${params.replace(
+			ANNOTATION_OPTION_REGEX,
+			(m: string, opt: string) => {
+				const normalizedOption = normalizeAnnotationOptionName(
+					normalizedName,
+					opt,
+				);
+				return normalizedOption === opt ? m : `${normalizedOption}=`;
+			},
+		)}`;
+	};
+
 /**
  * Normalizes annotation names in source text before parsing.
  * Regex is used here for preprocessing text before parsing (annotation normalization).
  * AST manipulation isn't feasible at this stage since we're normalizing annotation names
  * in the source text before it reaches the parser.
+ * Skips ApexDoc comments to avoid interfering with ApexDoc annotation normalization.
  * @param text - The source text containing annotations to normalize.
  * @returns The text with normalized annotation names.
  * @example
@@ -159,24 +180,56 @@ const printAnnotation = (
  * // Returns '@InvocableMethod(label="Test")'
  * ```
  */
-const normalizeAnnotationNamesInText = (text: string): string =>
-	text.replace(
-		ANNOTATION_REGEX,
-		(_match: string, name: string, params?: string) => {
-			const normalizedName = normalizeAnnotationName(name);
-			if (params === undefined || params.length === ZERO_LENGTH)
-				return `@${normalizedName}`;
-			return `@${normalizedName}${params.replace(
-				ANNOTATION_OPTION_REGEX,
-				(m: string, opt: string) => {
-					const normalized = normalizeAnnotationOptionName(
-						normalizedName,
-						opt,
-					);
-					return normalized === opt ? m : `${normalized}=`;
-				},
-			)}`;
-		},
-	);
+const normalizeAnnotationNamesInText = (text: string): string => {
+	const apexDocComments = findApexDocComments(text);
+	const replacer = createAnnotationReplacer();
+	// If no ApexDoc comments, process entire text
+	if (apexDocComments.length === ZERO_LENGTH) {
+		return text.replace(ANNOTATION_REGEX, replacer);
+	}
+
+	// Process text in segments, skipping ApexDoc comments
+	let result = text;
+	let lastIndex = ZERO_LENGTH;
+	const segments: { start: number; end: number; isComment: boolean }[] = [];
+
+	// Build segments
+	for (const comment of apexDocComments) {
+		if (lastIndex < comment.start) {
+			segments.push({
+				end: comment.start,
+				isComment: false,
+				start: lastIndex,
+			});
+		}
+		segments.push({
+			end: comment.end,
+			isComment: true,
+			start: comment.start,
+		});
+		lastIndex = comment.end;
+	}
+	if (lastIndex < text.length) {
+		segments.push({ end: text.length, isComment: false, start: lastIndex });
+	}
+
+	// Process non-comment segments
+	for (let i = segments.length - INDEX_ONE; i >= ZERO_LENGTH; i--) {
+		const segment = segments[i];
+		if (!segment || segment.isComment) continue;
+
+		const segmentText = text.substring(segment.start, segment.end);
+		const normalized = segmentText.replace(ANNOTATION_REGEX, replacer);
+
+		if (normalized !== segmentText) {
+			result =
+				result.substring(ZERO_LENGTH, segment.start) +
+				normalized +
+				result.substring(segment.end);
+		}
+	}
+
+	return result;
+};
 
 export { isAnnotation, normalizeAnnotationNamesInText, printAnnotation };

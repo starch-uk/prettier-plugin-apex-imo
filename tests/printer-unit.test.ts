@@ -63,9 +63,8 @@ describe('printer', () => {
 				nodeData: {
 					types: [],
 					values: [
-						// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
+
 						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
 					],
 				},
@@ -77,9 +76,8 @@ describe('printer', () => {
 				nodeData: {
 					types: [],
 					values: [
-						// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
-						// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
+
 						{ '@class': 'apex.jorje.data.ast.LiteralExpr' },
 					],
 				},
@@ -91,26 +89,20 @@ describe('printer', () => {
 				nodeData: {
 					pairs: [
 						{
-							// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 								'@class': 'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 								'@class': 'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
 						{
-							// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 								'@class': 'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 								'@class': 'apex.jorje.data.ast.LiteralExpr',
 							},
 						},
@@ -170,7 +162,6 @@ describe('printer', () => {
 					'should pass through list nodes with single entry to original printer',
 				nodeClass: 'apex.jorje.data.ast.NewObject$NewListLiteral',
 				nodeData: {
-					// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 					values: [{ '@class': 'apex.jorje.data.ast.LiteralExpr' }],
 				},
 			},
@@ -181,14 +172,11 @@ describe('printer', () => {
 				nodeData: {
 					pairs: [
 						{
-							// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 							'@class': 'apex.jorje.data.ast.MapLiteralKeyValue',
 							key: {
-								// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 								'@class': 'apex.jorje.data.ast.LiteralExpr',
 							},
 							value: {
-								// eslint-disable-next-line @typescript-eslint/naming-convention -- @class is required by Apex AST structure
 								'@class': 'apex.jorje.data.ast.LiteralExpr',
 							},
 						},

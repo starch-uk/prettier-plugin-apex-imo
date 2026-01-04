@@ -2,7 +2,6 @@
  * @file Type definitions for Apex AST nodes.
  */
 
-/* eslint-disable @typescript-eslint/naming-convention */
 interface ApexNode {
 	[key: string]: unknown;
 	'@class': string;

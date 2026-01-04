@@ -4,7 +4,7 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
-import { doc, type AstPath, type Doc } from 'prettier';
+import { doc, type AstPath, type Doc, type ParserOptions } from 'prettier';
 import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
 import { getNodeClass } from './utils.js';
 import { createTypeNormalizingPrint } from './casing.js';
@@ -13,6 +13,11 @@ const MIN_ENTRIES_FOR_MULTILINE = 2;
 const LIST_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewListLiteral';
 const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
+const COLLECTION_CLASSES = [
+	LIST_LITERAL_CLASS,
+	SET_LITERAL_CLASS,
+	MAP_LITERAL_CLASS,
+] as const;
 
 const isListInit = (
 	node: Readonly<ApexNode>,
@@ -33,72 +38,134 @@ const hasMultipleListEntries = (node: Readonly<ApexListInitNode>): boolean =>
 const hasMultipleMapEntries = (node: Readonly<ApexMapInitNode>): boolean =>
 	Array.isArray(node.pairs) && node.pairs.length >= MIN_ENTRIES_FOR_MULTILINE;
 
-const { group, indent, hardline, join } = doc.builders;
+const { group, indent, hardline, join, softline, ifBreak } = doc.builders;
+
+const isNestedInCollection = (
+	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
+): boolean => {
+	const { stack } = path;
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array length check
+	if (!Array.isArray(stack) || stack.length === 0) return false;
+	// Check if any parent in the stack is a collection
+	for (const parent of stack) {
+		if (typeof parent === 'object' && '@class' in parent) {
+			const parentClass = (parent as { '@class': string })['@class'];
+			if (
+				COLLECTION_CLASSES.includes(
+					parentClass as (typeof COLLECTION_CLASSES)[number],
+				)
+			)
+				return true;
+		}
+	}
+	return false;
+};
 
 const printCollection = (
 	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
 	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	originalPrint: () => Doc,
+	options?: Readonly<ParserOptions>,
 ): Doc => {
 	const { node } = path;
 	const nodeClass = getNodeClass(node);
 	const isList =
 		nodeClass === LIST_LITERAL_CLASS || nodeClass === SET_LITERAL_CLASS;
-	if (
-		(isList && !hasMultipleListEntries(node as ApexListInitNode)) ||
-		(!isList && !hasMultipleMapEntries(node as ApexMapInitNode))
-	)
-		return originalPrint();
+	const hasMultipleEntries = isList
+		? hasMultipleListEntries(node as ApexListInitNode)
+		: hasMultipleMapEntries(node as ApexMapInitNode);
 	const typeNormalizingPrint = createTypeNormalizingPrint(
 		print,
 		true,
 		'types',
 	);
 	const printedTypes = path.map(typeNormalizingPrint, 'types' as never);
+	const isNested = isNestedInCollection(path);
+	// For empty collections (no entries), we still need to handle them to ensure
+	// type parameters can break when they exceed printWidth. Only delegate to
+	// original printer if we have multiple entries (which we handle specially).
+	if (!hasMultipleEntries) {
+		// For empty collections, construct the typeDoc with break points to allow
+		// Prettier to break long type parameters when they exceed printWidth
+		if (isList) {
+			const isSet = nodeClass === SET_LITERAL_CLASS;
+		// For Set, add break points after commas to allow breaking
+		// For List, the dot separator is part of the type name syntax, so we can't break there
+		const typeName = isSet ? 'Set' : 'List';
+		const typeSeparator: Doc = isSet ? [',', softline] : '.';
+		// For non-nested, don't wrap in group to allow parent to break when line exceeds printWidth
+		const typeDoc: Doc = isNested
+			? group([typeName, '<', join(typeSeparator, printedTypes), '>'])
+			: [typeName, '<', join(typeSeparator, printedTypes), '>'];
+		return [typeDoc, '{}'];
+		}
+		// For empty Maps, add break points in type parameters to allow breaking
+		// Use group with softline to allow breaking when line exceeds printWidth
+		// Add softline before and after type parameters to allow breaking
+		const typeDoc: Doc = isNested
+			? group(['Map<', join([',', softline], printedTypes), '>'])
+			: group(['Map<', softline, join([',', softline], printedTypes), softline, '>']);
+		return [typeDoc, '{}'];
+	}
 	if (isList) {
 		const isSet = nodeClass === SET_LITERAL_CLASS;
-		const typeSeparator: Doc = isSet ? [',', ' '] : '.';
+		// For Set, add break points after commas to allow breaking
+		// For List, the dot separator is part of the type name syntax, so we can't break there
+		const typeSeparator: Doc = isSet ? [',', softline] : '.';
 		const typeName = isSet ? 'Set' : 'List';
-		return group([
-			typeName,
-			'<',
-			join(typeSeparator, printedTypes),
-			'>',
-			group([
-				'{',
-				indent([
-					hardline,
-					join([',', hardline], path.map(print, 'values' as never)),
-				]),
-				hardline,
-				'}',
-			]),
-		]);
-	}
-	return group([
-		'Map<',
-		join(', ', printedTypes),
-		'>',
-		group([
+		// For nested collections, wrap type in group to keep it together
+		// For top-level collections, don't wrap type in group to allow Prettier
+		// to break assignments when they exceed pageWidth
+		const typeDoc: Doc = isNested
+			? group([typeName, '<', join(typeSeparator, printedTypes), '>'])
+			: [typeName, '<', join(typeSeparator, printedTypes), '>'];
+		// Force multiline by ensuring the literal part is never in a collapsible group
+		// Use hardline which should force multiline, but can be collapsed by parent groups
+		return [
+			typeDoc,
 			'{',
 			indent([
 				hardline,
-				join(
-					[',', hardline],
-					path.map(
-						(pairPath: Readonly<AstPath<ApexNode>>) => [
-							pairPath.call(print, 'key' as never),
-							' => ',
-							pairPath.call(print, 'value' as never),
-						],
-						'pairs' as never,
-					),
-				),
+				join([',', hardline], path.map(print, 'values' as never)),
 			]),
 			hardline,
 			'}',
+		];
+	}
+	// Force multiline by ensuring the literal part is never in a collapsible group
+	// Use hardline which should force multiline, but can be collapsed by parent groups
+	// For nested collections, wrap type in group to keep it together
+	// For top-level collections, don't wrap in group to allow parent to break when line exceeds printWidth
+	const typeDoc: Doc = isNested
+		? group(['Map<', join([',', softline], printedTypes), '>'])
+		: ['Map<', join([',', softline], printedTypes), '>'];
+	// #region agent log
+	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'collections.ts:115',message:'typeDoc created',data:{isNested,typeDocIsArray:Array.isArray(typeDoc),typeDocIsGroup:!Array.isArray(typeDoc)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+	// #endregion
+	const result = [
+		typeDoc,
+		'{',
+		indent([
+			hardline,
+			join(
+				[',', hardline],
+				path.map(
+					(pairPath: Readonly<AstPath<ApexNode>>) => [
+						pairPath.call(print, 'key' as never),
+						' => ',
+						pairPath.call(print, 'value' as never),
+					],
+					'pairs' as never,
+				),
+			),
 		]),
-	]);
+		hardline,
+		'}',
+	];
+	// #region agent log
+	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'collections.ts:135',message:'returning Map Doc',data:{resultIsArray:Array.isArray(result)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+	// #endregion
+	return result;
 };
 
 export {

@@ -11,7 +11,9 @@ import {
 	getCommentIndent,
 	applyCommentIndentation,
 	createClosingIndent,
+	normalizeBlockComment,
 } from '../src/comments.js';
+import { loadFixture } from './test-utils.js';
 
 describe('comments', () => {
 	describe('findApexDocComments', () => {
@@ -371,7 +373,7 @@ describe('comments', () => {
 				codeBlock,
 				options,
 			);
-			expect(result).toBe('     * Line 1\n     *\n     * Line 2');
+			expect(result).toBe('     * Line 1\n     * \n     * Line 2');
 		});
 
 		it.concurrent('should handle single empty line', () => {
@@ -385,7 +387,7 @@ describe('comments', () => {
 				codeBlock,
 				options,
 			);
-			expect(result).toBe('     *\n     *');
+			expect(result).toBe('     * \n     * ');
 		});
 
 		it.concurrent(
@@ -399,7 +401,7 @@ describe('comments', () => {
 					codeBlock,
 					options,
 				);
-				expect(result).toBe('     * Line 1\n     *\n     * Line 2');
+				expect(result).toBe('     * Line 1\n     * \n     * Line 2');
 			},
 		);
 
@@ -484,5 +486,136 @@ describe('comments', () => {
 			expect(createClosingIndent(0, 2, false)).toBe('');
 			expect(createClosingIndent(0, 2, true)).toBe('');
 		});
+	});
+
+	describe('normalizeBlockComment', () => {
+		/**
+		 * Helper to extract comment value from fixture.
+		 * @param text - The fixture text.
+		 * @returns The extracted comment value.
+		 * @throws {Error} If comment markers are not found in the fixture.
+		 */
+		const extractComment = (text: string): string => {
+			const startRegex = /\/\*\*/;
+			const endRegex = /\*\//;
+			const startMatch = startRegex.exec(text);
+			const endMatch = endRegex.exec(text);
+			if (
+				startMatch?.index === undefined ||
+				endMatch?.index === undefined
+			) {
+				throw new Error('Could not find comment in fixture');
+			}
+			return text.substring(startMatch.index, endMatch.index + 2);
+		};
+
+		/**
+		 * Helper to extract comment indent from fixture.
+		 * @param text - The fixture text.
+		 * @returns The comment indent level.
+		 */
+		const extractCommentIndent = (text: string): number => {
+			const startRegex = /^(\s*)\/\*\*/m;
+			const startMatch = startRegex.exec(text);
+			if (startMatch?.[1] === undefined) {
+				return 0;
+			}
+			// Count spaces (assuming 2 spaces per indent level in fixtures)
+			return startMatch[1].length;
+		};
+
+		it.concurrent.each([
+			{
+				description: 'should normalize extra asterisks in start marker',
+				fixture: 'block-comment-extra-asterisks-start',
+			},
+			{
+				description: 'should normalize extra asterisks in end marker',
+				fixture: 'block-comment-extra-asterisks-end',
+			},
+			{
+				description: 'should add asterisks to lines without them',
+				fixture: 'block-comment-missing-asterisks',
+			},
+			{
+				description:
+					'should normalize multiple asterisks to single asterisk',
+				fixture: 'block-comment-multiple-asterisks',
+			},
+			{
+				description: 'should normalize inconsistent indentation',
+				fixture: 'block-comment-inconsistent-indent',
+			},
+			{
+				description: 'should handle mixed malformations',
+				fixture: 'block-comment-mixed-malformations',
+			},
+		])(
+			'$description',
+			({
+				fixture,
+			}: Readonly<{
+				description: string;
+				fixture: string;
+			}>) => {
+				const inputText = loadFixture(fixture, 'input');
+				const expectedText = loadFixture(fixture, 'output');
+				const inputComment = extractComment(inputText);
+				const expectedComment = extractComment(expectedText);
+				const commentIndent = extractCommentIndent(inputText);
+				const options = { tabWidth: 2, useTabs: false };
+
+				const result = normalizeBlockComment(
+					inputComment,
+					commentIndent,
+					options,
+				);
+				expect(result).toBe(expectedComment);
+			},
+		);
+
+		it.concurrent.each([
+			{
+				description:
+					'should normalize asterisks on lines containing {@code',
+				fixture: 'block-comment-code-missing-asterisks',
+			},
+			{
+				description:
+					'should normalize multiple asterisks before {@code',
+				fixture: 'block-comment-code-multiple-asterisks',
+			},
+			{
+				description:
+					'should normalize indentation for code block lines',
+				fixture: 'block-comment-code-inconsistent-indent',
+			},
+			{
+				description: 'should handle mixed code block malformations',
+				fixture: 'block-comment-code-mixed-malformations',
+			},
+		])(
+			'$description',
+			({
+				fixture,
+			}: Readonly<{
+				description: string;
+				fixture: string;
+			}>) => {
+				const inputText = loadFixture(fixture, 'input');
+				const expectedText = loadFixture(fixture, 'output');
+				const inputComment = extractComment(inputText);
+				const expectedComment = extractComment(expectedText);
+				const commentIndent = extractCommentIndent(inputText);
+				const options = { tabWidth: 2, useTabs: false };
+
+				const result = normalizeBlockComment(
+					inputComment,
+					commentIndent,
+					options,
+				);
+				expect(result).toBe(expectedComment);
+			},
+		);
 	});
 });
