@@ -36,7 +36,7 @@ public class WrappingTests {
     localList = new List<LongishTypeNameForWrap>();
     localMap = new Map<KeyTypeNameForWrap, ValueTypeNameForWrap>();
     localNestedMap =
-      new Map<OuterKeyTypeThatWraps,  Map<InnerKeyType, InnerValueType>>();
+      new Map<OuterKeyTypeThatWraps, Map<InnerKeyType, InnerValueType>>();
   }
 
   public class InnerWrappingTests {
@@ -58,8 +58,7 @@ public class WrappingTests {
 
       innerSet = new Set<LongishTypeNameForWrap>();
       innerList = new List<LongishTypeNameForWrap>();
-      innerMap =
-        new Map<KeyTypeNameForWrap, ValueTypeNameForWrap>();
+      innerMap = new Map<KeyTypeNameForWrap, ValueTypeNameForWrap>();
       innerNestedMap =
         new Map<OuterKeyTypeThatWraps, Map<InnerKeyType, InnerValueType>>();
     }
