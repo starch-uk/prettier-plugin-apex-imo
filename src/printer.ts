@@ -42,6 +42,76 @@ const isTypeRef = (node: Readonly<ApexNode> | null | undefined): boolean => {
 	);
 };
 
+/**
+ * Make a typeDoc breakable by adding break points at the first comma in generic types.
+ * Structure: [baseType, '<', [param1, ', ', param2, ...], '>']
+ * We make the first ', ' in the params array breakable.
+ */
+const makeTypeDocBreakable = (typeDoc: Doc, options: Readonly<ParserOptions>): Doc => {
+	if (typeof typeDoc === 'string') {
+		return typeDoc;
+	}
+	if (Array.isArray(typeDoc)) {
+		// Look for pattern: [baseType, '<', [params...], '>']
+		const result: Doc[] = [];
+		let i = 0;
+		
+		while (i < typeDoc.length) {
+			const item = typeDoc[i] as Doc;
+			
+			// Check if we found '<' followed by an array (type parameters)
+			if (item === '<' && i + 1 < typeDoc.length && Array.isArray(typeDoc[i + 1])) {
+				result.push(item); // '<'
+				i++;
+				
+				// Process the type parameters array
+				const params = typeDoc[i] as unknown[];
+				const processedParams: Doc[] = [];
+				let firstCommaFound = false;
+				
+				for (let j = 0; j < params.length; j++) {
+					const param = params[j] as Doc;
+					if (param === ', ' && !firstCommaFound) {
+						// First comma in type parameters - make it breakable
+						// Structure: [param1, ', ', group([indent([softline, param2, ...])])]
+						processedParams.push(', ');
+						// Wrap remaining params in a group with indent and softline
+						if (j + 1 < params.length) {
+							const remainingParams = params.slice(j + 1);
+							processedParams.push(group(indent([softline, ...remainingParams])));
+							break; // Done processing
+						}
+						firstCommaFound = true;
+					} else if (!firstCommaFound) {
+						// Before first comma - keep as-is
+						processedParams.push(param);
+					}
+					// After first comma is handled above
+				}
+				
+				result.push(processedParams);
+				i++;
+			} else {
+				result.push(item);
+				i++;
+			}
+		}
+		
+		return result;
+	}
+	if (typeDoc && typeof typeDoc === 'object' && 'type' in typeDoc) {
+		// It's a doc object (group, indent, etc.) - recurse into contents
+		const docObj = typeDoc as { type: string; contents?: unknown; [key: string]: unknown };
+		if ('contents' in docObj && docObj.contents !== undefined) {
+			return {
+				...docObj,
+				contents: makeTypeDocBreakable(docObj.contents as Doc, options),
+			} as Doc;
+		}
+	}
+	return typeDoc;
+};
+
 // Store current options and originalText for use in printComment
 let currentPrintOptions: Readonly<ParserOptions> | undefined = undefined;
 let currentOriginalText: string | undefined = undefined;
@@ -204,6 +274,17 @@ const createWrappedPrinter = (
 				fallback,
 				options,
 			);
+		// #region agent log - Test H1: Check if ClassTypeRef has generics (types field)
+		if (isTypeRef(node)) {
+			const nodeClass = getNodeClassOptional(node);
+			const hasTypes = 'types' in node;
+			const typesField = hasTypes ? (node as { types?: unknown }).types : undefined;
+			const typesIsArray = Array.isArray(typesField);
+			const typesLength = typesIsArray ? typesField.length : 0;
+			const hasNames = 'names' in node;
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{nodeClass,hasTypes,typesIsArray,typesLength,hasNames,isInVariableDecls:path.key === 'type' && path.stack.length > 10},hypothesisId:'H1',location:'printer.ts:207',message:'H1: Checking ClassTypeRef structure for generics',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
+		}
+		// #endregion
 		if (isTypeRef(node) && 'names' in node) {
 			const namesField = (node as { names?: unknown }).names;
 
@@ -226,6 +307,18 @@ const createWrappedPrinter = (
 				);
 			}
 		}
+		// #region agent log - Test H2: Check if we should intercept ClassTypeRef with generics to add break points
+		if (isTypeRef(node) && 'types' in node) {
+			const typesField = (node as { types?: unknown }).types;
+			const typesIsArray = Array.isArray(typesField);
+			const typesLength = typesIsArray ? typesField.length : 0;
+			const isInVariableDeclsType = path.key === 'type';
+			// Check if parent is VariableDecls by checking stack
+			const stackDepth = path.stack.length;
+			const parentIsVariableDecls = stackDepth > 10; // VariableDecls is typically deeper in stack
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{typesIsArray,typesLength,isInVariableDeclsType,stackDepth,parentIsVariableDecls,shouldIntercept:typesIsArray && typesLength > 1 && isInVariableDeclsType},hypothesisId:'H2',location:'printer.ts:228',message:'H2: Should we intercept ClassTypeRef with generics?',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
+		}
+		// #endregion
 		if (isIdentifier(node) && isInTypeContext(path)) {
 			const normalizedValue = normalizeTypeName(node.value);
 			if (normalizedValue !== node.value)
@@ -314,7 +407,33 @@ const createWrappedPrinter = (
 				if (modifierDocs.length > 0) {
 					resultParts.push(...modifierDocs);
 				}
-				resultParts.push(typeDoc);
+				// #region agent log - Test H3: Inspect typeDoc structure for break points
+				const typeDocType = typeof typeDoc;
+				const typeDocIsArray = Array.isArray(typeDoc);
+				const typeDocLength = typeDocIsArray ? (typeDoc as unknown[]).length : (typeof typeDoc === 'string' ? typeDoc.length : 'N/A');
+				// Check if typeDoc has break points (softline, line, or group structures)
+				const typeDocStr = JSON.stringify(typeDoc);
+				const hasSoftline = typeDocStr.includes('"soft":true') || typeDocStr.includes('softline');
+				const hasLine = typeDocStr.includes('"type":"line"');
+				const hasGroup = typeDocStr.includes('"type":"group"');
+				const hasComma = typeDocStr.includes(',');
+				const typeDocPreview = typeof typeDoc === 'string' ? typeDoc.slice(0, 200) : typeDocIsArray ? JSON.stringify(typeDoc).slice(0, 200) : String(typeDoc).slice(0, 200);
+				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{typeDocType,typeDocIsArray,typeDocLength,hasSoftline,hasLine,hasGroup,hasComma,typeDocPreview,modifierDocsLength:modifierDocs.length,declDocsLength:declDocs.length},hypothesisId:'H3',location:'printer.ts:317',message:'H3: Inspecting typeDoc for break points at commas',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
+				// #endregion
+				// #region agent log - Inspect typeDoc structure before making breakable
+				const typeDocStrBefore = JSON.stringify(typeDoc);
+				const typeDocIsArrayBefore = Array.isArray(typeDoc);
+				const typeDocLengthBefore = typeDocIsArrayBefore ? (typeDoc as unknown[]).length : 'N/A';
+				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{typeDocIsArrayBefore,typeDocLengthBefore,typeDocStructure:typeDocStrBefore.slice(0,500)},hypothesisId:'FIX_STRUCTURE',location:'printer.ts:353',message:'FIX: Inspecting typeDoc structure before processing',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
+				// #endregion
+				// Make typeDoc breakable by adding break points at commas
+				const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
+				// #region agent log - Test fix: Check if breakableTypeDoc has break points
+				const breakableTypeDocStr = JSON.stringify(breakableTypeDoc);
+				const breakableHasSoftline = breakableTypeDocStr.includes('"soft":true') || breakableTypeDocStr.includes('softline');
+				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{breakableHasSoftline,breakableTypeDocPreview:breakableTypeDocStr.slice(0,500)},hypothesisId:'FIX',location:'printer.ts:360',message:'FIX: After making typeDoc breakable',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
+				// #endregion
+				resultParts.push(breakableTypeDoc);
 				if (declDocs.length > 0) {
 					resultParts.push(' ');
 					if (declDocs.length > 1) {
@@ -325,7 +444,11 @@ const createWrappedPrinter = (
 						resultParts.push([declDocs[0] as Doc, ';']);
 					}
 				}
-				
+				// #region agent log - Inspect resultParts before grouping
+				const resultPartsLength = resultParts.length;
+				const resultPartsPreview = JSON.stringify(resultParts.slice(0, 5)).slice(0, 200);
+				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{resultPartsLength,resultPartsPreview,printWidth:options.printWidth},hypothesisId:'B',location:'printer.ts:329',message:'Inspecting resultParts before group wrapping',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
+				// #endregion
 				// Wrap in a group to allow breaking when full line exceeds printWidth
 				const result = group(resultParts);
 				
