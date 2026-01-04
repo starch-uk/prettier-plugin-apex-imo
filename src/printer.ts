@@ -13,6 +13,7 @@ import type {
 	ApexMapInitNode,
 	ApexAnnotationNode,
 } from './types.js';
+const { group, indent, softline } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
 	normalizeTypeName,
@@ -169,6 +170,26 @@ const createWrappedPrinter = (
 			.originalText;
 		const { node } = path;
 		const nodeClass = getNodeClassOptional(node);
+		// #region agent log - Node hierarchy investigation
+		if (nodeClass !== undefined && (nodeClass.includes('FieldMember') || nodeClass.includes('VariableDecls') || nodeClass.includes('VariableDecl'))) {
+			// Get parent context from path stack
+			const stackDepth = path.stack?.length ?? 0;
+			const pathKey = path.key;
+			const parentInfo = stackDepth > 1 ? `parent at depth ${stackDepth - 1}` : 'no parent';
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{nodeClass,pathKey,stackDepth,parentInfo,nodeKeys:Object.keys(node).filter((k) => !k.startsWith('@')).slice(0,15)},hypothesisId:'NODE_HIERARCHY',location:'printer.ts:171',message:'Investigating node hierarchy for wrapping',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
+				// Ignore logging errors
+			});
+		}
+		// Check specifically for VariableDecls to see its structure
+		if (nodeClass !== undefined && nodeClass === 'apex.jorje.data.ast.VariableDecls') {
+			const decls = (node as { decls?: unknown[] }).decls;
+			const type = (node as { type?: unknown }).type;
+			const modifiers = (node as { modifiers?: unknown[] }).modifiers;
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{nodeClass,pathKey:path.key,hasDecls:Array.isArray(decls),declsCount:Array.isArray(decls) ? decls.length : 0,hasType:!!type,hasModifiers:Array.isArray(modifiers),modifiersCount:Array.isArray(modifiers) ? modifiers.length : 0,firstDeclHasAssignment:Array.isArray(decls) && decls[0] && typeof decls[0] === 'object' && 'assignment' in decls[0] ? !!decls[0].assignment : false},hypothesisId:'VARIABLEDECLS_STRUCTURE',location:'printer.ts:185',message:'VariableDecls structure analysis',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
+				// Ignore logging errors
+			});
+		}
+		// #endregion
 		const typeNormalizingPrint = createTypeNormalizingPrint(print);
 		const fallback = (): Doc =>
 			originalPrinter.print(path, options, typeNormalizingPrint);
@@ -217,6 +238,113 @@ const createWrappedPrinter = (
 					typeNormalizingPrint,
 				);
 		}
+		// Intercept VariableDecls nodes to enable wrapping for field declarations with assignments
+		// This handles the full declaration including modifiers and type, so Prettier can evaluate full line length
+		if (nodeClass !== undefined && nodeClass === 'apex.jorje.data.ast.VariableDecls') {
+			const decls = (node as { decls?: unknown[] }).decls;
+			const hasAssignments = Array.isArray(decls) && decls.some((decl) => decl && typeof decl === 'object' && 'assignment' in decl && decl.assignment !== null && decl.assignment !== undefined);
+			
+			if (hasAssignments && Array.isArray(decls)) {
+				// Get the original Doc structure first to understand it
+				const originalDoc = fallback();
+				// #region agent log
+				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{hasAssignments,originalDocIsArray:Array.isArray(originalDoc),originalDocType:typeof originalDoc,declsCount:decls.length},hypothesisId:'ORIGINAL_DOC_STRUCTURE',location:'printer.ts:247',message:'Inspecting original Doc structure',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
+					// Ignore logging errors
+				});
+				// #endregion
+				
+				// Build the structure with proper grouping for wrapping
+				// Structure: modifiers + type + [name + group([' =', indent([softline, assignment])])]
+				const modifierDocs = path.map(print, 'modifiers' as never) as unknown as Doc[];
+				const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
+				
+				// Process each declaration with wrapping support
+				const { join: joinDocs } = doc.builders;
+				const declDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
+					const declNode = declPath.node;
+					if (!declNode || typeof declNode !== 'object') {
+						return print(declPath);
+					}
+					
+					// #region agent log - Inspect VariableDecl node structure
+					const declNodeKeys = Object.keys(declNode).filter((k) => !k.startsWith('@')).slice(0,20);
+					const hasAssignment = 'assignment' in declNode;
+					fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{declNodeKeys,hasAssignment,declNodeType:typeof declNode,declNodeClass:(declNode as { '@class'?: unknown })['@class']},hypothesisId:'VARIABLEDECL_STRUCTURE',location:'printer.ts:263',message:'Inspecting VariableDecl node structure',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
+						// Ignore logging errors
+					});
+					// #endregion
+					
+					const assignment = (declNode as { assignment?: unknown }).assignment;
+					if (assignment !== null && assignment !== undefined) {
+						// Get name and assignment separately - use path.call(print, "assignment", "value") like original
+						const nameDoc = declPath.call(print, 'name' as never) as unknown as Doc;
+						// Use path.call with two arguments: "assignment", "value" to access nested property
+						const assignmentDoc = declPath.call(print, 'assignment' as never, 'value' as never) as unknown as Doc;
+						
+						// #region agent log
+						const assignmentNodeClass = assignment && typeof assignment === 'object' && '@class' in assignment ? (assignment as { '@class'?: unknown })['@class'] : 'unknown';
+						fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{assignmentNodeClass,hasNameDoc:!!nameDoc,nameDocValue:typeof nameDoc === 'string' ? nameDoc.slice(0,50) : 'N/A',hasAssignmentDoc:!!assignmentDoc,assignmentDocType:typeof assignmentDoc,assignmentDocIsArray:Array.isArray(assignmentDoc),assignmentDocLength:typeof assignmentDoc === 'string' ? assignmentDoc.length : Array.isArray(assignmentDoc) ? assignmentDoc.length : 'N/A',assignmentDocPreview:typeof assignmentDoc === 'string' ? assignmentDoc.slice(0,100) : Array.isArray(assignmentDoc) ? 'Array[' + assignmentDoc.length + ']' : 'N/A'},hypothesisId:'VARIABLEDECL_IN_VARIABLEDECLS',location:'printer.ts:268',message:'Getting assignment in VariableDecls map with two-arg call',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
+							// Ignore logging errors
+						});
+						// #endregion
+						
+						// If assignmentDoc exists, create breakable structure
+						if (assignmentDoc) {
+							// Create breakable structure: [name, ' =', group(indent([softline, assignment]))]
+							// Keep name and '=' outside the group so Prettier can break after '='
+							// Group only the assignment part to keep it together as one unit
+							// The softline allows breaking, and indent handles the wrapped line
+							return [
+								nameDoc,
+								' =',
+								group(indent([softline, assignmentDoc])),
+							];
+						}
+					}
+					
+					return print(declPath);
+				}, 'decls' as never) as unknown as Doc[];
+				
+				// Combine: modifiers + type + ' ' + decls (joined if multiple) + semicolon
+				// Match original prettier-plugin-apex structure which adds semicolon
+				const resultParts: Doc[] = [];
+				if (modifierDocs.length > 0) {
+					resultParts.push(...modifierDocs);
+				}
+				resultParts.push(typeDoc);
+				if (declDocs.length > 0) {
+					resultParts.push(' ');
+					if (declDocs.length > 1) {
+						resultParts.push(joinDocs([', ', softline], declDocs));
+						resultParts.push(';');
+					} else if (declDocs.length === 1 && declDocs[0] !== undefined) {
+						// Single declaration - add semicolon like original prettier-plugin-apex
+						resultParts.push([declDocs[0] as Doc, ';']);
+					}
+				}
+				
+				// Wrap in a group to allow breaking when full line exceeds printWidth
+				const result = group(resultParts);
+				
+				// #region agent log
+				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{builtCustomDoc:true,declDocsCount:declDocs.length,resultLength:result.length},hypothesisId:'CUSTOM_DOC_BUILT',location:'printer.ts:331',message:'Built custom Doc with wrapping groups',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
+					// Ignore logging errors
+				});
+				// #endregion
+				
+				return result;
+			}
+		}
+		// #region agent log
+		if (nodeClass !== undefined && (nodeClass.includes('Variable') || nodeClass.includes('Field') || nodeClass.includes('Decl'))) {
+			const DEFAULT_PRINT_WIDTH = 80;
+			const printWidth = options.printWidth ?? DEFAULT_PRINT_WIDTH;
+			const fallbackDoc = fallback();
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{fallbackType:typeof fallbackDoc,nodeClass,printWidth},hypothesisId:'C',location:'printer.ts:246',message:'About to return fallback for Field/Variable',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
+				// Ignore logging errors
+			});
+		}
+		// #endregion
 		return fallback();
 	};
 
