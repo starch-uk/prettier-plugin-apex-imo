@@ -383,17 +383,83 @@ const createWrappedPrinter = (
 				if (modifierDocs.length > 0) {
 					resultParts.push(...modifierDocs);
 				}
-				// Make typeDoc breakable by adding break points at commas
-				const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
-				resultParts.push(breakableTypeDoc);
+				// For Map types with assignments, keep type together and break at assignment level
+				// Check if typeDoc is a Map type with nested Map types or deeply nested structures
+				// Examples: Map<String, Map<String, String>> or Map<String, List<Map<String, String>>>
+				// NOT: Map<String, List<String>> (simple Map with List value)
+				const isComplexMapType = (doc: Doc): boolean => {
+					if (typeof doc === 'string') {
+						// Check if it's a Map type with nested Map types (not just List/Set)
+						return doc.startsWith('Map<') && doc.includes('Map<');
+					}
+					if (Array.isArray(doc)) {
+						const firstElement = doc[0];
+						const isMap = firstElement === 'Map' || (Array.isArray(firstElement) && firstElement[0] === 'Map');
+						if (!isMap) return false;
+						// Check if type parameters contain nested Map types (directly or deeply nested)
+						if (doc.length > 2 && Array.isArray(doc[2])) {
+							const params = doc[2] as unknown[];
+							// Recursively check if any parameter contains nested Map types
+							const hasNestedMap = (param: unknown): boolean => {
+								if (typeof param === 'string') {
+									// Check if string contains nested Map types
+									return param.includes('Map<');
+								}
+								if (Array.isArray(param)) {
+									// Check if it's a Map type (nested Map)
+									const first = param[0];
+									if (first === 'Map') return true;
+									if (Array.isArray(first) && first[0] === 'Map') return true;
+									// Recursively check nested structures for Map types
+									return param.some((item) => hasNestedMap(item));
+								}
+								return false;
+							};
+							return params.some((param) => hasNestedMap(param));
+						}
+					}
+					return false;
+				};
+				
+				// For complex Map types with assignments, wrap in group to keep together
+				// For other types, use makeTypeDocBreakable
+				const processedTypeDoc = (isComplexMapType(typeDoc) && hasAssignments)
+					? group(typeDoc)
+					: makeTypeDocBreakable(typeDoc, options);
+				resultParts.push(processedTypeDoc);
+				
 				if (declDocs.length > 0) {
-					resultParts.push(' ');
 					if (declDocs.length > 1) {
+						resultParts.push(' ');
 						resultParts.push(joinDocs([', ', softline], declDocs));
 						resultParts.push(';');
 					} else if (declDocs.length === 1 && declDocs[0] !== undefined) {
-						// Single declaration - add semicolon like original prettier-plugin-apex
-						resultParts.push([declDocs[0] as Doc, ';']);
+						// Single declaration: extract name and assignment to allow breaking at '='
+						const declDoc = declDocs[0] as Doc;
+						// Check if declDoc is an array with the structure [name, ' ', '=', ' ', assignment]
+						if (Array.isArray(declDoc) && declDoc.length >= 5 && declDoc[2] === '=') {
+							const nameDoc = declDoc[0] as Doc;
+							const assignmentDoc = declDoc[4] as Doc;
+							// Only apply ifBreak for complex Map types to allow breaking at '=' while keeping type together
+							if (isComplexMapType(typeDoc)) {
+								resultParts.push(' ');
+								resultParts.push(group([nameDoc, ' ', '=']));
+								const wrappedAssignment = ifBreak(
+									indent([line, assignmentDoc]),
+									[' ', assignmentDoc]
+								);
+								resultParts.push(wrappedAssignment);
+								resultParts.push(';');
+							} else {
+								// For non-nested Map types or other types, use original structure
+								resultParts.push(' ');
+								resultParts.push([declDoc, ';']);
+							}
+						} else {
+							// Fallback: use original structure
+							resultParts.push(' ');
+							resultParts.push([declDoc, ';']);
+						}
 					}
 				}
 				// Wrap in a group to allow breaking when full line exceeds printWidth
