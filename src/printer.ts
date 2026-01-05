@@ -303,6 +303,26 @@ const createWrappedPrinter = (
 				return 'value' in assignment && (assignment as { value?: unknown }).value !== null && (assignment as { value?: unknown }).value !== undefined;
 			});
 			
+			// Helper function to check if an assignment is a collection initialization
+			const isCollectionAssignment = (assignment: unknown): boolean => {
+				if (!assignment || typeof assignment !== 'object') return false;
+				const assignmentValue = (assignment as { value?: unknown }).value;
+				if (!assignmentValue || typeof assignmentValue !== 'object' || !('@class' in assignmentValue)) return false;
+				const assignmentValueClass = (assignmentValue as { '@class': unknown })['@class'];
+				
+				// Check if it's a NewExpr (which wraps collection literals)
+				if (typeof assignmentValueClass === 'string' && assignmentValueClass === 'apex.jorje.data.ast.Expr$NewExpr') {
+					// Check if the NewExpr contains a collection literal
+					// The collection literal is in the 'creator' property
+					const creator = (assignmentValue as { creator?: unknown }).creator;
+					if (creator && typeof creator === 'object' && '@class' in creator) {
+						const creatorClass = (creator as { '@class': unknown })['@class'];
+						return typeof creatorClass === 'string' && (creatorClass === 'apex.jorje.data.ast.NewObject$NewListLiteral' || creatorClass === 'apex.jorje.data.ast.NewObject$NewSetLiteral' || creatorClass === 'apex.jorje.data.ast.NewObject$NewMapLiteral');
+					}
+				}
+				return false;
+			};
+			
 			if (hasAssignments && Array.isArray(decls)) {
 				// Build the structure with proper grouping for wrapping
 				// Structure: modifiers + type + [name + group([' =', indent([softline, assignment])])]
@@ -326,6 +346,19 @@ const createWrappedPrinter = (
 						
 						// If assignmentDoc exists, create breakable structure
 						if (assignmentDoc) {
+							// For collection initializations, don't wrap in a way that allows breaking at '='
+							// Keep "name = new List<Type>{" together by not using group(indent([softline, ...]))
+							// Instead, just return the assignment directly and let the collection handle its own wrapping
+							if (isCollectionAssignment(assignment)) {
+								return [
+									nameDoc,
+									' ',
+									'=',
+									' ',
+									assignmentDoc,
+								];
+							}
+							
 							// Create breakable structure matching prettier-plugin-apex pattern
 							// Use separate string literals for spaces like prettier-plugin-apex does:
 							// prettier-plugin-apex uses: [" ", "=", " ", assignmentDocs] for simple case
