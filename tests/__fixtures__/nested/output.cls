@@ -34,7 +34,7 @@ public class NestedTest {
           'key2' => 'value2'
         },
         'settings' => new Map<String, String>{ 'opt1' => 'val1' }
-    };
+      };
 
     // List with Map values
     List<Map<String, String>> listWithMaps = new List<Map<String, String>>{
