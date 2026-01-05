@@ -225,7 +225,9 @@ describe('printer', () => {
 
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			expect(wrapped.embed).toBe(mockOriginalPrinter.embed);
+			// embed is wrapped to handle ApexDoc code blocks, so it won't be the same reference
+			expect(wrapped.embed).toBeDefined();
+			expect(wrapped.embed).not.toBe(mockOriginalPrinter.embed);
 			expect(wrapped.preprocess).toBe(mockOriginalPrinter.preprocess);
 			const wrappedWithProps = wrapped as { otherProp?: string };
 			expect(wrappedWithProps.otherProp).toBe('test');
@@ -254,19 +256,19 @@ describe('printer', () => {
 		it.concurrent.each([
 			{
 				description:
-					'should pass through empty list nodes to original printer',
+					'should handle empty list nodes with custom formatting',
 				nodeClass: 'apex.jorje.data.ast.NewObject$NewListLiteral',
 				nodeData: { values: [] },
 			},
 			{
 				description:
-					'should pass through empty set nodes to original printer',
+					'should handle empty set nodes with custom formatting',
 				nodeClass: 'apex.jorje.data.ast.NewObject$NewSetLiteral',
 				nodeData: { values: [] },
 			},
 			{
 				description:
-					'should pass through empty map nodes to original printer',
+					'should handle empty map nodes with custom formatting',
 				nodeClass: 'apex.jorje.data.ast.NewObject$NewMapLiteral',
 				nodeData: { pairs: [] },
 			},
@@ -296,9 +298,13 @@ describe('printer', () => {
 					createMockPrint(),
 				);
 
-				// Should call original printer for empty collections
-				expect(mockOriginalPrinter.print).toHaveBeenCalled();
-				expect(result).toBe('original output');
+				// Empty collections are handled by our custom logic to ensure
+				// type parameters can break when they exceed printWidth
+				// They should return a Doc array, not the original output
+				expect(mockOriginalPrinter.print).not.toHaveBeenCalled();
+				expect(result).not.toBe('original output');
+				// Result should be a Doc array (our custom formatting)
+				expect(Array.isArray(result)).toBe(true);
 			},
 		);
 	});
