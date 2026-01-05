@@ -202,13 +202,13 @@ function shouldNormalizeType(
 		(key.toLowerCase() === 'type' ||
 			key.toLowerCase() === 'typeref' ||
 			key === 'types');
-	const result =
+	return (
 		forceTypeContext ||
 		parentKey === 'types' ||
 		key === 'names' ||
 		isTypeKey ||
-		isInTypeContext(path);
-	return result;
+		isInTypeContext(path)
+	);
 }
 
 const EMPTY_STRING_LENGTH = 0;
@@ -347,10 +347,59 @@ const createTypeNormalizingPrint =
 		return originalPrint(subPath);
 	};
 
+/**
+ * Normalizes type names in a code string by finding and normalizing object suffixes and standard object types.
+ * This is used for normalizing code blocks in ApexDoc comments before formatting.
+ * @param code - The code string to normalize.
+ * @returns The code string with normalized type names.
+ * @example
+ * ```typescript
+ * normalizeTypeNamesInCode('MyCustomObject__C obj = new MyCustomObject__C();');
+ * // Returns 'MyCustomObject__c obj = new MyCustomObject__c();'
+ * ```
+ */
+const normalizeTypeNamesInCode = (code: string): string => {
+	if (!code || typeof code !== 'string') return code;
+	// Create a regex pattern to match type names with object suffixes
+	// Match type names followed by object suffixes (e.g., MyCustomObject__C, Account__c)
+	// Sort suffixes by length descending to match longest first (e.g., __DataCategorySelection before __c)
+	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
+		([, a], [, b]) => b.length - a.length,
+	);
+	
+	// Process code line by line to avoid issues with word boundaries and context
+	const lines = code.split('\n');
+	const normalizedLines = lines.map((line) => {
+		let normalizedLine = line;
+		// Try each suffix pattern (longest first)
+		for (const [, normalizedSuffix] of suffixes) {
+			// Escape special regex characters in suffix
+			const escapedSuffix = normalizedSuffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			// Match type names with this suffix
+			// Pattern: [a-zA-Z0-9_]+ followed by the suffix
+			// Use negative lookbehind/lookahead to ensure we're matching a complete type name
+			// (not part of a larger identifier)
+			const pattern = new RegExp(
+				`(?<![a-zA-Z0-9_])([a-zA-Z0-9_]+)${escapedSuffix}(?![a-zA-Z0-9_])`,
+				'gi',
+			);
+			normalizedLine = normalizedLine.replace(pattern, (match, prefix) => {
+				// Reconstruct the full type name with original casing for prefix
+				const fullTypeName = `${prefix}${normalizedSuffix}`;
+				// Normalize the full type name (handles both prefix and suffix normalization)
+				return normalizeTypeName(fullTypeName);
+			});
+		}
+		return normalizedLine;
+	});
+	return normalizedLines.join('\n');
+};
+
 export {
 	normalizeStandardObjectType,
 	normalizeObjectSuffix,
 	normalizeTypeName,
+	normalizeTypeNamesInCode,
 	isIdentifier,
 	isInTypeContext,
 	createTypeNormalizingPrint,

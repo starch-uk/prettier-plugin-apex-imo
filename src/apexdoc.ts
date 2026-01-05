@@ -143,9 +143,14 @@ const formatCodeBlock = async (
 			: // Import the wrapped plugin to ensure multiline collection formatting
 				// Use dynamic import to avoid circular dependency issues
 				(await import('./index.js')).default;
+		// Normalize type names in code before formatting
+		// This ensures object suffixes and standard object types are normalized
+		// even when code blocks are formatted separately from the main document
+		const { normalizeTypeNamesInCode } = await import('./casing.js');
+		const normalizedCode = normalizeTypeNamesInCode(code);
 		const wrappedCode = isAnnotationCode
-			? `public class Temp { ${code} void method() {} }`
-			: `public class Temp { void method() { ${code} } }`;
+			? `public class Temp { ${normalizedCode} void method() {} }`
+			: `public class Temp { void method() { ${normalizedCode} } }`;
 		const formatted = await prettier.format(wrappedCode, {
 			parser: 'apex',
 			tabWidth,

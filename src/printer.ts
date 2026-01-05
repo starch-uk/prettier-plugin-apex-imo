@@ -29,7 +29,7 @@ import {
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 } from './comments.js';
-import { extractCodeFromBlock } from './apexdoc.js';
+import { extractCodeFromBlock } from './apexdoc-code.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -240,26 +240,6 @@ const createWrappedPrinter = (
 			.originalText;
 		const { node } = path;
 		const nodeClass = getNodeClassOptional(node);
-		// #region agent log - Node hierarchy investigation
-		if (nodeClass !== undefined && (nodeClass.includes('FieldMember') || nodeClass.includes('VariableDecls') || nodeClass.includes('VariableDecl'))) {
-			// Get parent context from path stack
-			const stackDepth = path.stack?.length ?? 0;
-			const pathKey = path.key;
-			const parentInfo = stackDepth > 1 ? `parent at depth ${stackDepth - 1}` : 'no parent';
-			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{nodeClass,pathKey,stackDepth,parentInfo,nodeKeys:Object.keys(node).filter((k) => !k.startsWith('@')).slice(0,15)},hypothesisId:'NODE_HIERARCHY',location:'printer.ts:171',message:'Investigating node hierarchy for wrapping',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
-				// Ignore logging errors
-			});
-		}
-		// Check specifically for VariableDecls to see its structure
-		if (nodeClass !== undefined && nodeClass === 'apex.jorje.data.ast.VariableDecls') {
-			const decls = (node as { decls?: unknown[] }).decls;
-			const type = (node as { type?: unknown }).type;
-			const modifiers = (node as { modifiers?: unknown[] }).modifiers;
-			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{nodeClass,pathKey:path.key,hasDecls:Array.isArray(decls),declsCount:Array.isArray(decls) ? decls.length : 0,hasType:!!type,hasModifiers:Array.isArray(modifiers),modifiersCount:Array.isArray(modifiers) ? modifiers.length : 0,firstDeclHasAssignment:Array.isArray(decls) && decls[0] && typeof decls[0] === 'object' && 'assignment' in decls[0] ? !!decls[0].assignment : false},hypothesisId:'VARIABLEDECLS_STRUCTURE',location:'printer.ts:185',message:'VariableDecls structure analysis',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
-				// Ignore logging errors
-			});
-		}
-		// #endregion
 		const typeNormalizingPrint = createTypeNormalizingPrint(print);
 		const fallback = (): Doc =>
 			originalPrinter.print(path, options, typeNormalizingPrint);
@@ -274,17 +254,6 @@ const createWrappedPrinter = (
 				fallback,
 				options,
 			);
-		// #region agent log - Test H1: Check if ClassTypeRef has generics (types field)
-		if (isTypeRef(node)) {
-			const nodeClass = getNodeClassOptional(node);
-			const hasTypes = 'types' in node;
-			const typesField = hasTypes ? (node as { types?: unknown }).types : undefined;
-			const typesIsArray = Array.isArray(typesField);
-			const typesLength = typesIsArray ? typesField.length : 0;
-			const hasNames = 'names' in node;
-			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{nodeClass,hasTypes,typesIsArray,typesLength,hasNames,isInVariableDecls:path.key === 'type' && path.stack.length > 10},hypothesisId:'H1',location:'printer.ts:207',message:'H1: Checking ClassTypeRef structure for generics',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
-		}
-		// #endregion
 		if (isTypeRef(node) && 'names' in node) {
 			const namesField = (node as { names?: unknown }).names;
 
@@ -307,18 +276,6 @@ const createWrappedPrinter = (
 				);
 			}
 		}
-		// #region agent log - Test H2: Check if we should intercept ClassTypeRef with generics to add break points
-		if (isTypeRef(node) && 'types' in node) {
-			const typesField = (node as { types?: unknown }).types;
-			const typesIsArray = Array.isArray(typesField);
-			const typesLength = typesIsArray ? typesField.length : 0;
-			const isInVariableDeclsType = path.key === 'type';
-			// Check if parent is VariableDecls by checking stack
-			const stackDepth = path.stack.length;
-			const parentIsVariableDecls = stackDepth > 10; // VariableDecls is typically deeper in stack
-			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{typesIsArray,typesLength,isInVariableDeclsType,stackDepth,parentIsVariableDecls,shouldIntercept:typesIsArray && typesLength > 1 && isInVariableDeclsType},hypothesisId:'H2',location:'printer.ts:228',message:'H2: Should we intercept ClassTypeRef with generics?',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
-		}
-		// #endregion
 		if (isIdentifier(node) && isInTypeContext(path)) {
 			const normalizedValue = normalizeTypeName(node.value);
 			if (normalizedValue !== node.value)
@@ -588,6 +545,8 @@ const createWrappedPrinter = (
 						const { code, endPos } = extraction;
 
 						// Format the code using textToDoc (proper Prettier API)
+						// textToDoc uses the same printer context (our wrapped printer with type normalization)
+						// This ensures type normalization is applied when formatting code blocks
 						try {
 							// Wrap code in a class context to ensure proper formatting
 							// This ensures lists/maps are formatted multiline as expected
@@ -598,62 +557,53 @@ const createWrappedPrinter = (
 								? `public class Temp { ${code} void method() {} }`
 								: `public class Temp { void method() { ${code} } }`;
 
-							// Use prettier.format with our plugin to ensure:
-							// 1. Wrapped printer is used (for multiline lists/maps)
-							// 2. Type normalization is applied (Account, Contact, etc.)
-							// Import plugin dynamically if not set to avoid circular dependency
-							let pluginToUse: Plugin<ApexNode> | undefined =
-								undefined;
-							// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- currentPluginInstance?.default can be any type
-							if (currentPluginInstance?.default) {
-								pluginToUse =
-									currentPluginInstance.default as Plugin<ApexNode>;
+							// Use textToDoc instead of prettier.format to ensure same printer context
+							// textToDoc uses the current printer (our wrapped printer with normalization)
+							// This ensures code blocks are processed like anonymous Apex with full normalization
+							const formattedWrappedDoc = await _textToDoc(wrappedCode, {
+								..._embedOptions,
+								parser: 'apex',
+							});
+
+							// Convert Doc back to string using Prettier's debug API
+							const debugApi = (
+								prettier as {
+									__debug?: {
+										formatDoc?: (doc: Doc, options: ParserOptions) => string;
+										printDocToString?: (
+											doc: Doc,
+											options: ParserOptions,
+										) => Promise<{ formatted: string }>;
+									};
+								}
+							).__debug;
+
+							let formattedWrapped: string;
+							if (debugApi?.printDocToString) {
+								const result = await debugApi.printDocToString(
+									formattedWrappedDoc,
+									_embedOptions,
+								);
+								formattedWrapped =
+									typeof result.formatted === 'string'
+										? result.formatted
+										: wrappedCode;
+							} else if (debugApi?.formatDoc) {
+								formattedWrapped = debugApi.formatDoc(
+									formattedWrappedDoc,
+									_embedOptions,
+								);
 							} else {
-								// Fallback: import plugin dynamically
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Dynamic import types
-								const pluginModule =
-									// @ts-expect-error TS2307 -- Dynamic import path resolution at runtime
-									await import('../index.js');
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Dynamic import types
-								pluginToUse = pluginModule.default;
-							}
-							// CRITICAL: Ensure we're using the plugin with wrapped printer
-							// The plugin should have our wrapped printer with type normalization
-							// Verify the printer has our custom print function
-
-							// eslint-disable-next-line @typescript-eslint/dot-notation -- TypeScript requires bracket notation for index signatures
-							const apexPrinter = pluginToUse?.['printers']?.[
-								'apex'
-							] as
-								| { print?: unknown; embed?: unknown }
-								| undefined;
-							if (
-								!apexPrinter ||
-								typeof apexPrinter.print !== 'function'
-							) {
-								// Fallback: if plugin doesn't have our wrapped printer, import it fresh
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Dynamic import types
-								const pluginModule =
-									// @ts-expect-error TS2307 -- Dynamic import path resolution at runtime
-									await import('../index.js');
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Dynamic import types
-								pluginToUse = pluginModule.default;
-							}
-							// CRITICAL: Use prettier.format with our plugin instance
-							// This ensures our wrapped printer with type normalization is used
-							// The wrapped printer's print function uses createTypeNormalizingPrint
-							// which normalizes standard object types like "account" -> "Account"
-							// The plugin instance should have our wrapped printer set up in index.ts
-
-							const formattedWrapped = await prettier.format(
-								wrappedCode,
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Prettier format options are complex
-								{
-									...options,
+								// Fallback to prettier.format if debug API not available
+								const pluginToUse =
+									currentPluginInstance?.default ??
+									(await import('./index.js')).default;
+								formattedWrapped = await prettier.format(wrappedCode, {
+									..._embedOptions,
 									parser: 'apex',
-									plugins: [pluginToUse],
-								},
-							);
+									plugins: [pluginToUse as prettier.Plugin],
+								});
+							}
 
 							// Extract the actual code from the wrapped format
 							// Remove the wrapper class and extract just the code block
