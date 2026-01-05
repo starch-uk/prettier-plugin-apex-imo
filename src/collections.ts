@@ -108,8 +108,8 @@ const printCollection = (
 		// Use group with softline to allow breaking when line exceeds printWidth
 		// Add softline before and after type parameters to allow breaking
 		const typeDoc: Doc = isNested
-			? group(['Map<', join([',', softline], printedTypes), '>'])
-			: group(['Map<', softline, join([',', softline], printedTypes), softline, '>']);
+			? group(['Map<', join([', ', softline], printedTypes), '>'])
+			: group(['Map<', softline, join([', ', softline], printedTypes), softline, '>']);
 		return [typeDoc, '{}'];
 	}
 	
@@ -148,11 +148,8 @@ const printCollection = (
 	// For nested collections, wrap type in group to keep it together
 	// For top-level collections, don't wrap in group to allow parent to break when line exceeds printWidth
 	const typeDoc: Doc = isNested
-		? group(['Map<', join([',', softline], printedTypes), '>'])
-		: ['Map<', join([',', softline], printedTypes), '>'];
-	// #region agent log
-	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'collections.ts:115',message:'typeDoc created',data:{isNested,typeDocIsArray:Array.isArray(typeDoc),typeDocIsGroup:!Array.isArray(typeDoc)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-	// #endregion
+		? group(['Map<', join([', ', softline], printedTypes), '>'])
+		: ['Map<', join([', ', softline], printedTypes), '>'];
 	const result = [
 		typeDoc,
 		'{',
@@ -173,9 +170,6 @@ const printCollection = (
 		hardline,
 		'}',
 	];
-	// #region agent log
-	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'collections.ts:135',message:'returning Map Doc',data:{resultIsArray:Array.isArray(result)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-	// #endregion
 	return result;
 };
 
