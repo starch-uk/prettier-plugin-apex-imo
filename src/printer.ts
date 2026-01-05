@@ -78,6 +78,7 @@ const makeTypeDocBreakable = (typeDoc: Doc, options: Readonly<ParserOptions>): D
 						// Wrap remaining params in a group with indent and softline
 						if (j + 1 < params.length) {
 							const remainingParams = params.slice(j + 1);
+							// Wrap remaining params in a group with indent and softline
 							processedParams.push(group(indent([softline, ...remainingParams])));
 							break; // Done processing
 						}
@@ -510,26 +511,28 @@ const createWrappedPrinter = (
 						resultParts.push(';');
 						return group(resultParts);
 					} else if (nameDocs.length === 1 && nameDocs[0] !== undefined) {
-						// Single declaration: group includes modifiers + type + wrapped name + semicolon
-						// Apply ifBreak to name so it wraps when type + name exceeds printWidth
+						// Single declaration: allow type and name to break independently
+						// Type can break at comma, name can break on new line
 						const nameDoc = nameDocs[0];
-						const wrappedName = ifBreak(
-							indent([line, nameDoc]),
-							[' ', nameDoc]
-						);
 						
-						// Build: modifiers + type + wrappedName + semicolon
-						// All parts need to be in the same group so Prettier can evaluate full width
+						// Build: modifiers + type + name + semicolon
+						// Don't wrap everything in a single group - allow type and name to break independently
 						const resultParts: Doc[] = [];
 						if (modifierDocs.length > 0) {
 							resultParts.push(...modifierDocs);
 						}
-						// Type and wrapped name together - ifBreak will evaluate full width
+						// Type can break at comma (breakableTypeDoc already has break points)
 						resultParts.push(breakableTypeDoc);
+						// Name can break on new line using ifBreak
+						const wrappedName = ifBreak(
+							indent([line, nameDoc]),
+							[' ', nameDoc]
+						);
 						resultParts.push(wrappedName);
 						resultParts.push(';');
 						
 						// Wrap in a group to allow breaking when full line exceeds printWidth
+						// The type break point and name break point will be evaluated together
 						return group(resultParts);
 					}
 				}
