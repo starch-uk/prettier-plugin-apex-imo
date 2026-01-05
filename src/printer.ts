@@ -13,7 +13,7 @@ import type {
 	ApexMapInitNode,
 	ApexAnnotationNode,
 } from './types.js';
-const { group, indent, softline } = doc.builders;
+const { group, indent, softline, ifBreak, line } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
 	normalizeTypeName,
@@ -461,16 +461,43 @@ const createWrappedPrinter = (
 				return result;
 			}
 		}
-		// #region agent log
-		if (nodeClass !== undefined && (nodeClass.includes('Variable') || nodeClass.includes('Field') || nodeClass.includes('Decl'))) {
-			const DEFAULT_PRINT_WIDTH = 80;
-			const printWidth = options.printWidth ?? DEFAULT_PRINT_WIDTH;
-			const fallbackDoc = fallback();
-			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{fallbackType:typeof fallbackDoc,nodeClass,printWidth},hypothesisId:'C',location:'printer.ts:246',message:'About to return fallback for Field/Variable',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
-				// Ignore logging errors
-			});
+		// Intercept reassignment statements (Stmnt$ExpressionStmnt with Expr$AssignmentExpr)
+		// This handles statements like: localNestedMap = new Map<...>();
+		if (nodeClass !== undefined && nodeClass.includes('Stmnt$ExpressionStmnt')) {
+			const expr = (node as { expr?: unknown }).expr;
+			const exprNodeClass = expr && typeof expr === 'object' && '@class' in expr ? getNodeClassOptional(expr as ApexNode) : undefined;
+			const isAssignmentExpr = exprNodeClass !== undefined && exprNodeClass.includes('Expr$AssignmentExpr');
+			
+			if (isAssignmentExpr && expr && typeof expr === 'object') {
+				// Extract left-hand side (variable name) and right-hand side (assignment value)
+				// AssignmentExpr structure: { left: ..., right: ... }
+				const leftPath = path.call(print, 'expr' as never, 'left' as never) as unknown as Doc;
+				const rightPath = path.call(print, 'expr' as never, 'right' as never) as unknown as Doc;
+				const assignmentDoc = rightPath;
+				
+				if (leftPath && assignmentDoc) {
+					// Apply H221 pattern: ifBreak(indent([line, assignmentDoc]), [' ', assignmentDoc])
+					// Flat mode: [' ', assignmentDoc] - keeps on one line when fits
+					// Break mode: indent([line, assignmentDoc]) - wraps with proper indent
+					const wrappedAssignment = ifBreak(
+						indent([line, assignmentDoc]),
+						[' ', assignmentDoc]
+					);
+					
+					// Wrap in group to allow Prettier's fits() to evaluate full line width
+					// Include semicolon like the original printer does for statements
+					const result = group([
+						leftPath,
+						' ',
+						'=',
+						wrappedAssignment,
+						';',
+					]);
+					
+					return result;
+				}
+			}
 		}
-		// #endregion
 		return fallback();
 	};
 
