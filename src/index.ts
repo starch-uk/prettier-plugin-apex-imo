@@ -50,26 +50,6 @@ const getApexPrinter = (): Parameters<
 
 const originalApexPrinter = getApexPrinter();
 
-// #region agent log - Plugin initialization
-fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
-	method: 'POST',
-	headers: { 'Content-Type': 'application/json' },
-	body: JSON.stringify({
-		location: 'index.ts:51',
-		message: 'Plugin initialization: originalApexPrinter obtained',
-		data: {
-			hasOriginalPrinter: originalApexPrinter !== undefined,
-			hasPrintMethod: originalApexPrinter?.print !== undefined,
-			timestamp: Date.now(),
-			hypothesis: 'WRAPPER_INVESTIGATION',
-		},
-		timestamp: Date.now(),
-		sessionId: 'debug-session',
-		hypothesisId: 'WRAPPER_INVESTIGATION',
-	}),
-}).catch(() => {});
-// #endregion
-
 /**
  * Custom printComment function that preserves our wrapped lines.
  * The original printApexDocComment trims each line, which removes our carefully
