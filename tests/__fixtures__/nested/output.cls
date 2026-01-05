@@ -27,7 +27,8 @@ public class NestedTest {
     };
 
     // Map with Map values (nested maps)
-    Map<String, Map<String, String>> mapWithMaps = new Map<String, Map<String, String>>{
+    Map<String, Map<String, String>> mapWithMaps =
+      new Map<String, Map<String, String>>{
       'config' => new Map<String, String>{
         'key1' => 'value1',
         'key2' => 'value2'
@@ -67,14 +68,15 @@ public class NestedTest {
     };
 
     // Deeply nested: Map with Lists containing Maps
-    Map<String, List<Map<String, String>>> deeplyNested = new Map<String, List<Map<String, String>>>{
-      'items' => new List<Map<String, String>>{
-        new Map<String, String>{
-          'name' => 'item1',
-          'id' => '1'
-        },
-        new Map<String, String>{ 'name' => 'item2' }
-      }
-    };
+    Map<String, List<Map<String, String>>> deeplyNested =
+      new Map<String, List<Map<String, String>>>{
+        'items' => new List<Map<String, String>>{
+          new Map<String, String>{
+            'name' => 'item1',
+            'id' => '1'
+          },
+          new Map<String, String>{ 'name' => 'item2' }
+        }
+      };
   }
 }
