@@ -81,10 +81,15 @@ const printCollection = (
 	);
 	const printedTypes = path.map(typeNormalizingPrint, 'types' as never);
 	const isNested = isNestedInCollection(path);
+	
+	// Check if collection is actually empty (no entries at all)
+	const isEmpty = isList
+		? !Array.isArray((node as ApexListInitNode).values) || (node as ApexListInitNode).values.length === 0
+		: !Array.isArray((node as ApexMapInitNode).pairs) || (node as ApexMapInitNode).pairs.length === 0;
+	
 	// For empty collections (no entries), we still need to handle them to ensure
-	// type parameters can break when they exceed printWidth. Only delegate to
-	// original printer if we have multiple entries (which we handle specially).
-	if (!hasMultipleEntries) {
+	// type parameters can break when they exceed printWidth
+	if (isEmpty) {
 		// For empty collections, construct the typeDoc with break points to allow
 		// Prettier to break long type parameters when they exceed printWidth
 		if (isList) {
@@ -106,6 +111,12 @@ const printCollection = (
 			? group(['Map<', join([',', softline], printedTypes), '>'])
 			: group(['Map<', softline, join([',', softline], printedTypes), softline, '>']);
 		return [typeDoc, '{}'];
+	}
+	
+	// For collections with entries but fewer than MIN_ENTRIES_FOR_MULTILINE (single item),
+	// delegate to the original printer to handle inline formatting
+	if (!hasMultipleEntries) {
+		return originalPrint();
 	}
 	if (isList) {
 		const isSet = nodeClass === SET_LITERAL_CLASS;
