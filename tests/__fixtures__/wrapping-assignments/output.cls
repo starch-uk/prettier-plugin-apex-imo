@@ -23,8 +23,7 @@ public class WrappingTests {
       new LongishTypeNameForWrap('one', 'two');
 
     Set<LongishTypeNameForWrap> localSet = new Set<LongishTypeNameForWrap>();
-    List<LongishTypeNameForWrap> localList =
-      new List<LongishTypeNameForWrap>();
+    List<LongishTypeNameForWrap> localList = new List<LongishTypeNameForWrap>();
     Map<KeyTypeNameForWrap, ValueTypeNameForWrap> localMap =
       new Map<KeyTypeNameForWrap, ValueTypeNameForWrap>();
     Map<OuterKeyTypeThatWraps,
