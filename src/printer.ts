@@ -331,21 +331,22 @@ const createWrappedPrinter = (
 					typeNormalizingPrint,
 				);
 		}
-		// Intercept VariableDecls nodes to enable wrapping for field declarations with assignments
+		// Intercept VariableDecls nodes to enable wrapping for field declarations with or without assignments
 		// This handles the full declaration including modifiers and type, so Prettier can evaluate full line length
 		if (nodeClass !== undefined && nodeClass === 'apex.jorje.data.ast.VariableDecls') {
 			const decls = (node as { decls?: unknown[] }).decls;
-			const hasAssignments = Array.isArray(decls) && decls.some((decl) => decl && typeof decl === 'object' && 'assignment' in decl && decl.assignment !== null && decl.assignment !== undefined);
+			// Check if any declaration has an assignment with a value
+			// Even declarations without assignments have an assignment property (object), but it may not have a 'value' property
+			const hasAssignments = Array.isArray(decls) && decls.some((decl) => {
+				if (!decl || typeof decl !== 'object') return false;
+				const assignment = (decl as { assignment?: unknown }).assignment;
+				// Check if assignment exists and has a 'value' property (real assignment)
+				if (assignment === null || assignment === undefined) return false;
+				if (typeof assignment !== 'object') return false;
+				return 'value' in assignment && (assignment as { value?: unknown }).value !== null && (assignment as { value?: unknown }).value !== undefined;
+			});
 			
 			if (hasAssignments && Array.isArray(decls)) {
-				// Get the original Doc structure first to understand it
-				const originalDoc = fallback();
-				// #region agent log
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{hasAssignments,originalDocIsArray:Array.isArray(originalDoc),originalDocType:typeof originalDoc,declsCount:decls.length},hypothesisId:'ORIGINAL_DOC_STRUCTURE',location:'printer.ts:247',message:'Inspecting original Doc structure',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
-					// Ignore logging errors
-				});
-				// #endregion
-				
 				// Build the structure with proper grouping for wrapping
 				// Structure: modifiers + type + [name + group([' =', indent([softline, assignment])])]
 				const modifierDocs = path.map(print, 'modifiers' as never) as unknown as Doc[];
@@ -359,27 +360,12 @@ const createWrappedPrinter = (
 						return print(declPath);
 					}
 					
-					// #region agent log - Inspect VariableDecl node structure
-					const declNodeKeys = Object.keys(declNode).filter((k) => !k.startsWith('@')).slice(0,20);
-					const hasAssignment = 'assignment' in declNode;
-					fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{declNodeKeys,hasAssignment,declNodeType:typeof declNode,declNodeClass:(declNode as { '@class'?: unknown })['@class']},hypothesisId:'VARIABLEDECL_STRUCTURE',location:'printer.ts:263',message:'Inspecting VariableDecl node structure',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
-						// Ignore logging errors
-					});
-					// #endregion
-					
 					const assignment = (declNode as { assignment?: unknown }).assignment;
 					if (assignment !== null && assignment !== undefined) {
 						// Get name and assignment separately - use path.call(print, "assignment", "value") like original
 						const nameDoc = declPath.call(print, 'name' as never) as unknown as Doc;
 						// Use path.call with two arguments: "assignment", "value" to access nested property
 						const assignmentDoc = declPath.call(print, 'assignment' as never, 'value' as never) as unknown as Doc;
-						
-						// #region agent log
-						const assignmentNodeClass = assignment && typeof assignment === 'object' && '@class' in assignment ? (assignment as { '@class'?: unknown })['@class'] : 'unknown';
-						fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{assignmentNodeClass,hasNameDoc:!!nameDoc,nameDocValue:typeof nameDoc === 'string' ? nameDoc.slice(0,50) : 'N/A',hasAssignmentDoc:!!assignmentDoc,assignmentDocType:typeof assignmentDoc,assignmentDocIsArray:Array.isArray(assignmentDoc),assignmentDocLength:typeof assignmentDoc === 'string' ? assignmentDoc.length : Array.isArray(assignmentDoc) ? assignmentDoc.length : 'N/A',assignmentDocPreview:typeof assignmentDoc === 'string' ? assignmentDoc.slice(0,100) : Array.isArray(assignmentDoc) ? 'Array[' + assignmentDoc.length + ']' : 'N/A'},hypothesisId:'VARIABLEDECL_IN_VARIABLEDECLS',location:'printer.ts:268',message:'Getting assignment in VariableDecls map with two-arg call',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
-							// Ignore logging errors
-						});
-						// #endregion
 						
 						// If assignmentDoc exists, create breakable structure
 						if (assignmentDoc) {
@@ -407,32 +393,8 @@ const createWrappedPrinter = (
 				if (modifierDocs.length > 0) {
 					resultParts.push(...modifierDocs);
 				}
-				// #region agent log - Test H3: Inspect typeDoc structure for break points
-				const typeDocType = typeof typeDoc;
-				const typeDocIsArray = Array.isArray(typeDoc);
-				const typeDocLength = typeDocIsArray ? (typeDoc as unknown[]).length : (typeof typeDoc === 'string' ? typeDoc.length : 'N/A');
-				// Check if typeDoc has break points (softline, line, or group structures)
-				const typeDocStr = JSON.stringify(typeDoc);
-				const hasSoftline = typeDocStr.includes('"soft":true') || typeDocStr.includes('softline');
-				const hasLine = typeDocStr.includes('"type":"line"');
-				const hasGroup = typeDocStr.includes('"type":"group"');
-				const hasComma = typeDocStr.includes(',');
-				const typeDocPreview = typeof typeDoc === 'string' ? typeDoc.slice(0, 200) : typeDocIsArray ? JSON.stringify(typeDoc).slice(0, 200) : String(typeDoc).slice(0, 200);
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{typeDocType,typeDocIsArray,typeDocLength,hasSoftline,hasLine,hasGroup,hasComma,typeDocPreview,modifierDocsLength:modifierDocs.length,declDocsLength:declDocs.length},hypothesisId:'H3',location:'printer.ts:317',message:'H3: Inspecting typeDoc for break points at commas',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
-				// #endregion
-				// #region agent log - Inspect typeDoc structure before making breakable
-				const typeDocStrBefore = JSON.stringify(typeDoc);
-				const typeDocIsArrayBefore = Array.isArray(typeDoc);
-				const typeDocLengthBefore = typeDocIsArrayBefore ? (typeDoc as unknown[]).length : 'N/A';
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{typeDocIsArrayBefore,typeDocLengthBefore,typeDocStructure:typeDocStrBefore.slice(0,500)},hypothesisId:'FIX_STRUCTURE',location:'printer.ts:353',message:'FIX: Inspecting typeDoc structure before processing',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
-				// #endregion
 				// Make typeDoc breakable by adding break points at commas
 				const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
-				// #region agent log - Test fix: Check if breakableTypeDoc has break points
-				const breakableTypeDocStr = JSON.stringify(breakableTypeDoc);
-				const breakableHasSoftline = breakableTypeDocStr.includes('"soft":true') || breakableTypeDocStr.includes('softline');
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{breakableHasSoftline,breakableTypeDocPreview:breakableTypeDocStr.slice(0,500)},hypothesisId:'FIX',location:'printer.ts:360',message:'FIX: After making typeDoc breakable',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
-				// #endregion
 				resultParts.push(breakableTypeDoc);
 				if (declDocs.length > 0) {
 					resultParts.push(' ');
@@ -444,21 +406,77 @@ const createWrappedPrinter = (
 						resultParts.push([declDocs[0] as Doc, ';']);
 					}
 				}
-				// #region agent log - Inspect resultParts before grouping
-				const resultPartsLength = resultParts.length;
-				const resultPartsPreview = JSON.stringify(resultParts.slice(0, 5)).slice(0, 200);
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{resultPartsLength,resultPartsPreview,printWidth:options.printWidth},hypothesisId:'B',location:'printer.ts:329',message:'Inspecting resultParts before group wrapping',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {});
-				// #endregion
 				// Wrap in a group to allow breaking when full line exceeds printWidth
 				const result = group(resultParts);
 				
-				// #region agent log
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{body:JSON.stringify({data:{builtCustomDoc:true,declDocsCount:declDocs.length,resultLength:result.length},hypothesisId:'CUSTOM_DOC_BUILT',location:'printer.ts:331',message:'Built custom Doc with wrapping groups',runId:'initial',sessionId:'debug-session',timestamp:Date.now()}),headers:{'Content-Type':'application/json'},method:'POST'}).catch(() => {
-					// Ignore logging errors
-				});
-				// #endregion
-				
 				return result;
+			}
+			
+			// Handle VariableDecls without assignments - wrap when type + name exceeds printWidth
+			if (!hasAssignments && Array.isArray(decls)) {
+				const modifierDocs = path.map(print, 'modifiers' as never) as unknown as Doc[];
+				const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
+				
+				// Make typeDoc breakable by adding break points at commas
+				const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
+				
+				// Process each declaration - get name docs
+				const { join: joinDocs } = doc.builders;
+				const nameDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
+					const declNode = declPath.node;
+					if (!declNode || typeof declNode !== 'object') {
+						return undefined;
+					}
+					
+					const nameDoc = declPath.call(print, 'name' as never) as unknown as Doc;
+					return nameDoc;
+				}, 'decls' as never) as unknown as (Doc | undefined)[];
+				
+				// Combine: modifiers + [type + wrapped name] (joined if multiple) + semicolon
+				// The group needs to include modifiers + type + name so Prettier can evaluate full width
+				// Structure: modifiers + type + ifBreak(indent([line, name]), [' ', name]) + semicolon
+				if (nameDocs.length > 0) {
+					if (nameDocs.length > 1) {
+						// Multiple declarations: modifiers + type + [name1, name2, ...] + semicolon
+						const resultParts: Doc[] = [];
+						if (modifierDocs.length > 0) {
+							resultParts.push(...modifierDocs);
+						}
+						// For each name, create: type + ifBreak(indent([line, name]), [' ', name])
+						const typeAndNames = nameDocs.filter((nameDoc): nameDoc is Doc => nameDoc !== undefined).map((nameDoc) => {
+							const wrappedName = ifBreak(
+								indent([line, nameDoc]),
+								[' ', nameDoc]
+							);
+							return group([breakableTypeDoc, wrappedName]);
+						});
+						resultParts.push(joinDocs([', ', softline], typeAndNames));
+						resultParts.push(';');
+						return group(resultParts);
+					} else if (nameDocs.length === 1 && nameDocs[0] !== undefined) {
+						// Single declaration: group includes modifiers + type + wrapped name + semicolon
+						// Apply ifBreak to name so it wraps when type + name exceeds printWidth
+						const nameDoc = nameDocs[0];
+						const wrappedName = ifBreak(
+							indent([line, nameDoc]),
+							[' ', nameDoc]
+						);
+						
+						// Build: modifiers + type + wrappedName + semicolon
+						// All parts need to be in the same group so Prettier can evaluate full width
+						const resultParts: Doc[] = [];
+						if (modifierDocs.length > 0) {
+							resultParts.push(...modifierDocs);
+						}
+						// Type and wrapped name together - ifBreak will evaluate full width
+						resultParts.push(breakableTypeDoc);
+						resultParts.push(wrappedName);
+						resultParts.push(';');
+						
+						// Wrap in a group to allow breaking when full line exceeds printWidth
+						return group(resultParts);
+					}
+				}
 			}
 		}
 		// Intercept reassignment statements (Stmnt$ExpressionStmnt with Expr$AssignmentExpr)

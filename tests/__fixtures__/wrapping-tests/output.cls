@@ -19,8 +19,7 @@ public class WrappingTests {
       extremelyLongVariableNameThatJustKeepsGoingAndGoingForNoGoodReasonWhatsoeverMethodVar;
     Map<RidiculouslyVerboseAndOverlyDescriptiveMapKeyTypeName, ShortValue>
       mapWithLongKeyMethodVar;
-    Map<ShortKey,
-      IncrediblyAndUnnecessarilyLongMapValueTypeNameDesignedToWrap>
+    Map<ShortKey, IncrediblyAndUnnecessarilyLongMapValueTypeNameDesignedToWrap>
       mapWithLongValueMethodVar;
     Map<OuterKeyThatIsSoLongItAloneBreaksTheLineWrappingRules,
       Map<ShortInnerKey, ShortInnerValue>>
@@ -28,9 +27,8 @@ public class WrappingTests {
   }
 
   public class InnerWrappingTests {
-    public
-      AbsurdlyLongClassNameDesignedSpecificallyToExplodeLineWrappingLogic
-        shortInnerFieldVar;
+    public AbsurdlyLongClassNameDesignedSpecificallyToExplodeLineWrappingLogic
+      shortInnerFieldVar;
     public ShortType
       extremelyLongVariableNameThatJustKeepsGoingAndGoingForNoGoodReasonWhatsoeverInnerField;
     public Map<RidiculouslyVerboseAndOverlyDescriptiveMapKeyTypeName,
@@ -48,8 +46,8 @@ public class WrappingTests {
         shortInnerMethodVar;
       ShortType
         extremelyLongVariableNameThatJustKeepsGoingAndGoingForNoGoodReasonWhatsoeverInnerMethodVar;
-      Map<RidiculouslyVerboseAndOverlyDescriptiveMapKeyTypeName,
-        ShortValue> mapWithLongKeyInnerMethodVar;
+      Map<RidiculouslyVerboseAndOverlyDescriptiveMapKeyTypeName, ShortValue>
+        mapWithLongKeyInnerMethodVar;
       Map<ShortKey,
         IncrediblyAndUnnecessarilyLongMapValueTypeNameDesignedToWrap>
         mapWithLongValueInnerMethodVar;
