@@ -18,8 +18,7 @@ public class WrappingTests {
 
   public void parentMethod() {
     LongishTypeNameForWrap localInstance = new LongishTypeNameForWrap();
-    LongishTypeNameForWrap localInstanceOne =
-      new LongishTypeNameForWrap('one');
+    LongishTypeNameForWrap localInstanceOne = new LongishTypeNameForWrap('one');
     LongishTypeNameForWrap localInstanceTwo =
       new LongishTypeNameForWrap('one', 'two');
 
