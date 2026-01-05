@@ -422,12 +422,10 @@ const createWrappedPrinter = (
 					return false;
 				};
 				
-				// For complex Map types with assignments, wrap in group to keep together
-				// For other types, use makeTypeDocBreakable
-				const processedTypeDoc = (isComplexMapType(typeDoc) && hasAssignments)
-					? group(typeDoc)
-					: makeTypeDocBreakable(typeDoc, options);
-				resultParts.push(processedTypeDoc);
+				// Make typeDoc breakable by adding break points at commas
+				// This allows Prettier to break at commas when width exceeds printWidth
+				const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
+				resultParts.push(breakableTypeDoc);
 				
 				if (declDocs.length > 0) {
 					if (declDocs.length > 1) {
