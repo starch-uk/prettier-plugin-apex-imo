@@ -20,6 +20,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.0.16
         version: 4.0.16(vitest@4.0.16(@types/node@25.0.3))
+      agent-docs:
+        specifier: ^1.0.0
+        version: 1.0.0
       eslint:
         specifier: ^9.39.2
         version: 9.39.2
@@ -592,6 +595,10 @@ packages:
     resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  agent-docs@1.0.0:
+    resolution: {integrity: sha512-OdqbgnRt3TPzsRvLf7QE1Ut1yEgFNj5qTvYNT1wCVsF6ENxK7wwGOQPxuqTqgooWczyV2q02+oe41Jmuvmelig==}
+    engines: {node: '>=20.0.0'}
 
   ajv@6.12.6:
     resolution: {integrity: sha512-j3fVLgvTo527anyYyJOGTYJbG+vnnQYvE0m5mmkc1TK+nxAppkCLMIL0aZ4dblVCNoGShhm+kzE4ZUykBoMg4g==}
@@ -2274,6 +2281,8 @@ snapshots:
       acorn: 8.15.0
 
   acorn@8.15.0: {}
+
+  agent-docs@1.0.0: {}
 
   ajv@6.12.6:
     dependencies:
