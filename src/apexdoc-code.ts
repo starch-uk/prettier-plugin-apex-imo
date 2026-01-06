@@ -317,6 +317,11 @@ const formatCodeBlockDirect = async ({
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<string> => {
+	// Handle empty code blocks - return empty string immediately
+	if (code.trim().length === 0) {
+		return '';
+	}
+	
 	// CRITICAL: Normalize annotations in the code before formatting
 	// textToDoc should use our wrapped parser, but to be safe, we normalize here
 	// This ensures annotations like @auraenabled become @AuraEnabled
