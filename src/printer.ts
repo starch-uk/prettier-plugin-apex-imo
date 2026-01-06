@@ -29,7 +29,11 @@ import {
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 } from './comments.js';
-import { extractCodeFromBlock } from './apexdoc-code.js';
+import {
+	extractCodeFromBlock,
+	formatCodeBlockDirect,
+	formatMultilineCodeBlock,
+} from './apexdoc-code.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -580,6 +584,13 @@ const createWrappedPrinter = (
 	// This allows us to format code blocks asynchronously using textToDoc
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier's embed types are complex
 	const customEmbed: any = (path: any, options: any): any => {
+		// DEBUG: Log embed function call
+		const fs = require('fs');
+		fs.appendFileSync(
+			'.cursor/debug.log',
+			`[customEmbed] Called\n`,
+		);
+
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- path.getNode() is a Prettier API
 		const node = path.getNode() as ApexNode;
 
@@ -591,6 +602,14 @@ const createWrappedPrinter = (
 		) {
 			const commentValue = node['value'];
 			const codeTagPos = commentValue.indexOf(CODE_TAG);
+
+			// DEBUG: Log if code block found
+			if (codeTagPos !== NOT_FOUND_INDEX) {
+				fs.appendFileSync(
+					'.cursor/debug.log',
+					`[customEmbed] Found code block at position ${codeTagPos}\n`,
+				);
+			}
 
 			// If comment contains code blocks, return a function to handle them
 			if (codeTagPos !== NOT_FOUND_INDEX) {
@@ -614,6 +633,13 @@ const createWrappedPrinter = (
 					_embedOptions: ParserOptions,
 					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
 				): Promise<Doc | undefined> => {
+					// DEBUG: Log async function call
+					const fs = require('fs');
+					fs.appendFileSync(
+						'.cursor/debug.log',
+						`[customEmbed async] Called for comment (${commentValue.length} chars, code block at ${codeTagPos})\n`,
+					);
+
 					// CRITICAL: Use textToDoc instead of prettier.format
 					// textToDoc uses the same printer context (our wrapped printer with type normalization)
 					// This ensures type normalization is applied when formatting code blocks
@@ -644,201 +670,39 @@ const createWrappedPrinter = (
 
 						const { code, endPos } = extraction;
 
-						// Format the code using textToDoc (proper Prettier API)
-						// textToDoc uses the same printer context (our wrapped printer with type normalization)
-						// This ensures type normalization is applied when formatting code blocks
-						try {
-							// Wrap code in a class context to ensure proper formatting
-							// This ensures lists/maps are formatted multiline as expected
-							const isAnnotationCode =
-								typeof code === 'string' &&
-								code.trim().startsWith('@');
-							const wrappedCode = isAnnotationCode
-								? `public class Temp { ${code} void method() {} }`
-								: `public class Temp { void method() { ${code} } }`;
+						// DEBUG: Log extracted code
+						fs.appendFileSync(
+							'.cursor/debug.log',
+							`[customEmbed async] Extracted code (${code.length} chars, ${code.split('\n').length} lines):\n${code.substring(0, 200)}\n...\n---\n`,
+						);
 
-							// Use textToDoc instead of prettier.format to ensure same printer context
-							// textToDoc uses the current printer (our wrapped printer with normalization)
-							// This ensures code blocks are processed like anonymous Apex with full normalization
-							const formattedWrappedDoc = await _textToDoc(wrappedCode, {
-								..._embedOptions,
-								parser: 'apex',
+						// Format the cleanly extracted code directly (no wrapper if possible)
+						// This preserves the code's natural structure and indentation
+						try {
+							const formattedCode = await formatCodeBlockDirect({
+								code,
+								currentPluginInstance,
+								embedOptions: _embedOptions,
+								textToDoc: _textToDoc,
 							});
 
-							// Convert Doc back to string using Prettier's debug API
-							const debugApi = (
-								prettier as {
-									__debug?: {
-										formatDoc?: (doc: Doc, options: ParserOptions) => string;
-										printDocToString?: (
-											doc: Doc,
-											options: ParserOptions,
-										) => Promise<{ formatted: string }>;
-									};
-								}
-							).__debug;
-
-							let formattedWrapped: string;
-							if (debugApi?.printDocToString) {
-								const result = await debugApi.printDocToString(
-									formattedWrappedDoc,
-									_embedOptions,
-								);
-								formattedWrapped =
-									typeof result.formatted === 'string'
-										? result.formatted
-										: wrappedCode;
-							} else if (debugApi?.formatDoc) {
-								formattedWrapped = debugApi.formatDoc(
-									formattedWrappedDoc,
-									_embedOptions,
-								);
-							} else {
-								// Fallback to prettier.format if debug API not available
-								const pluginToUse =
-									currentPluginInstance?.default ??
-									(await import('./index.js')).default;
-								formattedWrapped = await prettier.format(wrappedCode, {
-									..._embedOptions,
-									parser: 'apex',
-									plugins: [pluginToUse as prettier.Plugin],
-								});
-							}
-
-							// Extract the actual code from the wrapped format
-							// Remove the wrapper class and extract just the code block
-							const formattedWrappedTrimmed =
-								formattedWrapped.trim();
-
-							// eslint-disable-next-line @typescript-eslint/init-declarations -- formattedCode is assigned in all code paths
-							let formattedCode: string;
-							if (isAnnotationCode) {
-								// Extract code between class declaration and method using line-by-line approach
-								// This matches the logic in extractAnnotationCode from apexdoc.ts
-								const lines =
-									formattedWrappedTrimmed.split('\n');
-								const codeLines: string[] = [];
-								let classIndent = ZERO;
-								let braceCount = ZERO;
-								let inCode = false;
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Prettier options types
-								const tabWidthRaw = options.tabWidth;
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- tabWidthRaw is any type from options
-								const tabWidth =
-									tabWidthRaw ?? DEFAULT_TAB_WIDTH;
-								// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- tabWidth is number after ?? operator
-								const indentOffset = tabWidth;
-								const MIN_INDENT_LEVEL = ZERO;
-								const INITIAL_BRACE_COUNT = ONE;
-
-								for (const line of lines) {
-									if (line.includes('public class Temp')) {
-										classIndent = getIndentLevel(
-											line,
-											tabWidth as number,
-										);
-										braceCount = INITIAL_BRACE_COUNT;
-										inCode = true;
-										continue;
-									}
-									if (line.includes('void method()')) break;
-									if (inCode) {
-										const openBraces = (
-											line.match(/\{/g) ?? []
-										).length;
-										const closeBraces = (
-											line.match(/\}/g) ?? []
-										).length;
-										braceCount += openBraces - closeBraces;
-										if (
-											braceCount === ZERO &&
-											line.trim() === '}'
-										)
-											break;
-										const lineIndent = getIndentLevel(
-											line,
-											tabWidth as number,
-										);
-										const relativeIndent = Math.max(
-											MIN_INDENT_LEVEL,
-											lineIndent -
-												classIndent -
-												indentOffset,
-										);
-
-										codeLines.push(
-											createIndent(
-												relativeIndent,
-
-												tabWidth as number,
-												// eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access -- Prettier options types
-												options.useTabs,
-											) + line.trimStart(),
-										);
-									}
-								}
-								formattedCode =
-									codeLines.length > ZERO
-										? codeLines.join('\n')
-										: code;
-							} else {
-								// Extract code between method declaration and closing brace
-								// Pattern: "void method() { CODE }"
-								// Need to match the method's closing brace, not inner braces
-								// Use brace counting to find the correct closing brace
-								const methodStart =
-									formattedWrappedTrimmed.indexOf(
-										'void method() {',
-									);
-								if (methodStart !== NOT_FOUND_INDEX) {
-									let braceCount = ONE;
-									let pos =
-										methodStart + 'void method() {'.length;
-									let codeStart = pos;
-									while (
-										pos < formattedWrappedTrimmed.length &&
-										braceCount > ZERO
-									) {
-										if (
-											formattedWrappedTrimmed[pos] === '{'
-										)
-											braceCount++;
-										else if (
-											formattedWrappedTrimmed[pos] === '}'
-										)
-											braceCount--;
-										pos++;
-									}
-									if (braceCount === ZERO) {
-										// Found the matching closing brace
-										const extractedCode =
-											formattedWrappedTrimmed.substring(
-												codeStart,
-												pos - ONE,
-											);
-										// Preserve indentation structure - only trim leading/trailing newlines and whitespace
-										// from the entire block, but preserve relative indentation within the code
-										// This allows the stack to track: baseIndent + ' * ' + codeIndent
-										// Don't trimEnd() as it removes trailing whitespace from all lines
-										// Instead, only remove trailing newlines and trim the entire block
-										formattedCode = extractedCode
-											.replace(/^\n+/, '') // Remove leading newlines
-											.replace(/\n+$/, '') // Remove trailing newlines
-											.trimEnd(); // Remove trailing whitespace from last line only
-									} else {
-										formattedCode = code;
-									}
-								} else {
-									formattedCode = code;
-								}
-							}
+							// DEBUG: Log the formatted code
+							fs.appendFileSync(
+								'.cursor/debug.log',
+								`[customEmbed async] Formatted code (${formattedCode.length} chars, ${formattedCode.split('\n').length} lines):\n${formattedCode.substring(0, 500)}\n...\n---\n`,
+							);
 
 							codeBlockReplacements.push({
 								end: endPos,
 								formatted: formattedCode,
 								start: tagPos,
 							});
-						} catch {
+						} catch (error) {
+							// DEBUG: Log the error
+							fs.appendFileSync(
+								'.cursor/debug.log',
+								`[customEmbed async] Error formatting code block: ${String(error)}\n---\n`,
+							);
 							// If formatting fails, skip this code block
 						}
 
@@ -879,159 +743,18 @@ const createWrappedPrinter = (
 								// Add the comment prefix (` * `) to each line of the formatted code
 								// Remove leading whitespace from each line (from Prettier's indentation)
 								// and add the comment prefix instead
-								// For annotation code (starts with @), always format as multiline
-								// eslint-disable-next-line @typescript-eslint/init-declarations -- formattedWithPrefix is assigned in all code paths
-								let formattedWithPrefix: string;
-								// Only use multiline formatting if the code actually contains newlines
-								// Single-line annotation code blocks should stay on one line
-								if (replacement.formatted.includes('\n')) {
-									// Always split by newlines to preserve multiline structure
-									// For annotation code blocks, we want each line on its own line
-									const lines =
-										replacement.formatted.split('\n');
-									// Find minimum indentation to normalize relative indentation
-									// This represents the base indentation level from the formatted code
-									const nonEmptyLines = lines.filter(
-										(line) => line.trim().length > ZERO,
-									);
-									const EMPTY_LINE_COUNT = ZERO;
-									const minIndent =
-										nonEmptyLines.length > EMPTY_LINE_COUNT
-											? Math.min(
-													...nonEmptyLines.map(
-														(line) => {
-															const match =
-																/^(\s*)/.exec(
-																	line,
-																);
-															const MATCH_GROUP_INDEX =
-																ONE;
-															if (
-																match === null
-															) {
-																return ZERO;
-															}
-
-															return (
-																match[
-																	MATCH_GROUP_INDEX
-																]?.length ??
-																ZERO
-															);
-														},
-													),
-												)
-											: ZERO;
-									// Use stack to track indentation: baseIndent + ' * ' + codeIndent
-									// The stack preserves all three levels of indentation:
-									// 1. Base indentation (from comment context - already in commentPrefix)
-									// 2. Comment prefix (' * ' - already in commentPrefix)
-									// 3. Code's own indentation (relative to minIndent - preserved here)
-									// Track opening brace absolute indentation to match closing braces
-									// Store the absolute whitespaceLength (not codeIndent) so closing braces
-									// can match the exact indentation of their opening braces
-									// This preserves Prettier's behavior where closing braces align with opening braces
-									const openingBraceIndents: number[] = [];
-									const prefixedLines = lines.map((line) => {
-										if (line.trim().length === ZERO) {
-											return commentPrefix.trimEnd();
-										}
-										// Get leading whitespace from the line
-										const leadingWhitespaceMatch =
-											/^(\s*)/.exec(line);
-										const WHITESPACE_GROUP_INDEX = ONE;
-										const leadingWhitespace =
-											leadingWhitespaceMatch?.[
-												WHITESPACE_GROUP_INDEX
-											] ?? '';
-										const whitespaceLength =
-											leadingWhitespace.length;
-										const trimmedLine = line.trim();
-										// Calculate relative indentation beyond the minimum
-										// This is the code's own indentation that should be preserved
-										// Stack structure: baseIndent + ' * ' + codeIndent + content
-										let codeIndent = Math.max(
-											ZERO,
-											whitespaceLength - minIndent,
-										);
-										// Track opening braces - push their absolute whitespaceLength
-										// This allows closing braces to match the exact indentation of opening braces
-										// The opening brace's indentation is the indentation of the line it's on
-										// (even if the brace is at the end of the line, the line's indentation is what matters)
-										const openBraces = (
-											trimmedLine.match(/\{/g) ?? []
-										).length;
-										for (
-											let braceIndex = ZERO;
-											braceIndex < openBraces;
-											braceIndex++
-										) {
-											openingBraceIndents.push(
-												whitespaceLength,
-											);
-										}
-										// For closing braces, match the absolute indentation of their opening brace
-										// Handle both standalone '}' and lines like '};' or '},'
-										const closeBraces = (
-											trimmedLine.match(/\}/g) ?? []
-										).length;
-										if (
-											closeBraces > ZERO &&
-											openingBraceIndents.length > ZERO
-										) {
-											// Pop for each closing brace, and use the opening brace's absolute indentation
-											// Calculate codeIndent from the opening brace's absolute indentation
-											let matchingOpenIndent =
-												whitespaceLength;
-											for (
-												let braceIndex = ZERO;
-												braceIndex < closeBraces &&
-												openingBraceIndents.length >
-													ZERO;
-												braceIndex++
-											) {
-												matchingOpenIndent =
-													openingBraceIndents.pop() ??
-													matchingOpenIndent;
-											}
-											// Calculate codeIndent relative to minIndent, matching the opening brace
-											codeIndent = Math.max(
-												ZERO,
-												matchingOpenIndent - minIndent,
-											);
-										}
-										// Strip the minimum indentation and all remaining leading whitespace
-										// Then add back only the relative indentation (codeIndent)
-										// This ensures we don't double-count indentation
-										const contentAfterMinIndent =
-											minIndent > ZERO
-												? line.substring(minIndent)
-												: line;
-										const content =
-											contentAfterMinIndent.trimStart();
-										// Build the result using the stack structure:
-										// commentPrefix (baseIndent + ' * ') + codeIndent + content
-										const codeIndentStr =
-											codeIndent > ZERO
-												? ' '.repeat(codeIndent)
-												: '';
-										// Stack structure: baseIndent + ' * ' + codeIndent + content
-										const result = `${commentPrefix}${codeIndentStr}${content}`;
-										return result;
-									});
-									// Ensure closing braces are on separate lines
-									// The last line of prefixedLines is the closing brace of the code content (e.g., " * }")
-									// We need to add the closing brace for {@code} on a separate line
-									// The {@code} closing brace should be " * }" (with comment prefix) on its own line
-									formattedWithPrefix = `{@code\n${prefixedLines.join('\n')}\n${commentPrefix}}`;
-								} else {
-									const trimmedFormatted =
-										replacement.formatted.trim();
-									formattedWithPrefix =
-										trimmedFormatted.length === ZERO
+								// Use formatMultilineCodeBlock for multiline code blocks
+								const trimmedFormatted =
+									replacement.formatted.trim();
+								const formattedWithPrefix =
+									replacement.formatted.includes('\n')
+										? formatMultilineCodeBlock(
+												replacement.formatted,
+												commentPrefix,
+											)
+										: trimmedFormatted.length === ZERO
 											? '{@code}'
 											: `{@code ${trimmedFormatted}}`;
-								}
 								finalComment =
 									before + formattedWithPrefix + after;
 							}

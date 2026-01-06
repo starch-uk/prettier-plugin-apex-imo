@@ -198,171 +198,219 @@ const formatMultilineCodeBlock = (
 	formattedCode: string,
 	commentPrefix: string,
 ): string => {
+	// DEBUG: Log the input formatted code
+	const fs = require('fs');
+	fs.appendFileSync(
+		'.cursor/debug.log',
+		`[formatMultilineCodeBlock] Input formattedCode (${formattedCode.length} chars, ${formattedCode.split('\n').length} lines):\n${formattedCode}\n---\n`,
+	);
+
 	const lines = formattedCode.split('\n');
 	const trimmedPrefix = commentPrefix.trimEnd();
-	const nonEmptyLines = lines.filter(
-		(line) => line.trim().length > ARRAY_START_INDEX,
-	);
-	const minIndent =
-		nonEmptyLines.length > ARRAY_START_INDEX
-			? Math.min(
-					...nonEmptyLines.map((line) => {
-						const match = LEADING_WHITESPACE_REGEX.exec(line);
-						// eslint-disable-next-line @typescript-eslint/prefer-optional-chain -- Need explicit null check for type safety
-						return match !== null &&
-							match[MATCH_GROUP_INDEX] !== undefined
-							? match[MATCH_GROUP_INDEX].length
-							: ARRAY_START_INDEX;
-					}),
-				)
-			: ARRAY_START_INDEX;
-	// Track nesting depth based on braces (more reliable than whitespace for Prettier-formatted code)
+	
+	// Prettier formats code starting at column 0 (no leading whitespace)
+	// We need to:
+	// 1. Take each line from Prettier (starts at column 0)
+	// 2. Add the comment prefix '   * ' (which includes 1 space after asterisk)
+	// 3. Calculate indentation based on brace depth (code structure)
+	// 
+	// Expected pattern from output fixture:
+	// - Base level (class): 2 spaces after asterisk (*   class)
+	// - Method level: 4 spaces after asterisk (*     method)
+	// - Method body: 6 spaces after asterisk (*       return)
+	// 
+	// Formula: (braceDepth - 1) * 2 + 2
+	// - depth 1 (base): (1-1)*2 + 2 = 2 ✓
+	// - depth 2 (method): (2-1)*2 + 2 = 4 ✓
+	// - depth 3 (body): (3-1)*2 + 2 = 6 ✓
+	
+	// Track brace depth to calculate indentation
 	// Start at depth 1 because we're inside the {@code block
 	let braceDepth = 1;
-	const prefixedLines = lines.map((line) => {
+	
+	const prefixedLines = lines.map((line, lineIndex) => {
 		const trimmedLine = line.trim();
+		
+		// Empty lines just get the comment prefix (no trailing space)
 		if (trimmedLine.length === ARRAY_START_INDEX) {
-			return trimmedPrefix;
+			return commentPrefix.trimEnd();
 		}
-		const leadingWhitespaceMatch = LEADING_WHITESPACE_REGEX.exec(line);
-		const whitespaceLength =
-			leadingWhitespaceMatch !== null
-				? (leadingWhitespaceMatch[MATCH_GROUP_INDEX]?.length ??
-					ARRAY_START_INDEX)
-				: ARRAY_START_INDEX;
 		
-		// Calculate relative indentation from the minimum indent (preserves Prettier's formatting)
-		// This is the primary source of indentation - Prettier formats code with proper indentation
-		const relativeIndent = Math.max(
-			ARRAY_START_INDEX,
-			whitespaceLength - minIndent,
-		);
-		
-		// Count braces to track nesting depth (for fallback when whitespace is missing)
+		// Count braces to track nesting depth
 		const openBraces = (trimmedLine.match(BRACE_REGEX) ?? []).length;
 		const closeBraces = (trimmedLine.match(CLOSE_BRACE_REGEX) ?? []).length;
 		
-		// Calculate indentation:
-		// 1. If Prettier formatted with whitespace, use relative indent (preserves Prettier's structure)
-		// 2. If no whitespace (minIndent = 0), use brace-based indent as fallback
-		// 3. Always ensure at least base indentation
-		const TAB_WIDTH = 2;
-		// Brace depth represents nesting level: 1 = inside {@code, 2 = inside class, 3 = inside method, etc.
-		// Expected pattern: depth 1 = 1 additional space (total 2), depth 2 = 3 additional (total 4), depth 3 = 5 additional (total 6)
-		// Formula: additional = (depth - 1) * TAB_WIDTH + 1
-		// For depth 1: (1-1)*2 + 1 = 1
-		// For depth 2: (2-1)*2 + 1 = 3
-		// For depth 3: (3-1)*2 + 1 = 5
-		const braceBasedIndent = (braceDepth - 1) * TAB_WIDTH + 1;
+		// Calculate indentation based on brace depth
+		// Comment prefix '   * ' already has 1 space after asterisk
+		// We need to add additional spaces to reach the target:
+		// - Base level (depth 1): 0 additional spaces = 1 total after asterisk
+		// - Method level (depth 2): 2 additional spaces = 3 total after asterisk
+		// - Method body (depth 3): 4 additional spaces = 5 total after asterisk
+		// 
+		// Formula: (braceDepth - 1) * 2
+		// - depth 1: (1-1)*2 = 0 ✓
+		// - depth 2: (2-1)*2 = 2 ✓
+		// - depth 3: (3-1)*2 = 4 ✓
+		const codeBlockIndent = (braceDepth - 1) * 2;
+		const codeBlockIndentStr = ' '.repeat(codeBlockIndent);
 		
-		// Use relative indent if available and meaningful (Prettier formatted with whitespace)
-		// Otherwise fall back to brace-based indent
-		// Prefer relative indent when it's greater than 0, as it preserves Prettier's exact formatting
-		let codeIndent: number;
-		if (relativeIndent > ARRAY_START_INDEX) {
-			// Prettier formatted with whitespace - use it (preserves exact formatting)
-			// But ensure it's at least 1 (base level should have 1 additional space)
-			codeIndent = Math.max(1, relativeIndent);
-		} else {
-			// No whitespace from Prettier - use brace-based indent
-			codeIndent = braceBasedIndent;
+		// DEBUG: Log first 20 lines with details
+		if (lineIndex < 20) {
+			fs.appendFileSync(
+				'.cursor/debug.log',
+				`[formatMultilineCodeBlock] Line ${lineIndex}: braceDepth=${braceDepth}, indent=${codeBlockIndent}, openBraces=${openBraces}, closeBraces=${closeBraces}, content="${trimmedLine.substring(0, 50)}"\n`,
+			);
 		}
 		
 		// Update brace depth AFTER calculating indent (for next line)
 		braceDepth += openBraces - closeBraces;
 		
-		// Extract content, preserving any indentation that's part of the code structure
-		// If minIndent > 0, we've already accounted for it in codeIndent, so strip it
-		// Otherwise, preserve the original line structure
-		let content: string;
-		if (minIndent > ARRAY_START_INDEX) {
-			// We've calculated relative indent, so strip the minIndent from the line
-			content = line.substring(minIndent).trimStart();
-		} else {
-			// No minIndent means all lines start at column 0, so just trim
-			// But preserve the structure - don't trim if it would remove meaningful whitespace
-			content = line.trimStart();
-		}
+		// Prettier formats starting at column 0, so use the trimmed line
+		// (strip any leading whitespace that might exist)
+		const content = trimmedLine;
 		
-		// Add indentation for code blocks
-		// commentPrefix is "   * " (includes 1 space after asterisk)
-		// codeIndent is already calculated to include the base + relative indent
-		// Expected pattern from output fixture:
-		// - Base level (class): 2 spaces after asterisk (*   class) = 1 from prefix + 1 additional
-		// - Method level: 4 spaces after asterisk (*     method) = 1 from prefix + 3 additional  
-		// - Method body: 6 spaces after asterisk (*       return) = 1 from prefix + 5 additional
-		// codeIndent already includes the base (1) + relative (0, 2, 4, etc.), so use it directly
-		const codeIndentStr = ' '.repeat(codeIndent);
-		return `${commentPrefix}${codeIndentStr}${content}`;
+		// Combine: comment prefix + code block indent + content
+		return `${commentPrefix}${codeBlockIndentStr}${content}`;
 	});
-	return `{@code\n${prefixedLines.join('\n')}\n${commentPrefix}}`;
+	
+	const result = `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()}}`;
+	
+	// DEBUG: Log the result (first 50 lines)
+	fs.appendFileSync(
+		'.cursor/debug.log',
+		`[formatMultilineCodeBlock] Result (first 50 lines):\n${result.split('\n').slice(0, 50).join('\n')}\n---\n`,
+	);
+	
+	return result;
 };
 
 /**
- * Formats a code block using Prettier's debug API or format function.
+ * Formats a code block directly using Prettier's textToDoc.
+ * The code is extracted cleanly (no comment indentation) and formatted as-is.
  * @param params - Parameters object.
- * @param params.code - The code to format.
- * @param params.isAnnotationCode - Whether this is annotation code.
+ * @param params.code - The cleanly extracted code to format (no comment prefixes).
  * @param params.textToDoc - Prettier's textToDoc function.
  * @param params.embedOptions - Parser options for formatting.
  * @param params.currentPluginInstance - Plugin instance for formatting fallback.
- * @returns The formatted code.
+ * @returns The formatted code with preserved relative indentation.
  * @example
- * formatCodeBlock({code: '@Test', isAnnotationCode: true, textToDoc: async (t, o) => {}, embedOptions: {}, currentPluginInstance: undefined})
+ * formatCodeBlockDirect({code: '@IsTest\npublic void method() {}', textToDoc: async (t, o) => {}, embedOptions: {}, currentPluginInstance: undefined})
  */
-const formatCodeBlock = async ({
+const formatCodeBlockDirect = async ({
 	code,
-	isAnnotationCode,
 	textToDoc,
 	embedOptions,
 	currentPluginInstance,
 }: {
 	readonly code: string;
-	readonly isAnnotationCode: boolean;
 	readonly textToDoc: (text: string, options: ParserOptions) => Promise<Doc>;
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<string> => {
-	const wrappedCode = isAnnotationCode
-		? `public class Temp { ${code} void method() {} }`
-		: `public class Temp { void method() { ${code} } }`;
+	// Try apex-anonymous parser first (designed for code snippets)
+	// This handles both complete classes and incomplete code snippets
+	try {
+		const formattedDoc = await textToDoc(code, {
+			...embedOptions,
+			parser: 'apex-anonymous',
+		});
 
-	const formattedWrappedDoc = await textToDoc(wrappedCode, {
-		...embedOptions,
-		parser: 'apex',
-	});
+		const debugApi = (
+			prettier as {
+				__debug?: {
+					formatDoc?: (doc: Doc, options: ParserOptions) => string;
+					printDocToString?: (
+						doc: Doc,
+						options: ParserOptions,
+					) => Promise<{ formatted: string }>;
+				};
+			}
+		).__debug;
 
-	const debugApi = (
-		prettier as {
-			__debug?: {
-				formatDoc?: (doc: Doc, options: ParserOptions) => string;
-				printDocToString?: (
-					doc: Doc,
-					options: ParserOptions,
-				) => Promise<{ formatted: string }>;
-			};
+		let formatted: string;
+		if (debugApi?.printDocToString) {
+			const result = await debugApi.printDocToString(
+				formattedDoc,
+				embedOptions,
+			);
+			if (typeof result.formatted === 'string') {
+				formatted = result.formatted;
+			} else {
+				throw new Error('printDocToString did not return formatted string');
+			}
+		} else if (debugApi?.formatDoc) {
+			formatted = debugApi.formatDoc(formattedDoc, embedOptions);
+		} else {
+			const pluginToUse =
+				currentPluginInstance?.default ??
+				(await import('./index.js')).default;
+			formatted = await prettier.format(code, {
+				...embedOptions,
+				parser: 'apex-anonymous',
+				plugins: [pluginToUse as prettier.Plugin],
+			});
 		}
-	).__debug;
 
-	if (debugApi?.printDocToString) {
-		const result = await debugApi.printDocToString(
-			formattedWrappedDoc,
-			embedOptions,
+		// DEBUG: Log the formatted output
+		const fs = require('fs');
+		fs.appendFileSync(
+			'.cursor/debug.log',
+			`[formatCodeBlockDirect] apex-anonymous parser output:\n${formatted}\n---\n`,
 		);
-		if (typeof result.formatted === 'string') {
-			return result.formatted;
-		}
-	} else if (debugApi?.formatDoc) {
-		return debugApi.formatDoc(formattedWrappedDoc, embedOptions);
-	}
 
-	const pluginToUse =
-		currentPluginInstance?.default ?? (await import('./index.js')).default;
-	return await prettier.format(wrappedCode, {
-		...embedOptions,
-		parser: 'apex',
-		plugins: [pluginToUse as prettier.Plugin],
-	});
+		return formatted;
+	} catch (error) {
+		// If apex-anonymous fails, try the regular apex parser
+		// Both parsers format code starting at column 0 (no leading whitespace)
+		const formattedDoc = await textToDoc(code, {
+			...embedOptions,
+			parser: 'apex',
+		});
+
+		const debugApi = (
+			prettier as {
+				__debug?: {
+					formatDoc?: (doc: Doc, options: ParserOptions) => string;
+					printDocToString?: (
+						doc: Doc,
+						options: ParserOptions,
+					) => Promise<{ formatted: string }>;
+				};
+			}
+		).__debug;
+
+		let formatted: string;
+		if (debugApi?.printDocToString) {
+			const result = await debugApi.printDocToString(
+				formattedDoc,
+				embedOptions,
+			);
+			if (typeof result.formatted === 'string') {
+				formatted = result.formatted;
+			} else {
+				throw new Error('printDocToString did not return formatted string');
+			}
+		} else if (debugApi?.formatDoc) {
+			formatted = debugApi.formatDoc(formattedDoc, embedOptions);
+		} else {
+			const pluginToUse =
+				currentPluginInstance?.default ?? (await import('./index.js')).default;
+			formatted = await prettier.format(code, {
+				...embedOptions,
+				parser: 'apex',
+				plugins: [pluginToUse as prettier.Plugin],
+			});
+		}
+
+		// DEBUG: Log the formatted output
+		const fs = require('fs');
+		fs.appendFileSync(
+			'.cursor/debug.log',
+			`[formatCodeBlockDirect] apex parser output (fallback):\n${formatted}\n---\n`,
+		);
+
+		return formatted;
+	}
 };
 
 /**
@@ -467,28 +515,34 @@ const processCodeBlocks = async ({
 		}
 
 		try {
-			const isAnnotationCode = trimmedCode.startsWith('@');
-			const formattedWrapped = await formatCodeBlock({
+			// Format the cleanly extracted code directly (no wrapper if possible)
+			// This preserves the code's natural structure and indentation
+			const formattedCode = await formatCodeBlockDirect({
 				code,
 				currentPluginInstance,
 				embedOptions,
-				isAnnotationCode,
 				textToDoc,
 			});
 
-			const formattedCode = extractFormattedCode({
-				formattedWrapped,
-				isAnnotationCode,
-				tabWidth,
-				useTabs,
-			});
+			// DEBUG: Log the formatted code
+			const fs = require('fs');
+			fs.appendFileSync(
+				'.cursor/debug.log',
+				`[processCodeBlocks] Code block formatted (${formattedCode.length} chars, ${formattedCode.split('\n').length} lines):\n${formattedCode.substring(0, 500)}\n...\n---\n`,
+			);
 
 			replacements.push({
 				end: endPos,
 				formatted: formattedCode,
 				start: tagPos,
 			});
-		} catch {
+		} catch (error) {
+			// DEBUG: Log the error
+			const fs = require('fs');
+			fs.appendFileSync(
+				'.cursor/debug.log',
+				`[processCodeBlocks] Error formatting code block: ${String(error)}\n---\n`,
+			);
 			// If formatting fails, skip this code block
 		}
 
@@ -546,6 +600,11 @@ const applyCodeBlockReplacements = (
 
 	return finalComment;
 };
+
+/**
+ * Exports formatCodeBlockDirect and formatMultilineCodeBlock for use in printer.ts
+ */
+export { formatCodeBlockDirect, formatMultilineCodeBlock };
 
 /**
  * Creates an embed function for handling code blocks in comments.
