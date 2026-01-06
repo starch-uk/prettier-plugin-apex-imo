@@ -584,13 +584,6 @@ const createWrappedPrinter = (
 	// This allows us to format code blocks asynchronously using textToDoc
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier's embed types are complex
 	const customEmbed: any = (path: any, options: any): any => {
-		// DEBUG: Log embed function call
-		const fs = require('fs');
-		fs.appendFileSync(
-			'.cursor/debug.log',
-			`[customEmbed] Called\n`,
-		);
-
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- path.getNode() is a Prettier API
 		const node = path.getNode() as ApexNode;
 
@@ -602,14 +595,6 @@ const createWrappedPrinter = (
 		) {
 			const commentValue = node['value'];
 			const codeTagPos = commentValue.indexOf(CODE_TAG);
-
-			// DEBUG: Log if code block found
-			if (codeTagPos !== NOT_FOUND_INDEX) {
-				fs.appendFileSync(
-					'.cursor/debug.log',
-					`[customEmbed] Found code block at position ${codeTagPos}\n`,
-				);
-			}
 
 			// If comment contains code blocks, return a function to handle them
 			if (codeTagPos !== NOT_FOUND_INDEX) {
@@ -633,12 +618,6 @@ const createWrappedPrinter = (
 					_embedOptions: ParserOptions,
 					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
 				): Promise<Doc | undefined> => {
-					// DEBUG: Log async function call
-					const fs = require('fs');
-					fs.appendFileSync(
-						'.cursor/debug.log',
-						`[customEmbed async] Called for comment (${commentValue.length} chars, code block at ${codeTagPos})\n`,
-					);
 
 					// CRITICAL: Use textToDoc instead of prettier.format
 					// textToDoc uses the same printer context (our wrapped printer with type normalization)
@@ -651,6 +630,34 @@ const createWrappedPrinter = (
 						formatted: string;
 						start: number;
 					}[] = [];
+
+					// Calculate comment prefix length BEFORE formatting to adjust printWidth
+					// Find the {@code line to get its indentation (this is the correct base indentation)
+					const codeBlockLineMatch = new RegExp(
+						`^(\\s*)\\*\\s*\\{@code`,
+						'm',
+					).exec(commentValue);
+					// Extract base indentation from the {@code line (spaces before asterisk)
+					const FIRST_MATCH_GROUP = 1;
+					const baseIndent =
+						codeBlockLineMatch?.[FIRST_MATCH_GROUP] ?? '';
+					// Comment prefix: baseIndent + '* ' (for printing: baseIndent + '* ' + embedded line)
+					const commentPrefix = `${baseIndent}* `;
+					const commentPrefixLength = commentPrefix.length;
+					
+					// Adjust printWidth to account for comment prefix
+					// Each line will have commentPrefix added, so we need to reduce printWidth
+					const originalPrintWidth = _embedOptions.printWidth ?? 80;
+					const adjustedPrintWidth = Math.max(
+						40, // Minimum reasonable width
+						originalPrintWidth - commentPrefixLength,
+					);
+					
+					// Create adjusted embed options with reduced printWidth
+					const adjustedEmbedOptions = {
+						..._embedOptions,
+						printWidth: adjustedPrintWidth,
+					};
 
 					while (searchPos < processedComment.length) {
 						const tagPos = processedComment.indexOf(
@@ -670,27 +677,16 @@ const createWrappedPrinter = (
 
 						const { code, endPos } = extraction;
 
-						// DEBUG: Log extracted code
-						fs.appendFileSync(
-							'.cursor/debug.log',
-							`[customEmbed async] Extracted code (${code.length} chars, ${code.split('\n').length} lines):\n${code.substring(0, 200)}\n...\n---\n`,
-						);
-
 						// Format the cleanly extracted code directly (no wrapper if possible)
 						// This preserves the code's natural structure and indentation
+						// Use adjusted embed options with reduced printWidth
 						try {
 							const formattedCode = await formatCodeBlockDirect({
 								code,
 								currentPluginInstance,
-								embedOptions: _embedOptions,
+								embedOptions: adjustedEmbedOptions,
 								textToDoc: _textToDoc,
 							});
-
-							// DEBUG: Log the formatted code
-							fs.appendFileSync(
-								'.cursor/debug.log',
-								`[customEmbed async] Formatted code (${formattedCode.length} chars, ${formattedCode.split('\n').length} lines):\n${formattedCode.substring(0, 500)}\n...\n---\n`,
-							);
 
 							codeBlockReplacements.push({
 								end: endPos,
@@ -698,11 +694,6 @@ const createWrappedPrinter = (
 								start: tagPos,
 							});
 						} catch (error) {
-							// DEBUG: Log the error
-							fs.appendFileSync(
-								'.cursor/debug.log',
-								`[customEmbed async] Error formatting code block: ${String(error)}\n---\n`,
-							);
 							// If formatting fails, skip this code block
 						}
 
@@ -713,17 +704,8 @@ const createWrappedPrinter = (
 					// Apply replacements in reverse order to maintain positions
 					if (codeBlockReplacements.length > ZERO) {
 						let finalComment = commentValue;
-						// Determine the base indentation and comment prefix separately
-						// Stack structure: baseIndent + ' * ' + codeIndent + content
-						// Look for the first line with ` * ` to determine the base indentation
-						const firstLineMatch = /^(\s*)(\*)\s/m.exec(
-							commentValue,
-						);
-						// Extract base indentation (spaces before asterisk) and comment prefix
-						const FIRST_MATCH_GROUP = 1;
-						const baseIndent =
-							firstLineMatch?.[FIRST_MATCH_GROUP] ?? '';
-						const commentPrefix = `${baseIndent} * `;
+						// Comment prefix was already calculated above for printWidth adjustment
+						// Reuse it here for consistency
 						for (
 							let i = codeBlockReplacements.length - ONE;
 							i >= ZERO;

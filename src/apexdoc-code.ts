@@ -45,12 +45,23 @@ const extractCodeFromBlock = (
 	) as number;
 	let braceCount = INITIAL_BRACE_COUNT;
 	let pos = codeStart;
+	let lastBracePos = codeStart;
+	let lastBraceCount = braceCount;
 	while (pos < text.length && braceCount > ARRAY_START_INDEX) {
-		if (text[pos] === '{') braceCount++;
-		else if (text[pos] === '}') braceCount--;
+		if (text[pos] === '{') {
+			braceCount++;
+			lastBracePos = pos;
+			lastBraceCount = braceCount;
+		} else if (text[pos] === '}') {
+			braceCount--;
+			lastBracePos = pos;
+			lastBraceCount = braceCount;
+		}
 		pos++;
 	}
-	if (braceCount !== ARRAY_START_INDEX) return null;
+	if (braceCount !== ARRAY_START_INDEX) {
+		return null;
+	}
 	const rawCode = text.substring(codeStart, pos - STRING_OFFSET);
 	const code = rawCode.includes('*')
 		? rawCode
@@ -68,7 +79,8 @@ const extractCodeFromBlock = (
 				})
 				.join('\n')
 		: rawCode;
-	return { code: code.trim(), endPos: pos };
+	const trimmedCode = code.trim();
+	return { code: trimmedCode, endPos: pos };
 };
 
 /**
@@ -207,54 +219,30 @@ const formatMultilineCodeBlock = (
 	formattedCode: string,
 	commentPrefix: string,
 ): string => {
-	// DEBUG: Log the input formatted code
-	const fs = require('fs');
-	fs.appendFileSync(
-		'.cursor/debug.log',
-		`[formatMultilineCodeBlock] Input formattedCode (${formattedCode.length} chars, ${formattedCode.split('\n').length} lines):\n${formattedCode}\n---\n`,
-	);
-
-	const lines = formattedCode.split('\n');
-	const trimmedPrefix = commentPrefix.trimEnd();
+	// CRITICAL: Remove trailing empty lines from formatted code
+	// Prettier may add trailing newlines, which would create empty lines inside {@code} blocks
+	// We want the code block to end immediately after the last non-empty line
+	const trimmedFormattedCode = formattedCode.replace(/\n+$/, '');
+	let lines = trimmedFormattedCode.split('\n');
+	// Remove trailing empty lines from the array (in case split created empty strings)
+	while (lines.length > 0 && lines[lines.length - 1].trim().length === 0) {
+		lines = lines.slice(0, -1);
+	}
 	
-	// Let Prettier handle indentation - preserve its indentation exactly as-is
-	// Prettier formats code with correct indentation based on tabWidth
-	// We just need to add the comment prefix to each line, preserving Prettier's formatting
-	
+	// Preserve exact indentation from embed output: baseIndent + '* ' + embedded line (with its indentation)
 	const prefixedLines = lines.map((line, lineIndex) => {
 		// Empty lines just get the comment prefix (no trailing space)
 		if (line.trim().length === ARRAY_START_INDEX) {
 			return commentPrefix.trimEnd();
 		}
 		
-		// Preserve Prettier's indentation exactly as-is
-		// Prettier formats code starting at column 0, so we preserve the leading whitespace
-		const leadingSpaces = line.length - line.trimStart().length;
-		const leadingWhitespace = ' '.repeat(leadingSpaces);
-		const trimmedLine = line.trim();
-		
-		// DEBUG: Log first 20 lines with details
-		if (lineIndex < 20) {
-			fs.appendFileSync(
-				'.cursor/debug.log',
-				`[formatMultilineCodeBlock] Line ${lineIndex}: leadingSpaces=${leadingSpaces}, content="${trimmedLine.substring(0, 50)}"\n`,
-			);
-		}
-		
-		// Combine: comment prefix + Prettier's original indentation + content
-		// This preserves Prettier's formatting exactly, including empty lines and indentation
-		return `${commentPrefix}${leadingWhitespace}${trimmedLine}`;
+		// Preserve the exact indentation from the embed output
+		// The line from embed already has the correct indentation (0, 2, 4, 6 spaces, etc.)
+		// We just add the comment prefix before it
+		return `${commentPrefix}${line}`;
 	});
 	
-	const result = `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()}}`;
-	
-	// DEBUG: Log the result (first 50 lines)
-	fs.appendFileSync(
-		'.cursor/debug.log',
-		`[formatMultilineCodeBlock] Result (first 50 lines):\n${result.split('\n').slice(0, 50).join('\n')}\n---\n`,
-	);
-	
-	return result;
+	return `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()}}`;
 };
 
 /**
@@ -296,128 +284,42 @@ const formatCodeBlockDirect = async ({
 	// This ensures annotations like @auraenabled become @AuraEnabled
 	const normalizedCode = normalizeAnnotationNamesInText(code);
 	
-	// DEBUG: Log normalization (always log to see what's happening)
-	const fs = require('fs');
-	fs.appendFileSync(
-		'.cursor/debug.log',
-		`[formatCodeBlockDirect] Input code: "${code}"\n[formatCodeBlockDirect] Normalized code: "${normalizedCode}"\n`,
-	);
-	
 	// For single-line code blocks that are just annotations or simple statements,
 	// normalize and return without formatting (they're not valid Apex code by themselves)
 	// Check if it's a simple annotation or single-line statement
 	const isSimpleAnnotation = /^@\w+/.test(normalizedCode.trim()) && normalizedCode.split('\n').length === 1;
 	if (isSimpleAnnotation && normalizedCode.trim().length < 100) {
 		// For simple annotations, just return normalized code
-		fs.appendFileSync(
-			'.cursor/debug.log',
-			`[formatCodeBlockDirect] Simple annotation detected, returning normalized code without formatting\n`,
-		);
 		return normalizedCode;
 	}
+	
+	// CRITICAL: Always use prettier.format with our plugin to ensure wrapped printer is used
+	// textToDoc might use the original prettier-plugin-apex printer instead of our wrapped one
+	// This ensures annotation normalization and custom line breaks are applied
+	const pluginToUse =
+		currentPluginInstance?.default ??
+		(await import('./index.js')).default;
 	
 	// Try apex-anonymous parser first (designed for code snippets)
 	// This handles both complete classes and incomplete code snippets
 	try {
-		const formattedDoc = await textToDoc(normalizedCode, {
+		const formatted = await prettier.format(normalizedCode, {
 			...embedOptions,
 			parser: 'apex-anonymous',
+			plugins: [pluginToUse as prettier.Plugin],
 		});
-
-		const debugApi = (
-			prettier as {
-				__debug?: {
-					formatDoc?: (doc: Doc, options: ParserOptions) => string;
-					printDocToString?: (
-						doc: Doc,
-						options: ParserOptions,
-					) => Promise<{ formatted: string }>;
-				};
-			}
-		).__debug;
-
-		let formatted: string;
-		if (debugApi?.printDocToString) {
-			const result = await debugApi.printDocToString(
-				formattedDoc,
-				embedOptions,
-			);
-			if (typeof result.formatted === 'string') {
-				formatted = result.formatted;
-			} else {
-				throw new Error('printDocToString did not return formatted string');
-			}
-		} else if (debugApi?.formatDoc) {
-			formatted = debugApi.formatDoc(formattedDoc, embedOptions);
-		} else {
-			const pluginToUse =
-				currentPluginInstance?.default ??
-				(await import('./index.js')).default;
-			formatted = await prettier.format(normalizedCode, {
-				...embedOptions,
-				parser: 'apex-anonymous',
-				plugins: [pluginToUse as prettier.Plugin],
-			});
-		}
-
-		// DEBUG: Log the formatted output
-		const fs = require('fs');
-		fs.appendFileSync(
-			'.cursor/debug.log',
-			`[formatCodeBlockDirect] apex-anonymous parser output:\n${formatted}\n---\n`,
-		);
 
 		return formatted;
 	} catch (error) {
 		// If apex-anonymous fails, try the regular apex parser
 		// Both parsers format code starting at column 0 (no leading whitespace)
 		// Use normalized code to ensure annotations are normalized
-		const formattedDoc = await textToDoc(normalizedCode, {
+		// CRITICAL: Use prettier.format with our plugin to ensure wrapped printer is used
+		const formatted = await prettier.format(normalizedCode, {
 			...embedOptions,
 			parser: 'apex',
+			plugins: [pluginToUse as prettier.Plugin],
 		});
-
-		const debugApi = (
-			prettier as {
-				__debug?: {
-					formatDoc?: (doc: Doc, options: ParserOptions) => string;
-					printDocToString?: (
-						doc: Doc,
-						options: ParserOptions,
-					) => Promise<{ formatted: string }>;
-				};
-			}
-		).__debug;
-
-		let formatted: string;
-		if (debugApi?.printDocToString) {
-			const result = await debugApi.printDocToString(
-				formattedDoc,
-				embedOptions,
-			);
-			if (typeof result.formatted === 'string') {
-				formatted = result.formatted;
-			} else {
-				throw new Error('printDocToString did not return formatted string');
-			}
-		} else if (debugApi?.formatDoc) {
-			formatted = debugApi.formatDoc(formattedDoc, embedOptions);
-		} else {
-			const pluginToUse =
-				currentPluginInstance?.default ?? (await import('./index.js')).default;
-			formatted = await prettier.format(normalizedCode, {
-				...embedOptions,
-				parser: 'apex',
-				plugins: [pluginToUse as prettier.Plugin],
-			});
-		}
-
-		// DEBUG: Log the formatted output
-		const fs = require('fs');
-		fs.appendFileSync(
-			'.cursor/debug.log',
-			`[formatCodeBlockDirect] apex parser output (fallback):\n${formatted}\n---\n`,
-		);
 
 		return formatted;
 	}
@@ -534,12 +436,6 @@ const processCodeBlocks = async ({
 				textToDoc,
 			});
 
-			// DEBUG: Log the formatted code
-			const fs = require('fs');
-			fs.appendFileSync(
-				'.cursor/debug.log',
-				`[processCodeBlocks] Code block formatted (${formattedCode.length} chars, ${formattedCode.split('\n').length} lines):\n${formattedCode.substring(0, 500)}\n...\n---\n`,
-			);
 
 			replacements.push({
 				end: endPos,
@@ -547,12 +443,6 @@ const processCodeBlocks = async ({
 				start: tagPos,
 			});
 		} catch (error) {
-			// DEBUG: Log the error
-			const fs = require('fs');
-			fs.appendFileSync(
-				'.cursor/debug.log',
-				`[processCodeBlocks] Error formatting code block: ${String(error)}\n---\n`,
-			);
 			// If formatting fails, skip this code block
 		}
 
@@ -678,12 +568,6 @@ const createCodeBlockEmbed = (
 							commentValue,
 							replacements,
 						);
-						// DEBUG: Test Hypothesis 27 - Check embed-formatted output
-						if (commentKey.includes('complex-test-class') || finalComment.includes('ComplexIntegrationTest')) {
-							const fs = require('fs');
-							const debugLog = `[H27-EMBED] commentKey=${commentKey}\nfinalComment (first 2000 chars):\n${finalComment.substring(0, 2000)}\n---\n`;
-							fs.appendFileSync('.cursor/debug.log', debugLog);
-						}
 						formattedCodeBlocks.set(commentKey, finalComment);
 					}
 

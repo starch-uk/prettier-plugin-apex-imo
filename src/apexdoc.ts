@@ -294,27 +294,13 @@ const normalizeSingleApexDocComment = (
 				codeBlockIndentStackEarly.pop();
 			}
 		}
-		// For code block content lines, preserve spacing after asterisk from embed function
-		// This includes closing braces which need to preserve their indentation to align with opening braces
-		// Use the original line to get the spacing that the embed function added
-		const originalAsteriskMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(originalLine);
-		const normalizedAsteriskMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(line);
-		if (
-			inCodeBlockEarly &&
-			!line.includes('{@code') &&
-			originalAsteriskMatch &&
-			normalizedAsteriskMatch
-		) {
-			// Code block content line - preserve embed indentation from original line
-			// originalAsteriskMatch groups: [0]=full match, [1]=leading whitespace, [2]=asterisk, [3]=whitespace after asterisk, [4]=rest of line
-			const originalAfterAsterisk =
-				originalAsteriskMatch[INDEX_THREE] ?? '';
-			const restOfLine = normalizedAsteriskMatch[INDEX_FOUR] ?? '';
-			// originalAfterAsterisk includes: 1 space (from '* ') + embed indentation (if any)
-			// Preserve the full indentation: baseIndent + asterisk + originalAfterAsterisk + restOfLine
-			normalizedLines.push(
-				`${baseIndent} *${originalAfterAsterisk}${restOfLine}`,
-			);
+		// For code block content lines, preserve EXACTLY as formatted by embed function
+		// The embed function has already added the correct prefix (e.g., "   * ") and preserved indentation
+		// We must NOT reconstruct or modify these lines - just use the original line as-is
+		if (inCodeBlockEarly && !line.includes('{@code')) {
+			// Code block content line - preserve exactly as formatted by embed function
+			// The originalLine already has the correct format: "   * " + embed indentation + content
+			normalizedLines.push(originalLine);
 		} else {
 			// Normal line - keep as-is (already normalized by normalizeBlockComment)
 			normalizedLines.push(line);
@@ -324,9 +310,40 @@ const normalizeSingleApexDocComment = (
 
 	// Normalize annotation names (e.g., @Param -> @param) and split multiple annotations on same line
 	// First, split lines with multiple annotations onto separate lines
+	// Track code blocks to skip annotation splitting for code block content
+	let inCodeBlockForSplit = false;
+	let codeBlockBraceCountForSplit = 0;
 	const annotationSplitLines = normalizedComment.split('\n');
 	const splitLines: string[] = [];
 	for (const line of annotationSplitLines) {
+		// Track code block boundaries
+		if (line.includes('{@code')) {
+			inCodeBlockForSplit = true;
+			codeBlockBraceCountForSplit = 1; // Count the opening brace in {@code
+			// Count additional braces in the line
+			const afterCodeTag = line.substring(line.indexOf('{@code') + '{@code'.length);
+			for (const char of afterCodeTag) {
+				if (char === '{') codeBlockBraceCountForSplit++;
+				if (char === '}') codeBlockBraceCountForSplit--;
+			}
+		}
+		if (inCodeBlockForSplit) {
+			// Count braces in this line
+			for (const char of line) {
+				if (char === '{') codeBlockBraceCountForSplit++;
+				if (char === '}') codeBlockBraceCountForSplit--;
+			}
+			// Code block ends when brace count reaches 0
+			if (codeBlockBraceCountForSplit === 0) {
+				inCodeBlockForSplit = false;
+			}
+			// Skip annotation splitting for code block content lines (but not the {@code line itself)
+			// Preserve code block content exactly as-is
+			if (!line.includes('{@code')) {
+				splitLines.push(line);
+				continue;
+			}
+		}
 		// Match all annotations on the line: * @annotation1 value1 @annotation2 value2
 		// Also match annotations that appear after text (e.g., "text. * @param" or "text * @param")
 		const annotationMatches = [
@@ -513,6 +530,7 @@ const normalizeSingleApexDocComment = (
 		}
 	}
 	normalizedComment = annotationNormalizedLinesForRegex.join('\n');
+	
 	// Normalize extra whitespace around annotations (e.g., "  @author   Developer  " -> "@author Developer")
 	// Match lines with annotations and normalize spacing and indentation
 	const annotationLines = normalizedComment.split('\n');
@@ -553,24 +571,25 @@ const normalizeSingleApexDocComment = (
 		/**
 		 * Next line should not start with '}' (not '};' or '},' etc.).
 		 */
-		const isCodeBlockEnd =
-			codeBlockIndentStack.length > ARRAY_START_INDEX &&
-			trimmedLineForCodeBlock === '}' &&
-			nextTrimmed !== '}' &&
-			!nextTrimmed.startsWith('}');
+		// CRITICAL: isCodeBlockEnd should ONLY match the {@code} closing brace, NOT code content closing braces
+		// The {@code} closing brace is the LAST standalone '}' that closes the code block
+		// Code content closing braces should be treated as code block content and preserved
+		// We can't reliably detect the {@code} closing brace here without full brace counting
+		// So we'll use a simpler approach: only treat lines as code block ends if they're the actual {@code} closing
+		// For now, we'll be more conservative and NOT mark lines as code block ends here
+		// The code block will be closed when we see the actual {@code} closing brace in the wrapping phase
+		const isCodeBlockEnd = false; // Disable code block end detection here - handle in wrapping phase
 		// Update stack based on code block boundaries
 		if (isCodeBlockStart) {
 			// Push empty string - will detect indentation from first continuation line
 			codeBlockIndentStack.push('');
 		}
-		if (isCodeBlockEnd) {
-			codeBlockIndentStack.pop();
-		}
+		// Don't pop here - code block ends are handled in the wrapping phase
 		const inCodeBlock = codeBlockIndentStack.length > ARRAY_START_INDEX;
 		// For code block content lines, preserve spacing after asterisk (don't normalize)
 		// The embed function produces code with configurable indentation (tabWidth/useTabs)
-		// Only exclude the actual {@code} closing brace, not code content closing braces
-		if (inCodeBlock && !isCodeBlockStart && !isCodeBlockEnd) {
+		// ALL lines inside code blocks (except {@code} start) should be preserved
+		if (inCodeBlock && !isCodeBlockStart) {
 			// Inside code block - preserve the line structure, just normalize base indent and asterisks
 			let normalizedLine = line;
 			const asteriskMatch = /^(\s*)(\*+)(\s*)(.*)$/.exec(line);
@@ -583,7 +602,9 @@ const normalizeSingleApexDocComment = (
 				// Preserve the indentation from afterAsterisk (embed function preserves relative indentation)
 				// consistentPrefixForSpacing is "   * " (includes 1 space after asterisk)
 				// afterAsterisk already contains the correct indentation (1 space + additional if any)
-				normalizedLine = `${consistentPrefixForSpacing.slice(ARRAY_START_INDEX, NOT_FOUND_INDEX)}${afterAsterisk}${content}`;
+				// Remove trailing space from consistentPrefixForSpacing and add afterAsterisk (which includes the space + indentation)
+				const basePrefix = consistentPrefixForSpacing.slice(ARRAY_START_INDEX, NOT_FOUND_INDEX); // "   *" (without trailing space)
+				normalizedLine = `${basePrefix}${afterAsterisk}${content}`;
 			} else {
 				// Line has no asterisk - add one with preserved spacing
 				const trimmed = line.trimStart();
@@ -723,8 +744,51 @@ const normalizeSingleApexDocComment = (
 	});
 	// Now split lines that contain both text and annotations (e.g., " * text * @param value")
 	// into separate lines
+	// Track code blocks to skip processing for code block content
+	let inCodeBlockForFinal = false;
+	let codeBlockBraceCountForFinal = 0;
 	const finalLines: string[] = [];
-	for (const line of annotationNormalizedLines) {
+	for (let lineIndex = 0; lineIndex < annotationNormalizedLines.length; lineIndex++) {
+		const line = annotationNormalizedLines[lineIndex] ?? '';
+		// Track code block boundaries
+		if (line.includes('{@code')) {
+			inCodeBlockForFinal = true;
+			codeBlockBraceCountForFinal = 1; // Count the opening brace in {@code
+			// Count additional braces in the line
+			const afterCodeTag = line.substring(line.indexOf('{@code') + '{@code'.length);
+			for (const char of afterCodeTag) {
+				if (char === '{') codeBlockBraceCountForFinal++;
+				if (char === '}') codeBlockBraceCountForFinal--;
+			}
+		}
+		if (inCodeBlockForFinal) {
+			// Skip processing for code block content lines (but not the {@code line itself)
+			// Preserve code block content exactly as-is
+			// IMPORTANT: Check this BEFORE counting braces, so we preserve the closing brace line
+			if (!line.includes('{@code')) {
+				// Count braces in this line
+				for (const char of line) {
+					if (char === '{') codeBlockBraceCountForFinal++;
+					if (char === '}') codeBlockBraceCountForFinal--;
+				}
+				// Code block ends when brace count reaches 0
+				if (codeBlockBraceCountForFinal === 0) {
+					inCodeBlockForFinal = false;
+				}
+				// Always preserve code block content lines exactly as-is
+				finalLines.push(line);
+				continue;
+			}
+			// For {@code line, count braces but don't skip (need to process it)
+			for (const char of line) {
+				if (char === '{') codeBlockBraceCountForFinal++;
+				if (char === '}') codeBlockBraceCountForFinal--;
+			}
+			if (codeBlockBraceCountForFinal === 0) {
+				inCodeBlockForFinal = false;
+			}
+		}
+		
 		// Check if line contains both text and annotations
 		// Match patterns like " * text * @param value" or " * text. * @param value * @return value"
 		const annotationInMiddleRegex =
