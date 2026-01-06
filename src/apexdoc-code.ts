@@ -216,7 +216,9 @@ const formatMultilineCodeBlock = (
 					}),
 				)
 			: ARRAY_START_INDEX;
-	const openingBraceIndents: number[] = [];
+	// Track nesting depth based on braces (more reliable than whitespace for Prettier-formatted code)
+	// Start at depth 1 because we're inside the {@code block
+	let braceDepth = 1;
 	const prefixedLines = lines.map((line) => {
 		const trimmedLine = line.trim();
 		if (trimmedLine.length === ARRAY_START_INDEX) {
@@ -228,41 +230,69 @@ const formatMultilineCodeBlock = (
 				? (leadingWhitespaceMatch[MATCH_GROUP_INDEX]?.length ??
 					ARRAY_START_INDEX)
 				: ARRAY_START_INDEX;
-		let codeIndent = Math.max(
+		
+		// Calculate relative indentation from the minimum indent (preserves Prettier's formatting)
+		// This is the primary source of indentation - Prettier formats code with proper indentation
+		const relativeIndent = Math.max(
 			ARRAY_START_INDEX,
 			whitespaceLength - minIndent,
 		);
-		// Track opening braces
+		
+		// Count braces to track nesting depth (for fallback when whitespace is missing)
 		const openBraces = (trimmedLine.match(BRACE_REGEX) ?? []).length;
-		for (let i = ARRAY_START_INDEX; i < openBraces; i++) {
-			openingBraceIndents.push(whitespaceLength);
-		}
-		// Match closing braces to their opening brace indentation
 		const closeBraces = (trimmedLine.match(CLOSE_BRACE_REGEX) ?? []).length;
-		if (
-			closeBraces > ARRAY_START_INDEX &&
-			openingBraceIndents.length > ARRAY_START_INDEX
-		) {
-			let matchingOpenIndent = whitespaceLength;
-			for (
-				let i = ARRAY_START_INDEX;
-				i < closeBraces &&
-				openingBraceIndents.length > ARRAY_START_INDEX;
-				i++
-			) {
-				matchingOpenIndent =
-					openingBraceIndents.pop() ?? matchingOpenIndent;
-			}
-			codeIndent = Math.max(
-				ARRAY_START_INDEX,
-				matchingOpenIndent - minIndent,
-			);
+		
+		// Calculate indentation:
+		// 1. If Prettier formatted with whitespace, use relative indent (preserves Prettier's structure)
+		// 2. If no whitespace (minIndent = 0), use brace-based indent as fallback
+		// 3. Always ensure at least base indentation
+		const TAB_WIDTH = 2;
+		// Brace depth represents nesting level: 1 = inside {@code, 2 = inside class, 3 = inside method, etc.
+		// Expected pattern: depth 1 = 1 additional space (total 2), depth 2 = 3 additional (total 4), depth 3 = 5 additional (total 6)
+		// Formula: additional = (depth - 1) * TAB_WIDTH + 1
+		// For depth 1: (1-1)*2 + 1 = 1
+		// For depth 2: (2-1)*2 + 1 = 3
+		// For depth 3: (3-1)*2 + 1 = 5
+		const braceBasedIndent = (braceDepth - 1) * TAB_WIDTH + 1;
+		
+		// Use relative indent if available and meaningful (Prettier formatted with whitespace)
+		// Otherwise fall back to brace-based indent
+		// Prefer relative indent when it's greater than 0, as it preserves Prettier's exact formatting
+		let codeIndent: number;
+		if (relativeIndent > ARRAY_START_INDEX) {
+			// Prettier formatted with whitespace - use it (preserves exact formatting)
+			// But ensure it's at least 1 (base level should have 1 additional space)
+			codeIndent = Math.max(1, relativeIndent);
+		} else {
+			// No whitespace from Prettier - use brace-based indent
+			codeIndent = braceBasedIndent;
 		}
-		const content = (
-			minIndent > ARRAY_START_INDEX ? line.substring(minIndent) : line
-		).trimStart();
-		const codeIndentStr =
-			codeIndent > ARRAY_START_INDEX ? ' '.repeat(codeIndent) : '';
+		
+		// Update brace depth AFTER calculating indent (for next line)
+		braceDepth += openBraces - closeBraces;
+		
+		// Extract content, preserving any indentation that's part of the code structure
+		// If minIndent > 0, we've already accounted for it in codeIndent, so strip it
+		// Otherwise, preserve the original line structure
+		let content: string;
+		if (minIndent > ARRAY_START_INDEX) {
+			// We've calculated relative indent, so strip the minIndent from the line
+			content = line.substring(minIndent).trimStart();
+		} else {
+			// No minIndent means all lines start at column 0, so just trim
+			// But preserve the structure - don't trim if it would remove meaningful whitespace
+			content = line.trimStart();
+		}
+		
+		// Add indentation for code blocks
+		// commentPrefix is "   * " (includes 1 space after asterisk)
+		// codeIndent is already calculated to include the base + relative indent
+		// Expected pattern from output fixture:
+		// - Base level (class): 2 spaces after asterisk (*   class) = 1 from prefix + 1 additional
+		// - Method level: 4 spaces after asterisk (*     method) = 1 from prefix + 3 additional  
+		// - Method body: 6 spaces after asterisk (*       return) = 1 from prefix + 5 additional
+		// codeIndent already includes the base (1) + relative (0, 2, 4, etc.), so use it directly
+		const codeIndentStr = ' '.repeat(codeIndent);
 		return `${commentPrefix}${codeIndentStr}${content}`;
 	});
 	return `{@code\n${prefixedLines.join('\n')}\n${commentPrefix}}`;
@@ -579,6 +609,12 @@ const createCodeBlockEmbed = (
 							commentValue,
 							replacements,
 						);
+						// DEBUG: Test Hypothesis 27 - Check embed-formatted output
+						if (commentKey.includes('complex-test-class') || finalComment.includes('ComplexIntegrationTest')) {
+							const fs = require('fs');
+							const debugLog = `[H27-EMBED] commentKey=${commentKey}\nfinalComment (first 2000 chars):\n${finalComment.substring(0, 2000)}\n---\n`;
+							fs.appendFileSync('.cursor/debug.log', debugLog);
+						}
 						formattedCodeBlocks.set(commentKey, finalComment);
 					}
 

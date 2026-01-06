@@ -1007,6 +1007,8 @@ const normalizeSingleApexDocComment = (
 		// Each entry stores the detected indentation string for that code block level
 		const codeBlockIndentStackForWrap: string[] = [];
 		let insideCodeBlock = false;
+		// Track brace depth within code blocks to properly detect the final closing brace
+		let codeBlockBraceDepth = 0;
 		for (
 			let lineIndex = ARRAY_START_INDEX;
 			lineIndex < annotationLinesForWrap.length;
@@ -1031,28 +1033,59 @@ const normalizeSingleApexDocComment = (
 			// Also, if the next line starts with "}" (like "};" or "},"), then this is code content, not the {@code} closing brace
 			const nextLine = annotationLinesForWrap[lineIndex + INDEX_ONE];
 			const nextTrimmed = nextLine?.replace(/^\s*\*\s*/, '').trim() ?? '';
+			
+			// Track brace depth within code blocks BEFORE checking if this line ends the block
+			// We need to check the brace depth BEFORE updating it for the current line
+			let currentBraceDepth = codeBlockBraceDepth;
+			if (insideCodeBlock && !isCodeBlockStart) {
+				// Count opening braces { in the line
+				const openBraces = (trimmedLine.match(/\{/g) ?? []).length;
+				// Count closing braces } in the line
+				const closeBraces = (trimmedLine.match(/\}/g) ?? []).length;
+				// Calculate what the brace depth will be AFTER processing this line
+				// But check if this line ends the block BEFORE updating the depth
+				currentBraceDepth = codeBlockBraceDepth + openBraces - closeBraces;
+			}
+			
+			// Code block ends only when:
+			// 1. We're inside a code block
+			// 2. This line is just "}" (standalone closing brace)
+			// 3. Brace depth will be 0 AFTER processing this line (we've closed all nested structures)
+			// 4. Next line is NOT also just "}" (handles double closing braces)
+			// 5. Next line does NOT start with "}" (handles "};" or "},")
 			const isCodeBlockEnd =
 				insideCodeBlock &&
 				!isCommentEnd &&
 				!isCommentStart &&
 				!isCodeBlockStart &&
 				trimmedLine === '}' &&
+				currentBraceDepth === ARRAY_START_INDEX &&
 				// Only end code block if next line is NOT also just a closing brace
 				// (this handles the case where we have " * }" followed by " * }" - the second one ends the code block)
 				// AND next line does NOT start with "}" (if it starts with "}", it's code content like "};" or "},")
 				nextTrimmed !== '}' &&
 				!nextTrimmed.startsWith('}');
+			
+			// Now update the brace depth for the next iteration
+			if (insideCodeBlock && !isCodeBlockStart) {
+				const openBraces = (trimmedLine.match(/\{/g) ?? []).length;
+				const closeBraces = (trimmedLine.match(/\}/g) ?? []).length;
+				codeBlockBraceDepth += openBraces - closeBraces;
+			}
 			const isCodeBlock =
 				isCodeBlockStart || (insideCodeBlock && !isCodeBlockEnd);
+
 
 			// Track code block state using stack
 			if (isCodeBlockStart) {
 				insideCodeBlock = true;
+				codeBlockBraceDepth = INDEX_ONE; // Start with depth 1 for the {@code opening brace
 				// Push empty string - will detect indentation from first continuation line
 				codeBlockIndentStackForWrap.push('');
 			}
 			if (isCodeBlockEnd) {
 				insideCodeBlock = false;
+				codeBlockBraceDepth = ARRAY_START_INDEX;
 				codeBlockIndentStackForWrap.pop();
 			}
 
@@ -1257,6 +1290,23 @@ const normalizeSingleApexDocComment = (
 						const afterAsterisk =
 							linePrefixMatch[INDEX_THREE] ?? '';
 						const content = linePrefixMatch[INDEX_FOUR] ?? '';
+						
+						// DEBUG: Test Hypothesis 27 & 31 - Indentation preservation
+						if (lineIndex >= 17 && lineIndex <= 25) {
+							const fs = require('fs');
+							const debugLog = [
+								`[H27/H31] lineIndex=${lineIndex}`,
+								`annotationLine="${annotationLine}"`,
+								`group1="${linePrefixMatch[INDEX_ONE] ?? ''}"`,
+								`group2="${linePrefixMatch[INDEX_TWO] ?? ''}"`,
+								`afterAsterisk="${afterAsterisk}" (length=${afterAsterisk.length})`,
+								`content="${content}" (length=${content.length})`,
+								`contentStartsWithSpace=${content.startsWith(' ')}`,
+								`wrapCommentPrefix="${wrapCommentPrefix}"`,
+							].join(' | ') + '\n';
+							fs.appendFileSync('.cursor/debug.log', debugLog);
+						}
+						
 						// Preserve the indentation from afterAsterisk (embed function preserves relative indentation)
 						// wrapCommentPrefix is "   * " (includes 1 space after asterisk)
 						// If afterAsterisk has more than 1 space, it means there's additional indentation
@@ -1267,6 +1317,13 @@ const normalizeSingleApexDocComment = (
 						} else {
 							// First line or no additional indentation: wrapCommentPrefix (1 space) + content
 							normalizedLine = `${wrapCommentPrefix}${content}`;
+						}
+						
+						// DEBUG: Log normalized result
+						if (lineIndex >= 17 && lineIndex <= 25) {
+							const fs = require('fs');
+							const debugLog = `[H27/H31] normalizedLine="${normalizedLine}"\n`;
+							fs.appendFileSync('.cursor/debug.log', debugLog);
 						}
 					}
 					wrappedLines.push(normalizedLine);
