@@ -1,8 +1,8 @@
 public class Test {
   /**
    * Manages customer account information and related operations.
-   * This class bypasses user record access via 'without sharing' so that it
-   * can be used in a batch classes.
+   * This class bypasses user record access via 'without sharing' so that it can
+   * be used in a batch classes.
    * @author John Developer
    * @since 0.1.0
    * @version 0.3.1

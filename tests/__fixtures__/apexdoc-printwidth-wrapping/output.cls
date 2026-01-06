@@ -3,11 +3,10 @@ public class PrintWidthTest {
    * Test method with very long annotation descriptions that should wrap based
    * on printWidth.
    * @param input This is a very long parameter description that should
-   * definitely wrap to the next line when the printWidth is set to a
-   * reasonable value like 80 characters.
+   * definitely wrap to the next line when the printWidth is set to a reasonable
+   * value like 80 characters.
    * @return This is an extremely long return value description that contains
-   * many words and should wrap properly when the printWidth setting is
-   * honored.
+   * many words and should wrap properly when the printWidth setting is honored.
    * @throws IllegalArgumentException This is a very long exception description
    * that explains what happens when invalid input is provided to this method.
    * @see RelatedClass This is a long see annotation description that should

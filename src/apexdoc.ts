@@ -873,7 +873,7 @@ const normalizeSingleApexDocComment = (
 
 		for (const word of words) {
 			const testLine = `${currentLine} ${word}`;
-			if (testLine.length < wrapPrintWidth) {
+			if (testLine.length <= wrapPrintWidth) {
 				currentLine = testLine;
 			} else {
 				if (currentLine !== annotationPart) {
@@ -892,6 +892,102 @@ const normalizeSingleApexDocComment = (
 		}
 
 		return wrappedLines.join('\n');
+	};
+
+	/**
+	 * Helper function to wrap text blocks with paragraph detection.
+	 * Detects paragraph boundaries: if a line ends with sentence-ending punctuation
+	 * and the next line starts with a capital letter, treat it as a new paragraph.
+	 * @param textBlock - Array of text block lines to wrap.
+	 * @param wrapCommentPrefix - The comment prefix to use (e.g., "   * ").
+	 * @param wrapPrintWidth - The maximum line width for wrapping.
+	 * @returns Array of wrapped lines.
+	 */
+	const wrapTextBlockWithParagraphs = (
+		textBlock: string[],
+		wrapCommentPrefix: string,
+		wrapPrintWidth: number,
+	): string[] => {
+		// Extract all text from all lines in the text block
+		const textParts = textBlock
+			.map((line) => {
+				const prefixMatch = /^(\s*\*\s*)/.exec(line);
+				const prefix =
+					prefixMatch?.[INDEX_ONE] ?? wrapCommentPrefix;
+				return line.substring(prefix.length).trim();
+			})
+			.filter((text) => text.length > EMPTY);
+
+		// Group text parts into paragraphs
+		const paragraphs: string[] = [];
+		let currentParagraph: string[] = [];
+
+		for (let i = 0; i < textParts.length; i++) {
+			const part = textParts[i];
+			if (part === undefined || part.length === EMPTY) {
+				continue;
+			}
+
+			const nextPart = textParts[i + INDEX_ONE];
+
+			currentParagraph.push(part);
+
+			// Check if this is a paragraph boundary:
+			// - There is a newline (implicit, since we're processing separate lines)
+			// - Next part exists and starts with a capital letter
+			// This indicates a new paragraph, not a continuation
+			const nextStartsWithCapital =
+				nextPart !== undefined &&
+				nextPart.length > EMPTY &&
+				/^[A-Z]/.test(nextPart.trim());
+
+			if (nextStartsWithCapital) {
+				// This is a paragraph boundary - finish current paragraph
+				paragraphs.push(currentParagraph.join(' '));
+				currentParagraph = [];
+			}
+		}
+
+		// Add the last paragraph if it exists
+		if (currentParagraph.length > EMPTY) {
+			paragraphs.push(currentParagraph.join(' '));
+		}
+
+		// Wrap each paragraph independently
+		const wrappedLines: string[] = [];
+		for (const paragraphText of paragraphs) {
+			if (paragraphText.length > EMPTY) {
+				const words = paragraphText.split(/\s+/);
+				let currentTextLine = '';
+				for (const word of words) {
+					const testLine =
+						currentTextLine === ''
+							? word
+							: `${currentTextLine} ${word}`;
+					const testLineWithPrefix =
+						wrapCommentPrefix + testLine;
+					// Break if adding this word would make the line exceed printWidth
+					// Allow lines to be exactly equal to printWidth (<= printWidth)
+					if (testLineWithPrefix.length <= wrapPrintWidth) {
+						currentTextLine = testLine;
+					} else {
+						// Adding this word would make the line > printWidth, so break before adding it
+						if (currentTextLine !== '') {
+							wrappedLines.push(
+								wrapCommentPrefix + currentTextLine,
+							);
+						}
+						currentTextLine = word;
+					}
+				}
+				if (currentTextLine !== '') {
+					wrappedLines.push(
+						wrapCommentPrefix + currentTextLine,
+					);
+				}
+			}
+		}
+		return wrappedLines;
 	};
 
 	// Wrap long annotation lines based on printWidth
@@ -963,133 +1059,13 @@ const normalizeSingleApexDocComment = (
 			// If we hit an annotation, code block, or comment boundary, flush the current text block
 			if (isAnnotation || isCodeBlock || isCommentEnd || isCommentStart) {
 				if (currentTextBlock.length > EMPTY) {
-					// For text blocks with multiple lines, preserve line breaks
-					// (don't join lines that are already on separate lines)
-					// This preserves the original line structure for malformed comments
-					if (currentTextBlock.length > INDEX_ONE) {
-						// Process each line, wrapping if it exceeds printWidth
-						// The actual prefix might be normalized to " * " (3 chars), but the expected output uses "   * " (5 chars)
-						// We need to use the expected prefix length for effectiveWidth calculation
-						// The expected prefix is based on commentIndent, which should be 2 for "   * " (5 chars)
-						// But if commentIndent is 0, we need to infer it from the expected output format
-						// For now, use the actual prefix length from the line, but ensure we use commentPrefix for output
-						// Calculate effective width: printWidth minus the actual prefix length (since lines are already normalized)
-						// But we need to account for the fact that the expected output uses a longer prefix
-						// So we calculate effectiveWidth based on the expected output prefix length
-						// The expected prefix is "   * " (5 chars) when commentIndent = 2, but commentPrefix might be " * " (3 chars) if commentIndent = 0
-						// We need to use the expected prefix length for wrapping, which is 5 chars (2 spaces + " * ")
-
-						/**
-						 * Default to 5 if commentIndent is 0.
-						 */
-						for (const line of currentTextBlock) {
-							const prefixMatch = /^(\s*\*\s*)/.exec(line);
-							const prefixLength = prefixMatch?.[INDEX_ONE];
-							const text = line
-								.substring(
-									prefixLength?.length ??
-										wrapCommentPrefix.length,
-								)
-								.trim();
-							if (text.length > EMPTY) {
-								// Use the expected prefix (wrapCommentPrefix) for output, not the actual prefix from the line
-								const finalLine = `${wrapCommentPrefix}${text}`;
-								// If the line exceeds printWidth, wrap it
-								if (finalLine.length >= printWidth) {
-									const words = text.split(/\s+/);
-									const wrappedTextLines: string[] = [];
-									let currentTextLine = '';
-									for (const word of words) {
-										const testLine =
-											currentTextLine === ''
-												? word
-												: `${currentTextLine} ${word}`;
-										const testLineWithPrefix =
-											wrapCommentPrefix + testLine;
-										// Break if adding this word would make the line exceed or equal printWidth
-										// Lines must be strictly less than printWidth (< printWidth, not <=)
-										if (
-											testLineWithPrefix.length <
-											printWidth
-										) {
-											currentTextLine = testLine;
-										} else {
-											// Adding this word would make the line >= printWidth, so break before adding it
-											if (currentTextLine !== '') {
-												wrappedTextLines.push(
-													wrapCommentPrefix +
-														currentTextLine,
-												);
-											}
-											currentTextLine = word;
-										}
-									}
-									if (currentTextLine !== '') {
-										wrappedTextLines.push(
-											wrapCommentPrefix + currentTextLine,
-										);
-									}
-									wrappedLines.push(...wrappedTextLines);
-								} else {
-									wrappedLines.push(finalLine);
-								}
-							}
-						}
-					} else {
-						// Join the text block and then wrap it properly so Prettier can preserve the wrapping
-						const joinedText = currentTextBlock
-							.map((line) => {
-								const prefixMatch = /^(\s*\*\s*)/.exec(line);
-								const prefix =
-									prefixMatch?.[INDEX_ONE] ??
-									wrapCommentPrefix;
-								return line.substring(prefix.length).trim();
-							})
-							.filter((text) => text.length > EMPTY)
-							.join(' ');
-						if (joinedText.length > EMPTY) {
-							const joinedLine = `${wrapCommentPrefix}${joinedText}`;
-							// If the joined line is longer than or equal to printWidth, wrap it
-							// Lines must be strictly less than printWidth (< printWidth)
-							if (joinedLine.length >= printWidth) {
-								const words = joinedText.split(/\s+/);
-								const wrappedTextLines: string[] = [];
-								let currentTextLine = '';
-								for (const word of words) {
-									const testLine =
-										currentTextLine === ''
-											? word
-											: `${currentTextLine} ${word}`;
-									const testLineWithPrefix =
-										wrapCommentPrefix + testLine;
-									// Break if adding this word would make the line exceed or equal printWidth
-									// Lines must be strictly less than printWidth (< printWidth, not <=)
-									if (
-										testLineWithPrefix.length < printWidth
-									) {
-										currentTextLine = testLine;
-									} else {
-										// Adding this word would make the line >= printWidth, so break before adding it
-										if (currentTextLine !== '') {
-											wrappedTextLines.push(
-												wrapCommentPrefix +
-													currentTextLine,
-											);
-										}
-										currentTextLine = word;
-									}
-								}
-								if (currentTextLine !== '') {
-									wrappedTextLines.push(
-										wrapCommentPrefix + currentTextLine,
-									);
-								}
-								wrappedLines.push(...wrappedTextLines);
-							} else {
-								wrappedLines.push(joinedLine);
-							}
-						}
-					}
+					wrappedLines.push(
+						...wrapTextBlockWithParagraphs(
+							currentTextBlock,
+							wrapCommentPrefix,
+							printWidth,
+						),
+					);
 					currentTextBlock = [];
 				}
 
@@ -1131,6 +1107,52 @@ const normalizeSingleApexDocComment = (
 							normalizedAnnotationLine = `${wrapCommentPrefix}${trimmed}`;
 						}
 					}
+
+					// Keep appending continuation lines until we hit a non-continuation line
+					let continuationIndex = lineIndex + INDEX_ONE;
+					while (continuationIndex < annotationLinesForWrap.length) {
+						const continuationLine = annotationLinesForWrap[continuationIndex];
+						if (continuationLine === undefined) {
+							break;
+						}
+						const continuationIsAnnotation = /\*\s*@[a-zA-Z_]/.test(
+							continuationLine,
+						);
+						const continuationIsCodeBlock =
+							continuationLine.includes('{@code');
+						const continuationIsCommentEnd =
+							continuationLine.trim() === '*/';
+						const continuationIsCommentStart =
+							continuationLine.trim() === '/**';
+						const continuationIsContinuation =
+							!continuationIsAnnotation &&
+							!continuationIsCodeBlock &&
+							!continuationIsCommentEnd &&
+							!continuationIsCommentStart;
+
+						if (!continuationIsContinuation) {
+							break;
+						}
+
+						const continuationPrefixMatch = /^(\s*\*\s*)/.exec(
+							continuationLine,
+						);
+						const continuationPrefix =
+							continuationPrefixMatch?.[INDEX_ONE] ??
+							wrapCommentPrefix;
+						const continuationText = continuationLine
+							.substring(continuationPrefix.length)
+							.trim();
+						if (continuationText.length > EMPTY) {
+							normalizedAnnotationLine += ' ' + continuationText;
+							continuationIndex++;
+						} else {
+							break;
+						}
+					}
+					// Skip all the continuation lines we've included
+					lineIndex = continuationIndex - INDEX_ONE;
+
 					if (normalizedAnnotationLine.length >= printWidth) {
 						const wrapped = wrapAnnotationLine(
 							normalizedAnnotationLine,
@@ -1228,21 +1250,13 @@ const normalizeSingleApexDocComment = (
 				if (hasAnnotationInMiddle) {
 					// Line contains annotation - flush text block and process as annotation line
 					if (currentTextBlock.length > EMPTY) {
-						const joinedText = currentTextBlock
-							.map((line) => {
-								const prefixMatch = /^(\s*\*\s*)/.exec(line);
-								const prefix =
-									prefixMatch?.[INDEX_ONE] ??
-									wrapCommentPrefix;
-								return line.substring(prefix.length).trim();
-							})
-							.filter((text) => text.length > EMPTY)
-							.join(' ');
-						if (joinedText.length > EMPTY) {
-							wrappedLines.push(
-								`${wrapCommentPrefix}${joinedText}`,
-							);
-						}
+						wrappedLines.push(
+							...wrapTextBlockWithParagraphs(
+								currentTextBlock,
+								wrapCommentPrefix,
+								printWidth,
+							),
+						);
 						currentTextBlock = [];
 					}
 					// Process the annotation line
@@ -1369,70 +1383,13 @@ const normalizeSingleApexDocComment = (
 		}
 		// Flush any remaining text block
 		if (currentTextBlock.length > EMPTY) {
-			// For text blocks with multiple lines, preserve line breaks
-			// (don't join lines that are already on separate lines)
-			if (currentTextBlock.length > INDEX_ONE) {
-				// Preserve each line as-is, just normalize indentation
-				for (const line of currentTextBlock) {
-					const prefixMatch = /^(\s*\*\s*)/.exec(line);
-					const prefix =
-						prefixMatch?.[INDEX_ONE] ?? wrapCommentPrefix;
-					const text = line.substring(prefix.length).trim();
-					if (text.length > EMPTY) {
-						wrappedLines.push(`${wrapCommentPrefix}${text}`);
-					}
-				}
-			} else {
-				// Single line - join and wrap if needed
-				const joinedText = currentTextBlock
-					.map((line) => {
-						const prefixMatch = /^(\s*\*\s*)/.exec(line);
-						const prefix =
-							prefixMatch?.[INDEX_ONE] ?? wrapCommentPrefix;
-						return line.substring(prefix.length).trim();
-					})
-					.filter((text) => text.length > EMPTY)
-					.join(' ');
-				if (joinedText.length > EMPTY) {
-					const joinedLine = `${wrapCommentPrefix}${joinedText}`;
-					// If the joined line is longer than or equal to printWidth, wrap it
-					// Lines must be strictly less than printWidth (< printWidth)
-					if (joinedLine.length >= printWidth) {
-						const words = joinedText.split(/\s+/);
-						const wrappedTextLines: string[] = [];
-						let currentTextLine = '';
-						for (const word of words) {
-							const testLine =
-								currentTextLine === ''
-									? word
-									: `${currentTextLine} ${word}`;
-							const testLineWithPrefix =
-								wrapCommentPrefix + testLine;
-							// Break if adding this word would make the line exceed or equal printWidth
-							// Lines must be strictly less than printWidth (< printWidth, not <=)
-							if (testLineWithPrefix.length < printWidth) {
-								currentTextLine = testLine;
-							} else {
-								// Adding this word would make the line >= printWidth, so break before adding it
-								if (currentTextLine !== '') {
-									wrappedTextLines.push(
-										wrapCommentPrefix + currentTextLine,
-									);
-								}
-								currentTextLine = word;
-							}
-						}
-						if (currentTextLine !== '') {
-							wrappedTextLines.push(
-								wrapCommentPrefix + currentTextLine,
-							);
-						}
-						wrappedLines.push(...wrappedTextLines);
-					} else {
-						wrappedLines.push(joinedLine);
-					}
-				}
-			}
+			wrappedLines.push(
+				...wrapTextBlockWithParagraphs(
+					currentTextBlock,
+					wrapCommentPrefix,
+					printWidth,
+				),
+			);
 		}
 		normalizedComment = wrappedLines.join('\n');
 	}
