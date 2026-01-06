@@ -2,10 +2,10 @@ public class DocumentationExample {
   /**
    * Comprehensive example of a test class structure with parallel test
    * execution, helper classes, and multiple test scenarios. This example
-   * demonstrates best practices for organizing test code including inner
-   * helper classes for data preparation, static utility methods for common
-   * operations, and well-structured test methods that validate different
-   * aspects of the system under test.
+   * demonstrates best practices for organizing test code including inner helper
+   * classes for data preparation, static utility methods for common operations,
+   * and well-structured test methods that validate different aspects of the
+   * system under test.
    * @example This example shows a complete test class implementation with
    * parallel execution enabled, demonstrating how to structure test classes
    * with helper classes and methods for maximum code reusability and
@@ -79,12 +79,13 @@ public class DocumentationExample {
    *       );
    *       System.assert(!isValid, 'Account should be invalid');
    *       List<Account> emptyList = new List<Account>();
-   *       Map<String, List<String>> nestedMap = new Map<String, List<String>>{
-   *         'tags' => new List<String>{
-   *           'test',
-   *           'integration'
-   *         }
-   *       };
+   *       Map<String,
+   *         List<String>> nestedMap = new Map<String, List<String>>{
+   *           'tags' => new List<String>{
+   *             'test',
+   *             'integration'
+   *           }
+   *         };
    *     } catch (Exception e) {
    *       System.assert(true, 'Expected exception for invalid account');
    *     }
@@ -116,12 +117,12 @@ public class DocumentationExample {
    *     };
    *     Map<String, Map<String, String>> nestedMaps =
    *       new Map<String, Map<String, String>>{
-   *         'config' => new Map<String, String>{
-   *           'key1' => 'value1',
-   *           'key2' => 'value2'
-   *         },
-   *       }
-   *     };
+   *           'config' => new Map<String, String>{
+   *             'key1' => 'value1',
+   *             'key2' => 'value2'
+   *           },
+   *         }
+   *       };
    *   }
    * }
    * }
