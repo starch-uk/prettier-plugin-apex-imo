@@ -72,18 +72,16 @@ public class DocumentationExample {
    *   static void createAccountWithInvalidData() {
    *     try {
    *       Account invalidAccount = new Account();
-   *       Boolean isValid = ComplexIntegrationTest.validateAccount(
-   *         invalidAccount
-   *       );
+   *       Boolean isValid =
+   *         ComplexIntegrationTest.validateAccount(invalidAccount);
    *       System.assert(!isValid, 'Account should be invalid');
    *       List<Account> emptyList = new List<Account>();
-   *       Map<String,
-   *         List<String>> nestedMap = new Map<String, List<String>>{
-   *           'tags' => new List<String>{
-   *             'test',
-   *             'integration'
-   *           }
-   *         };
+   *       Map<String, List<String>> nestedMap = new Map<String, List<String>>{
+   *         'tags' => new List<String>{
+   *           'test',
+   *           'integration'
+   *         }
+   *       };
    *     } catch (Exception e) {
    *       System.assert(true, 'Expected exception for invalid account');
    *     }
