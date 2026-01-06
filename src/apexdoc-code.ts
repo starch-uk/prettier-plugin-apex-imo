@@ -15,6 +15,7 @@ import {
 	STRING_OFFSET,
 	MIN_INDENT_LEVEL,
 } from './comments.js';
+import { normalizeAnnotationNamesInText } from './annotations.js';
 
 const CODE_TAG = '{@code';
 const CODE_TAG_LENGTH = CODE_TAG.length;
@@ -240,6 +241,15 @@ const formatMultilineCodeBlock = (
 		const openBraces = (trimmedLine.match(BRACE_REGEX) ?? []).length;
 		const closeBraces = (trimmedLine.match(CLOSE_BRACE_REGEX) ?? []).length;
 		
+		// For closing braces, use the depth AFTER closing (so they align with opening brace)
+		// For opening braces and content, use the current depth
+		// Calculate the depth after processing this line's braces
+		const depthAfterBraces = braceDepth + openBraces - closeBraces;
+		
+		// If this line closes braces, use the depth after closing for indentation
+		// Otherwise, use the current depth
+		const depthForIndent = closeBraces > 0 ? depthAfterBraces : braceDepth;
+		
 		// Calculate indentation based on brace depth
 		// Comment prefix '   * ' already has 1 space after asterisk
 		// We need to add additional spaces to reach the target:
@@ -247,23 +257,23 @@ const formatMultilineCodeBlock = (
 		// - Method level (depth 2): 2 additional spaces = 3 total after asterisk
 		// - Method body (depth 3): 4 additional spaces = 5 total after asterisk
 		// 
-		// Formula: (braceDepth - 1) * 2
+		// Formula: (depthForIndent - 1) * 2
 		// - depth 1: (1-1)*2 = 0 ✓
 		// - depth 2: (2-1)*2 = 2 ✓
 		// - depth 3: (3-1)*2 = 4 ✓
-		const codeBlockIndent = (braceDepth - 1) * 2;
+		const codeBlockIndent = (depthForIndent - 1) * 2;
 		const codeBlockIndentStr = ' '.repeat(codeBlockIndent);
 		
 		// DEBUG: Log first 20 lines with details
 		if (lineIndex < 20) {
 			fs.appendFileSync(
 				'.cursor/debug.log',
-				`[formatMultilineCodeBlock] Line ${lineIndex}: braceDepth=${braceDepth}, indent=${codeBlockIndent}, openBraces=${openBraces}, closeBraces=${closeBraces}, content="${trimmedLine.substring(0, 50)}"\n`,
+				`[formatMultilineCodeBlock] Line ${lineIndex}: braceDepth=${braceDepth}, depthAfterBraces=${depthAfterBraces}, depthForIndent=${depthForIndent}, indent=${codeBlockIndent}, openBraces=${openBraces}, closeBraces=${closeBraces}, content="${trimmedLine.substring(0, 50)}"\n`,
 			);
 		}
 		
 		// Update brace depth AFTER calculating indent (for next line)
-		braceDepth += openBraces - closeBraces;
+		braceDepth = depthAfterBraces;
 		
 		// Prettier formats starting at column 0, so use the trimmed line
 		// (strip any leading whitespace that might exist)
@@ -307,10 +317,35 @@ const formatCodeBlockDirect = async ({
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<string> => {
+	// CRITICAL: Normalize annotations in the code before formatting
+	// textToDoc should use our wrapped parser, but to be safe, we normalize here
+	// This ensures annotations like @auraenabled become @AuraEnabled
+	const normalizedCode = normalizeAnnotationNamesInText(code);
+	
+	// DEBUG: Log normalization (always log to see what's happening)
+	const fs = require('fs');
+	fs.appendFileSync(
+		'.cursor/debug.log',
+		`[formatCodeBlockDirect] Input code: "${code}"\n[formatCodeBlockDirect] Normalized code: "${normalizedCode}"\n`,
+	);
+	
+	// For single-line code blocks that are just annotations or simple statements,
+	// normalize and return without formatting (they're not valid Apex code by themselves)
+	// Check if it's a simple annotation or single-line statement
+	const isSimpleAnnotation = /^@\w+/.test(normalizedCode.trim()) && normalizedCode.split('\n').length === 1;
+	if (isSimpleAnnotation && normalizedCode.trim().length < 100) {
+		// For simple annotations, just return normalized code
+		fs.appendFileSync(
+			'.cursor/debug.log',
+			`[formatCodeBlockDirect] Simple annotation detected, returning normalized code without formatting\n`,
+		);
+		return normalizedCode;
+	}
+	
 	// Try apex-anonymous parser first (designed for code snippets)
 	// This handles both complete classes and incomplete code snippets
 	try {
-		const formattedDoc = await textToDoc(code, {
+		const formattedDoc = await textToDoc(normalizedCode, {
 			...embedOptions,
 			parser: 'apex-anonymous',
 		});
@@ -344,7 +379,7 @@ const formatCodeBlockDirect = async ({
 			const pluginToUse =
 				currentPluginInstance?.default ??
 				(await import('./index.js')).default;
-			formatted = await prettier.format(code, {
+			formatted = await prettier.format(normalizedCode, {
 				...embedOptions,
 				parser: 'apex-anonymous',
 				plugins: [pluginToUse as prettier.Plugin],
@@ -362,7 +397,8 @@ const formatCodeBlockDirect = async ({
 	} catch (error) {
 		// If apex-anonymous fails, try the regular apex parser
 		// Both parsers format code starting at column 0 (no leading whitespace)
-		const formattedDoc = await textToDoc(code, {
+		// Use normalized code to ensure annotations are normalized
+		const formattedDoc = await textToDoc(normalizedCode, {
 			...embedOptions,
 			parser: 'apex',
 		});
@@ -395,7 +431,7 @@ const formatCodeBlockDirect = async ({
 		} else {
 			const pluginToUse =
 				currentPluginInstance?.default ?? (await import('./index.js')).default;
-			formatted = await prettier.format(code, {
+			formatted = await prettier.format(normalizedCode, {
 				...embedOptions,
 				parser: 'apex',
 				plugins: [pluginToUse as prettier.Plugin],
