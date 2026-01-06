@@ -38,10 +38,8 @@ public class DocumentationExample {
    *
    *   @IsTest
    *   static void createAccountWithValidData() {
-   *     Account testAccount = new Account(
-   *       Name = 'Test Account',
-   *       Industry = 'Technology'
-   *     );
+   *     Account testAccount =
+   *       new Account(Name = 'Test Account', Industry = 'Technology');
    *     Boolean isValid = ComplexIntegrationTest.validateAccount(testAccount);
    *     System.assert(isValid, 'Account should be valid');
    *     List<Account> accounts =
@@ -120,7 +118,7 @@ public class DocumentationExample {
    *         'config' => new Map<String, String>{
    *           'key1' => 'value1',
    *           'key2' => 'value2'
-   *         },
+   *         }
    *       };
    *   }
    * }
