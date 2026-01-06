@@ -17,17 +17,21 @@ public class DocumentationExample {
    *     public static List<Account> createAccounts(Integer count) {
      ****       return new List<Account>();
    *     }
+   *    
     * * *     public static List<Contact> createContactsForAccounts(List<Account> accounts) {
    *       return new List<Contact>();
    *     }
    *   }
+   *    
    *   @TestSetup
    *   static void setupTestData() {
    *     // Setup code here
   *   }
+   *    
    *   private static Boolean validateAccount(Account account) {
 *     return account != null;
    *   }
+   *    
    *   @IsTest
    *   static void createAccountWithValidData() {
    *     Account testAccount = new Account(Name = 'Test Account', Industry = 'Technology');
@@ -42,6 +46,7 @@ public class DocumentationExample {
    *     Map<String, String> singleLineMap = new Map<String, String>{'key' => 'value'};
    *     Map<String, Integer> multiLineMap = new Map<String, Integer>{'one' => 1, 'two' => 2, 'three' => 3};
    *   }
+   *    
    *   @IsTest
    *   static void createAccountWithInvalidData() {
    *     try {
@@ -54,6 +59,7 @@ public class DocumentationExample {
    *       System.assert(true, 'Expected exception for invalid account');
    *     }
    *   }
+   *    
    *   @IsTest
    *   static void processBulkAccounts() {
    *     List<Account> accounts = ComplexIntegrationTest.TestDataHelper.createAccounts(200);
