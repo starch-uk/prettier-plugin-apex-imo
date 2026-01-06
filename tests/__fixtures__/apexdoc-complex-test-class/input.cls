@@ -28,8 +28,8 @@ public class DocumentationExample {
    *     // Setup code here
   *   }
    *    
-   *   private static Boolean validateAccount(Account account) {
-*     return account != null;
+   *   private static Boolean validateAccount(Account acc) {
+*     return acc != null;
    *   }
    *    
    *   @IsTest
