@@ -1109,7 +1109,12 @@ const normalizeSingleApexDocComment = (
 					}
 
 					// Keep appending continuation lines until we hit a non-continuation line
+					// CRITICAL: Don't treat code block content lines as continuation lines
+					// Code block content should be preserved as separate lines, not collapsed
 					let continuationIndex = lineIndex + INDEX_ONE;
+					// Track code block state during continuation scanning
+					// Use the same logic as the main loop to detect code blocks
+					let continuationInsideCodeBlock = insideCodeBlock;
 					while (continuationIndex < annotationLinesForWrap.length) {
 						const continuationLine = annotationLinesForWrap[continuationIndex];
 						if (continuationLine === undefined) {
@@ -1118,17 +1123,43 @@ const normalizeSingleApexDocComment = (
 						const continuationIsAnnotation = /\*\s*@[a-zA-Z_]/.test(
 							continuationLine,
 						);
-						const continuationIsCodeBlock =
+						const continuationIsCodeBlockStart =
 							continuationLine.includes('{@code');
 						const continuationIsCommentEnd =
 							continuationLine.trim() === '*/';
 						const continuationIsCommentStart =
 							continuationLine.trim() === '/**';
+						
+						// Track code block state for continuation lines (same logic as main loop)
+						if (continuationIsCodeBlockStart) {
+							continuationInsideCodeBlock = true;
+						}
+						
+						// Check if this is the end of a code block (same logic as main loop)
+						const continuationTrimmed = continuationLine.replace(/^\s*\*\s*/, '').trim();
+						const continuationNextLine = annotationLinesForWrap[continuationIndex + INDEX_ONE];
+						const continuationNextTrimmed = continuationNextLine?.replace(/^\s*\*\s*/, '').trim() ?? '';
+						const continuationIsCodeBlockEnd =
+							continuationInsideCodeBlock &&
+							!continuationIsCommentEnd &&
+							!continuationIsCommentStart &&
+							!continuationIsCodeBlockStart &&
+							continuationTrimmed === '}' &&
+							continuationNextTrimmed !== '}' &&
+							!continuationNextTrimmed.startsWith('}');
+						
+						if (continuationIsCodeBlockEnd) {
+							continuationInsideCodeBlock = false;
+						}
+						
+						// Don't treat code block content lines as continuation lines
+						// If we're inside a code block, don't continue appending
 						const continuationIsContinuation =
 							!continuationIsAnnotation &&
-							!continuationIsCodeBlock &&
+							!continuationIsCodeBlockStart &&
 							!continuationIsCommentEnd &&
-							!continuationIsCommentStart;
+							!continuationIsCommentStart &&
+							!continuationInsideCodeBlock;
 
 						if (!continuationIsContinuation) {
 							break;
