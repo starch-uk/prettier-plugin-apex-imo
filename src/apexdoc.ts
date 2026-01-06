@@ -1281,52 +1281,11 @@ const normalizeSingleApexDocComment = (
 					}
 					wrappedLines.push(normalizedLine);
 				} else if (insideCodeBlock) {
-					// Code block content lines - preserve structure, normalize spacing after asterisk
-					let normalizedLine = annotationLine;
-					const linePrefixMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(
-						annotationLine,
-					);
-					if (linePrefixMatch) {
-						const afterAsterisk =
-							linePrefixMatch[INDEX_THREE] ?? '';
-						const content = linePrefixMatch[INDEX_FOUR] ?? '';
-						
-						// DEBUG: Test Hypothesis 27 & 31 - Indentation preservation
-						if (lineIndex >= 17 && lineIndex <= 25) {
-							const fs = require('fs');
-							const debugLog = [
-								`[H27/H31] lineIndex=${lineIndex}`,
-								`annotationLine="${annotationLine}"`,
-								`group1="${linePrefixMatch[INDEX_ONE] ?? ''}"`,
-								`group2="${linePrefixMatch[INDEX_TWO] ?? ''}"`,
-								`afterAsterisk="${afterAsterisk}" (length=${afterAsterisk.length})`,
-								`content="${content}" (length=${content.length})`,
-								`contentStartsWithSpace=${content.startsWith(' ')}`,
-								`wrapCommentPrefix="${wrapCommentPrefix}"`,
-							].join(' | ') + '\n';
-							fs.appendFileSync('.cursor/debug.log', debugLog);
-						}
-						
-						// Preserve the indentation from afterAsterisk (embed function preserves relative indentation)
-						// wrapCommentPrefix is "   * " (includes 1 space after asterisk)
-						// If afterAsterisk has more than 1 space, it means there's additional indentation
-						// that should be preserved (e.g., list items with 2 spaces)
-						if (afterAsterisk.length > INDEX_ONE) {
-							// Preserve the full indentation: wrapCommentPrefix (1 space) + additional spaces + content
-							normalizedLine = `${wrapCommentPrefix}${afterAsterisk.substring(INDEX_ONE)}${content}`;
-						} else {
-							// First line or no additional indentation: wrapCommentPrefix (1 space) + content
-							normalizedLine = `${wrapCommentPrefix}${content}`;
-						}
-						
-						// DEBUG: Log normalized result
-						if (lineIndex >= 17 && lineIndex <= 25) {
-							const fs = require('fs');
-							const debugLog = `[H27/H31] normalizedLine="${normalizedLine}"\n`;
-							fs.appendFileSync('.cursor/debug.log', debugLog);
-						}
-					}
-					wrappedLines.push(normalizedLine);
+					// Code block content lines - preserve as-is (already formatted by embed function)
+					// The embed function handles formatting and annotation normalization for code blocks
+					// We should NOT normalize ApexDoc annotations inside code blocks
+					// Just preserve the line exactly as formatted by the embed function
+					wrappedLines.push(annotationLine);
 				}
 			} else {
 				// Accumulate non-annotation lines into a text block

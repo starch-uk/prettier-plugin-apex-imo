@@ -55,9 +55,17 @@ const extractCodeFromBlock = (
 	const code = rawCode.includes('*')
 		? rawCode
 				.split('\n')
-				.map((line) =>
-					line.replace(COMMENT_ASTERISK_REGEX, '').trimStart(),
-				)
+				.map((line) => {
+					// Check if this is an empty line (only asterisk(s) and whitespace)
+					// After removing comment asterisks, if the line is empty, preserve it
+					const afterAsterisk = line.replace(COMMENT_ASTERISK_REGEX, '').trimStart();
+					if (afterAsterisk === '') {
+						// This is an empty line - preserve it as empty string
+						return '';
+					}
+					// Remove comment asterisk and leading whitespace, but preserve content
+					return afterAsterisk;
+				})
 				.join('\n')
 		: rawCode;
 	return { code: code.trim(), endPos: pos };
@@ -209,78 +217,33 @@ const formatMultilineCodeBlock = (
 	const lines = formattedCode.split('\n');
 	const trimmedPrefix = commentPrefix.trimEnd();
 	
-	// Prettier formats code starting at column 0 (no leading whitespace)
-	// We need to:
-	// 1. Take each line from Prettier (starts at column 0)
-	// 2. Add the comment prefix '   * ' (which includes 1 space after asterisk)
-	// 3. Calculate indentation based on brace depth (code structure)
-	// 
-	// Expected pattern from output fixture:
-	// - Base level (class): 2 spaces after asterisk (*   class)
-	// - Method level: 4 spaces after asterisk (*     method)
-	// - Method body: 6 spaces after asterisk (*       return)
-	// 
-	// Formula: (braceDepth - 1) * 2 + 2
-	// - depth 1 (base): (1-1)*2 + 2 = 2 ✓
-	// - depth 2 (method): (2-1)*2 + 2 = 4 ✓
-	// - depth 3 (body): (3-1)*2 + 2 = 6 ✓
-	
-	// Track brace depth to calculate indentation
-	// Start at depth 1 because we're inside the {@code block
-	let braceDepth = 1;
+	// Let Prettier handle indentation - preserve its indentation exactly as-is
+	// Prettier formats code with correct indentation based on tabWidth
+	// We just need to add the comment prefix to each line, preserving Prettier's formatting
 	
 	const prefixedLines = lines.map((line, lineIndex) => {
-		const trimmedLine = line.trim();
-		
 		// Empty lines just get the comment prefix (no trailing space)
-		if (trimmedLine.length === ARRAY_START_INDEX) {
+		if (line.trim().length === ARRAY_START_INDEX) {
 			return commentPrefix.trimEnd();
 		}
 		
-		// Count braces to track nesting depth
-		const openBraces = (trimmedLine.match(BRACE_REGEX) ?? []).length;
-		const closeBraces = (trimmedLine.match(CLOSE_BRACE_REGEX) ?? []).length;
-		
-		// For closing braces, use the depth AFTER closing (so they align with opening brace)
-		// For opening braces and content, use the current depth
-		// Calculate the depth after processing this line's braces
-		const depthAfterBraces = braceDepth + openBraces - closeBraces;
-		
-		// If this line closes braces, use the depth after closing for indentation
-		// Otherwise, use the current depth
-		const depthForIndent = closeBraces > 0 ? depthAfterBraces : braceDepth;
-		
-		// Calculate indentation based on brace depth
-		// Comment prefix '   * ' already has 1 space after asterisk
-		// We need to add additional spaces to reach the target:
-		// - Base level (depth 1): 0 additional spaces = 1 total after asterisk
-		// - Method level (depth 2): 2 additional spaces = 3 total after asterisk
-		// - Method body (depth 3): 4 additional spaces = 5 total after asterisk
-		// 
-		// Formula: (depthForIndent - 1) * 2
-		// - depth 1: (1-1)*2 = 0 ✓
-		// - depth 2: (2-1)*2 = 2 ✓
-		// - depth 3: (3-1)*2 = 4 ✓
-		const codeBlockIndent = (depthForIndent - 1) * 2;
-		const codeBlockIndentStr = ' '.repeat(codeBlockIndent);
+		// Preserve Prettier's indentation exactly as-is
+		// Prettier formats code starting at column 0, so we preserve the leading whitespace
+		const leadingSpaces = line.length - line.trimStart().length;
+		const leadingWhitespace = ' '.repeat(leadingSpaces);
+		const trimmedLine = line.trim();
 		
 		// DEBUG: Log first 20 lines with details
 		if (lineIndex < 20) {
 			fs.appendFileSync(
 				'.cursor/debug.log',
-				`[formatMultilineCodeBlock] Line ${lineIndex}: braceDepth=${braceDepth}, depthAfterBraces=${depthAfterBraces}, depthForIndent=${depthForIndent}, indent=${codeBlockIndent}, openBraces=${openBraces}, closeBraces=${closeBraces}, content="${trimmedLine.substring(0, 50)}"\n`,
+				`[formatMultilineCodeBlock] Line ${lineIndex}: leadingSpaces=${leadingSpaces}, content="${trimmedLine.substring(0, 50)}"\n`,
 			);
 		}
 		
-		// Update brace depth AFTER calculating indent (for next line)
-		braceDepth = depthAfterBraces;
-		
-		// Prettier formats starting at column 0, so use the trimmed line
-		// (strip any leading whitespace that might exist)
-		const content = trimmedLine;
-		
-		// Combine: comment prefix + code block indent + content
-		return `${commentPrefix}${codeBlockIndentStr}${content}`;
+		// Combine: comment prefix + Prettier's original indentation + content
+		// This preserves Prettier's formatting exactly, including empty lines and indentation
+		return `${commentPrefix}${leadingWhitespace}${trimmedLine}`;
 	});
 	
 	const result = `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()}}`;
