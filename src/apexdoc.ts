@@ -1090,7 +1090,28 @@ const normalizeSingleApexDocComment = (
 			}
 
 			// If we hit an annotation, code block, or comment boundary, flush the current text block
-			if (isAnnotation || isCodeBlock || isCommentEnd || isCommentStart) {
+			// CRITICAL: Code block content lines must be preserved exactly as-is
+			// Check for code block content FIRST before any other processing
+			// This ensures code block content is NEVER processed by ApexDoc normalization
+			if (insideCodeBlock && !isCodeBlockStart && !isCodeBlockEnd) {
+				// Code block content line - preserve exactly as formatted by embed function
+				// The embed function handles:
+				//   1. Code formatting (via Prettier)
+				//   2. Annotation normalization (via normalizeAnnotationNamesInText in formatCodeBlockDirect)
+				// ApexDoc normalization (this function) must NOT touch code block content at all
+				// We must NOT normalize, modify, or process these lines in any way
+				if (currentTextBlock.length > EMPTY) {
+					wrappedLines.push(
+						...wrapTextBlockWithParagraphs(
+							currentTextBlock,
+							wrapCommentPrefix,
+							printWidth,
+						),
+					);
+					currentTextBlock = [];
+				}
+				wrappedLines.push(annotationLine);
+			} else if (isAnnotation || isCodeBlock || isCommentEnd || isCommentStart) {
 				if (currentTextBlock.length > EMPTY) {
 					wrappedLines.push(
 						...wrapTextBlockWithParagraphs(
@@ -1102,7 +1123,10 @@ const normalizeSingleApexDocComment = (
 					currentTextBlock = [];
 				}
 
-				if (isAnnotation) {
+				// CRITICAL: Don't process annotations inside code blocks
+				// Code block content lines (including lines with @ annotations) should be preserved as-is
+				// The embed function already handles annotation normalization for code blocks
+				if (isAnnotation && !insideCodeBlock) {
 					// Ensure annotation lines have consistent indentation
 					// Normalize multiple asterisks to single asterisk first
 					let normalizedAnnotationLine = annotationLine;
@@ -1280,21 +1304,19 @@ const normalizeSingleApexDocComment = (
 						}
 					}
 					wrappedLines.push(normalizedLine);
-				} else if (insideCodeBlock) {
-					// Code block content lines - preserve as-is (already formatted by embed function)
-					// The embed function handles formatting and annotation normalization for code blocks
-					// We should NOT normalize ApexDoc annotations inside code blocks
-					// Just preserve the line exactly as formatted by the embed function
-					wrappedLines.push(annotationLine);
 				}
+				// Note: Code block content lines are handled at the top of the if/else chain
+				// to ensure they're preserved before any other processing
 			} else {
 				// Accumulate non-annotation lines into a text block
 				// But check again if the line contains an annotation (might have been missed)
 				// This can happen if annotations appear in the middle of a line after text
+				// CRITICAL: Don't process annotations inside code blocks
+				// Code block content lines (including lines with @ annotations) should be preserved as-is
 				const hasAnnotationInMiddle = /\*\s*@[a-zA-Z_]/.test(
 					annotationLine,
 				);
-				if (hasAnnotationInMiddle) {
+				if (hasAnnotationInMiddle && !insideCodeBlock) {
 					// Line contains annotation - flush text block and process as annotation line
 					if (currentTextBlock.length > EMPTY) {
 						wrappedLines.push(
@@ -1368,22 +1390,14 @@ const normalizeSingleApexDocComment = (
 				} else {
 					// No annotation - add to text block or preserve code block lines
 					// If inside a code block (but not the start/end line), preserve the line as-is
+					// CRITICAL: Code block content is already formatted by embed function
+					// We must preserve it exactly as-is, including all indentation
 					if (insideCodeBlock) {
-						// Inside code block content - preserve structure, normalize spacing after asterisk
-						let normalizedLine = annotationLine;
-						const linePrefixMatch = /^(\s*)(\*)(\s*)(.*)$/.exec(
-							annotationLine,
-						);
-						if (linePrefixMatch) {
-							const afterAsterisk =
-								linePrefixMatch[INDEX_THREE] ?? '';
-							const content = linePrefixMatch[INDEX_FOUR] ?? '';
-							// Preserve the indentation from afterAsterisk (embed function preserves relative indentation)
-							// wrapCommentPrefix is "   * " (includes 1 space after asterisk)
-							// afterAsterisk already contains the correct indentation (1 space + additional if any)
-							normalizedLine = `${wrapCommentPrefix.slice(ARRAY_START_INDEX, NOT_FOUND_INDEX)}${afterAsterisk}${content}`;
-						}
-						wrappedLines.push(normalizedLine);
+						// Inside code block content - preserve exactly as formatted by embed function
+						// The embed function handles formatting and annotation normalization for code blocks
+						// We should NOT normalize or modify code block content lines
+						// Just preserve the line exactly as formatted by the embed function
+						wrappedLines.push(annotationLine);
 					} else {
 						// Not in code block - normalize asterisks before adding to text block
 						// Normalize multiple asterisks to single asterisk first

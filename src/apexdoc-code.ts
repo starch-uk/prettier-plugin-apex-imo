@@ -286,6 +286,12 @@ const formatCodeBlockDirect = async ({
 	}
 	
 	// CRITICAL: Normalize annotations in the code before formatting
+	// This is the ONLY place where annotations inside {@code} blocks are normalized
+	// ApexDoc normalization (normalizeSingleApexDocComment) skips code block content entirely
+	// This separation ensures:
+	// 1. Code formatting is handled by embed function (Prettier)
+	// 2. Annotation normalization for code blocks happens here (separate from ApexDoc normalization)
+	// 3. ApexDoc normalization only processes annotations OUTSIDE code blocks
 	// textToDoc should use our wrapped parser, but to be safe, we normalize here
 	// This ensures annotations like @auraenabled become @AuraEnabled
 	const normalizedCode = normalizeAnnotationNamesInText(code);
