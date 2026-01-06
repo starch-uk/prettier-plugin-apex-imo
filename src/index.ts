@@ -256,71 +256,7 @@ const isApexParser = (
 	return APEX_PARSERS.includes(parser as (typeof APEX_PARSERS)[number]);
 };
 
-/**
- * Parameters for determining if a code block should be skipped.
- */
-export interface ShouldSkipCodeBlockParams {
-	readonly formattedCode: string;
-	readonly originalCode: string;
-	readonly processedText: string;
-	readonly startPos: number;
-	readonly endPos: number;
-}
 
-/**
- * Determines whether a code block should be skipped during formatting.
- * @param params - Parameters for determining if a code block should be skipped.
- * @param params.formattedCode - The formatted code string.
- * @param params.originalCode - The original code string.
- * @param params.processedText - The processed text string.
- * @param params.startPos - The start position of the code block.
- * @param params.endPos - The end position of the code block.
- * @returns True if the code block should be skipped, false otherwise.
- * @example
- * ```typescript
- * shouldSkipCodeBlock({
- *   formattedCode: '',
- *   originalCode: 'test',
- *   processedText: 'text',
- *   startPos: 0,
- *   endPos: 4
- * }); // Returns true
- * ```
- */
-const shouldSkipCodeBlock = (
-	params: Readonly<ShouldSkipCodeBlockParams>,
-): boolean => {
-	const { formattedCode, originalCode } = params;
-
-	// Skip if formatted code is empty (only whitespace)
-	if (formattedCode.trim() === '') {
-		return true;
-	}
-
-	// Skip if formatted code starts with FORMAT_FAILED_PREFIX
-	if (formattedCode.startsWith('__FORMAT_FAILED__')) {
-		return true;
-	}
-
-	// Skip if formatted equals original and contains newlines
-	// This indicates the code block wasn't actually formatted and just contains whitespace/newlines
-	if (formattedCode === originalCode && formattedCode.includes('\n')) {
-		return true;
-	}
-
-	return false;
-};
-
-/**
- * Wraps parsers to add annotation normalization.
- * @param parsers - The parsers to wrap.
- * @param _pluginInstance - The plugin instance (unused, kept for API compatibility).
- * @returns The wrapped parsers, or the original parsers if null/undefined.
- * @example
- * ```typescript
- * const wrapped = wrapParsers(originalParsers, plugin);
- * ```
- */
 const wrapParsers = (
 	parsers: Readonly<Plugin<ApexNode>['parsers']>,
 	_pluginInstance: Readonly<Plugin<ApexNode>>,
@@ -379,4 +315,4 @@ export default plugin;
 // eslint-disable-next-line import/group-exports -- Destructuring export and function exports need separate declarations
 export const { languages, parsers, printers, options, defaultOptions } = plugin;
 // eslint-disable-next-line import/group-exports -- Functions and types need separate export
-export { isApexParser, shouldSkipCodeBlock, wrapParsers };
+export { isApexParser };

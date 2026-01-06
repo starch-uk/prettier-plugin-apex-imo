@@ -109,37 +109,6 @@ const getCommentIndent = (
 	);
 };
 
-const applyCommentIndentation = (
-	formattedCode: Readonly<string>,
-	codeBlock: Readonly<{ readonly commentIndent: number }>,
-	options: Readonly<{
-		readonly tabWidth: number;
-		readonly useTabs?: boolean | null | undefined;
-	}>,
-): string => {
-	const { tabWidth, useTabs } = options;
-	const { commentIndent } = codeBlock;
-	const baseIndent = createIndent(commentIndent, tabWidth, useTabs);
-	// Handle completely empty input (no content, not even newlines)
-	if (formattedCode.length === ARRAY_START_INDEX) {
-		return `${baseIndent} *`;
-	}
-	const lines = formattedCode.split('\n');
-	const commentPrefix = `${baseIndent} * `;
-	return lines
-		.map((line) =>
-			line.trim() === ''
-				? commentPrefix
-				: `${commentPrefix}${createIndent(
-						getIndentLevel(line, tabWidth),
-						tabWidth,
-						useTabs,
-					)}${line.trimStart()}`,
-		)
-		.join('\n');
-};
-
-const createClosingIndent = createIndent;
 
 /**
  * Normalizes a block comment to standard format.
@@ -222,8 +191,6 @@ export {
 	getIndentLevel,
 	createIndent,
 	getCommentIndent,
-	applyCommentIndentation,
-	createClosingIndent,
 	normalizeBlockComment,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,

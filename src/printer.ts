@@ -4,15 +4,15 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
-import * as prettier from 'prettier';
 import { doc } from 'prettier';
-import type { AstPath, Doc, ParserOptions, Plugin } from 'prettier';
+import type { AstPath, Doc, ParserOptions } from 'prettier';
 import type {
 	ApexNode,
 	ApexListInitNode,
 	ApexMapInitNode,
 	ApexAnnotationNode,
 } from './types.js';
+
 const { group, indent, softline, ifBreak, line } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
@@ -23,12 +23,7 @@ import {
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
-import {
-	getIndentLevel,
-	createIndent,
-	ARRAY_START_INDEX,
-	DEFAULT_TAB_WIDTH,
-} from './comments.js';
+import { ARRAY_START_INDEX } from './comments.js';
 import {
 	extractCodeFromBlock,
 	formatCodeBlockDirect,
@@ -50,8 +45,11 @@ const isTypeRef = (node: Readonly<ApexNode> | null | undefined): boolean => {
  * Make a typeDoc breakable by adding break points at the first comma in generic types.
  * Structure: [baseType, '<', [param1, ', ', param2, ...], '>']
  * We make the first ', ' in the params array breakable.
+ * @param typeDoc - The type document to make breakable.
+ * @param _options - Parser options (unused but required for consistency).
+ * @returns The breakable type document.
  */
-const makeTypeDocBreakable = (typeDoc: Doc, options: Readonly<ParserOptions>): Doc => {
+const makeTypeDocBreakable = (typeDoc: Doc, _options: Readonly<ParserOptions>): Doc => {
 	if (typeof typeDoc === 'string') {
 		return typeDoc;
 	}
@@ -63,8 +61,10 @@ const makeTypeDocBreakable = (typeDoc: Doc, options: Readonly<ParserOptions>): D
 		while (i < typeDoc.length) {
 			const item = typeDoc[i] as Doc;
 			
+			const ARRAY_OFFSET = 1;
+			const FIRST_INDEX = 0;
 			// Check if we found '<' followed by an array (type parameters)
-			if (item === '<' && i + 1 < typeDoc.length && Array.isArray(typeDoc[i + 1])) {
+			if (item === '<' && i + ARRAY_OFFSET < typeDoc.length && Array.isArray(typeDoc[i + ARRAY_OFFSET])) {
 				result.push(item); // '<'
 				i++;
 				
@@ -73,15 +73,15 @@ const makeTypeDocBreakable = (typeDoc: Doc, options: Readonly<ParserOptions>): D
 				const processedParams: Doc[] = [];
 				let firstCommaFound = false;
 				
-				for (let j = 0; j < params.length; j++) {
+				for (let j = FIRST_INDEX; j < params.length; j++) {
 					const param = params[j] as Doc;
 					if (param === ', ' && !firstCommaFound) {
 						// First comma in type parameters - make it breakable
 						// Structure: [param1, ', ', group([indent([softline, param2, ...])])]
 						processedParams.push(', ');
 						// Wrap remaining params in a group with indent and softline
-						if (j + 1 < params.length) {
-							const remainingParams = params.slice(j + 1);
+						if (j + ARRAY_OFFSET < params.length) {
+							const remainingParams = params.slice(j + ARRAY_OFFSET);
 							// Wrap remaining params in a group with indent and softline
 							processedParams.push(group(indent([softline, ...remainingParams])));
 							break; // Done processing
@@ -104,17 +104,17 @@ const makeTypeDocBreakable = (typeDoc: Doc, options: Readonly<ParserOptions>): D
 		
 		return result;
 	}
-	if (typeDoc && typeof typeDoc === 'object' && 'type' in typeDoc) {
+	if (typeof typeDoc === 'object' && typeDoc !== null && 'type' in typeDoc) {
 		// It's a doc object (group, indent, etc.) - recurse into contents
 		const docObj = typeDoc as { type: string; contents?: unknown; [key: string]: unknown };
 		if ('contents' in docObj && docObj.contents !== undefined) {
-			return {
-				...docObj,
-				contents: makeTypeDocBreakable(docObj.contents as Doc, options),
-			} as Doc;
+				return {
+					...docObj,
+					contents: makeTypeDocBreakable(docObj.contents as Doc, _options),
+				} as Doc;
+			}
 		}
-	}
-	return typeDoc;
+		return typeDoc;
 };
 
 // Store current options and originalText for use in printComment
@@ -157,6 +157,7 @@ const CODE_TAG_LENGTH = 6;
 const NOT_FOUND_INDEX = -1;
 const ZERO = 0;
 const ONE = 1;
+const SINGLE_DECLARATION = 1;
 
 const isCommentNode = (
 	node: Readonly<ApexNode> | null | undefined,
@@ -296,24 +297,29 @@ const createWrappedPrinter = (
 		// Intercept VariableDecls nodes to enable wrapping for field declarations with or without assignments
 		// This handles the full declaration including modifiers and type, so Prettier can evaluate full line length
 		if (nodeClass !== undefined && nodeClass === 'apex.jorje.data.ast.VariableDecls') {
-			const decls = (node as { decls?: unknown[] }).decls;
+			const { decls } = node as { decls?: unknown[] };
 			// Check if any declaration has an assignment with a value
 			// Even declarations without assignments have an assignment property (object), but it may not have a 'value' property
 			const hasAssignments = Array.isArray(decls) && decls.some((decl) => {
 				if (!decl || typeof decl !== 'object') return false;
-				const assignment = (decl as { assignment?: unknown }).assignment;
+				const { assignment } = decl as { assignment?: unknown };
 				// Check if assignment exists and has a 'value' property (real assignment)
 				if (assignment === null || assignment === undefined) return false;
 				if (typeof assignment !== 'object') return false;
-				return 'value' in assignment && (assignment as { value?: unknown }).value !== null && (assignment as { value?: unknown }).value !== undefined;
+				const assignmentValue = (assignment as { value?: unknown }).value;
+				return assignmentValue !== null && assignmentValue !== undefined;
 			});
 			
-			// Helper function to check if an assignment is a collection initialization
+			/**
+			 * Helper function to check if an assignment is a collection initialization.
+			 * @param assignment - The assignment to check.
+			 * @returns True if the assignment is a collection initialization.
+			 */
 			const isCollectionAssignment = (assignment: unknown): boolean => {
 				if (!assignment || typeof assignment !== 'object') return false;
-				const assignmentValue = (assignment as { value?: unknown }).value;
+				const { value: assignmentValue } = assignment as { value?: unknown };
 				if (!assignmentValue || typeof assignmentValue !== 'object' || !('@class' in assignmentValue)) return false;
-				const assignmentValueClass = (assignmentValue as { '@class': unknown })['@class'];
+				const { '@class': assignmentValueClass } = assignmentValue as { '@class': unknown };
 				
 				// Check if it's a NewExpr (which wraps collection literals)
 				if (typeof assignmentValueClass === 'string' && assignmentValueClass === 'apex.jorje.data.ast.Expr$NewExpr') {
@@ -338,7 +344,7 @@ const createWrappedPrinter = (
 				const { join: joinDocs } = doc.builders;
 				const declDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
 					const declNode = declPath.node;
-					if (!declNode || typeof declNode !== 'object') {
+					if (typeof declNode !== 'object' || declNode === null) {
 						return print(declPath);
 					}
 					
@@ -392,18 +398,19 @@ const createWrappedPrinter = (
 				// Check if typeDoc is a Map type with nested Map types or deeply nested structures
 				// Examples: Map<String, Map<String, String>> or Map<String, List<Map<String, String>>>
 				// NOT: Map<String, List<String>> (simple Map with List value)
-				const isComplexMapType = (doc: Doc): boolean => {
-					if (typeof doc === 'string') {
+				const isComplexMapType = (typeDocToCheck: Doc): boolean => {
+					if (typeof typeDocToCheck === 'string') {
 						// Check if it's a Map type with nested Map types (not just List/Set)
-						return doc.startsWith('Map<') && doc.includes('Map<');
+						return typeDocToCheck.startsWith('Map<') && typeDocToCheck.includes('Map<');
 					}
-					if (Array.isArray(doc)) {
-						const firstElement = doc[0];
-						const isMap = firstElement === 'Map' || (Array.isArray(firstElement) && firstElement[0] === 'Map');
+					if (Array.isArray(typeDocToCheck)) {
+						const firstElement = typeDocToCheck[ARRAY_START_INDEX];
+						const isMap = firstElement === 'Map' || (Array.isArray(firstElement) && firstElement[ARRAY_START_INDEX] === 'Map');
 						if (!isMap) return false;
+						const TYPE_PARAMS_INDEX = 2;
 						// Check if type parameters contain nested Map types (directly or deeply nested)
-						if (doc.length > 2 && Array.isArray(doc[2])) {
-							const params = doc[2] as unknown[];
+						if (typeDocToCheck.length > TYPE_PARAMS_INDEX && Array.isArray(typeDocToCheck[TYPE_PARAMS_INDEX])) {
+							const params = typeDocToCheck[TYPE_PARAMS_INDEX] as unknown[];
 							// Recursively check if any parameter contains nested Map types
 							const hasNestedMap = (param: unknown): boolean => {
 								if (typeof param === 'string') {
@@ -412,9 +419,9 @@ const createWrappedPrinter = (
 								}
 								if (Array.isArray(param)) {
 									// Check if it's a Map type (nested Map)
-									const first = param[0];
+									const first = param[ARRAY_START_INDEX];
 									if (first === 'Map') return true;
-									if (Array.isArray(first) && first[0] === 'Map') return true;
+									if (Array.isArray(first) && first[ARRAY_START_INDEX] === 'Map') return true;
 									// Recursively check nested structures for Map types
 									return param.some((item) => hasNestedMap(item));
 								}
@@ -436,13 +443,16 @@ const createWrappedPrinter = (
 						resultParts.push(' ');
 						resultParts.push(joinDocs([', ', softline], declDocs));
 						resultParts.push(';');
-					} else if (declDocs.length === 1 && declDocs[0] !== undefined) {
+					} else if (declDocs.length === SINGLE_DECLARATION && declDocs[ARRAY_START_INDEX] !== undefined) {
 						// Single declaration: extract name and assignment to allow breaking at '='
-						const declDoc = declDocs[0] as Doc;
+						const declDoc = declDocs[ARRAY_START_INDEX] as Doc;
+						const MIN_DECL_DOC_LENGTH = 5;
+						const EQUALS_INDEX = 2;
+						const ASSIGNMENT_INDEX = 4;
 						// Check if declDoc is an array with the structure [name, ' ', '=', ' ', assignment]
-						if (Array.isArray(declDoc) && declDoc.length >= 5 && declDoc[2] === '=') {
-							const nameDoc = declDoc[0] as Doc;
-							const assignmentDoc = declDoc[4] as Doc;
+						if (Array.isArray(declDoc) && declDoc.length >= MIN_DECL_DOC_LENGTH && declDoc[EQUALS_INDEX] === '=') {
+							const nameDoc = declDoc[ARRAY_START_INDEX] as Doc;
+							const assignmentDoc = declDoc[ASSIGNMENT_INDEX] as Doc;
 							// Only apply ifBreak for complex Map types to allow breaking at '=' while keeping type together
 							if (isComplexMapType(typeDoc)) {
 								resultParts.push(' ');
@@ -481,9 +491,9 @@ const createWrappedPrinter = (
 				
 				// Process each declaration - get name docs
 				const { join: joinDocs } = doc.builders;
-				const nameDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
+					const nameDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
 					const declNode = declPath.node;
-					if (!declNode || typeof declNode !== 'object') {
+					if (typeof declNode !== 'object' || declNode === null) {
 						return undefined;
 					}
 					
@@ -498,7 +508,7 @@ const createWrappedPrinter = (
 					if (nameDocs.length > 1) {
 						// Multiple declarations: modifiers + type + [name1, name2, ...] + semicolon
 						const resultParts: Doc[] = [];
-						if (modifierDocs.length > 0) {
+						if (modifierDocs.length > ARRAY_START_INDEX) {
 							resultParts.push(...modifierDocs);
 						}
 						// For each name, create: type + ifBreak(indent([line, name]), [' ', name])
@@ -512,15 +522,15 @@ const createWrappedPrinter = (
 						resultParts.push(joinDocs([', ', softline], typeAndNames));
 						resultParts.push(';');
 						return group(resultParts);
-					} else if (nameDocs.length === 1 && nameDocs[0] !== undefined) {
+					} else if (nameDocs.length === SINGLE_DECLARATION && nameDocs[ARRAY_START_INDEX] !== undefined) {
 						// Single declaration: allow type and name to break independently
 						// Type can break at comma, name can break on new line
-						const nameDoc = nameDocs[0];
+						const nameDoc = nameDocs[ARRAY_START_INDEX];
 						
 						// Build: modifiers + type + name + semicolon
 						// Don't wrap everything in a single group - allow type and name to break independently
 						const resultParts: Doc[] = [];
-						if (modifierDocs.length > 0) {
+						if (modifierDocs.length > ARRAY_START_INDEX) {
 							resultParts.push(...modifierDocs);
 						}
 						// Type can break at comma (breakableTypeDoc already has break points)
@@ -685,7 +695,6 @@ const createWrappedPrinter = (
 								code,
 								currentPluginInstance,
 								embedOptions: adjustedEmbedOptions,
-								textToDoc: _textToDoc,
 							});
 
 							codeBlockReplacements.push({

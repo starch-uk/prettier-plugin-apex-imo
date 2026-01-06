@@ -21,26 +21,6 @@ import { getNodeClassOptional } from './utils.js';
  */
 const SLICE_START_INDEX = 0;
 
-const normalizeObjectSuffix = (typeName: string): string => {
-	if (!typeName || typeof typeName !== 'string') return typeName;
-	// Check each suffix (sorted by length descending to match longest first)
-	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
-		([, a], [, b]) => b.length - a.length,
-	);
-	const lowerTypeName = typeName.toLowerCase();
-	for (const [, normalizedSuffix] of suffixes) {
-		const lowerSuffix = normalizedSuffix.toLowerCase();
-		if (lowerTypeName.endsWith(lowerSuffix)) {
-			// Use the lowercase suffix length for slicing since we matched using lowercase
-			const prefix = typeName.slice(
-				SLICE_START_INDEX,
-				typeName.length - lowerSuffix.length,
-			);
-			return prefix + normalizedSuffix;
-		}
-	}
-	return typeName;
-};
 
 const normalizeStandardObjectType = (typeName: string): string =>
 	typeof typeName === 'string' && typeName
@@ -314,7 +294,7 @@ const createTypeNormalizingPrint =
 		forceTypeContext = false,
 		parentKey?: string,
 	) =>
-	(subPath: Readonly<AstPath<ApexNode>>, ...extraArgs: unknown[]): Doc => {
+	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {
 		// Prettier's path.call may pass extra arguments (index, options)
 		// but our print function only needs the path - ignore extra args
 		// Pass extra args through to originalPrint in case it needs them
@@ -383,7 +363,7 @@ const normalizeTypeNamesInCode = (code: string): string => {
 				`(?<![a-zA-Z0-9_])([a-zA-Z0-9_]+)${escapedSuffix}(?![a-zA-Z0-9_])`,
 				'gi',
 			);
-			normalizedLine = normalizedLine.replace(pattern, (match, prefix) => {
+			normalizedLine = normalizedLine.replace(pattern, (match, prefix: string) => {
 				// Reconstruct the full type name with original casing for prefix
 				const fullTypeName = `${prefix}${normalizedSuffix}`;
 				// Normalize the full type name (handles both prefix and suffix normalization)
@@ -396,8 +376,6 @@ const normalizeTypeNamesInCode = (code: string): string => {
 };
 
 export {
-	normalizeStandardObjectType,
-	normalizeObjectSuffix,
 	normalizeTypeName,
 	normalizeTypeNamesInCode,
 	isIdentifier,

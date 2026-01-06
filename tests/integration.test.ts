@@ -457,6 +457,116 @@ describe('prettier-plugin-apex-imo integration', () => {
 			// Should correctly indent {@code} blocks when the inner class has 3 spaces of indentation
 			expect(result).toBe(expected);
 		});
+
+		it.concurrent.each([
+			{
+				description: 'should format simple integer assignment in {@code} blocks',
+				fixture: 'formatcodeblock-simple-integer',
+			},
+			{
+				description: 'should format @Deprecated annotation in {@code} blocks',
+				fixture: 'formatcodeblock-deprecated',
+			},
+			{
+				description: 'should format @AuraEnabled annotation in {@code} blocks',
+				fixture: 'formatcodeblock-annotation',
+			},
+			{
+				description: 'should preserve invalid Apex code in {@code} blocks with __FORMAT_FAILED__ prefix',
+				fixture: 'formatcodeblock-invalid-apex',
+			},
+			{
+				description: 'should preserve multiline @InvocableMethod in {@code} blocks with __FORMAT_FAILED__ prefix',
+				fixture: 'formatcodeblock-invocable-multiline',
+			},
+			{
+				description: 'should format multi-line code in {@code} blocks',
+				fixture: 'formatcodeblock-multi-line-code',
+			},
+			{
+				description: 'should format single-line code in {@code} blocks',
+				fixture: 'formatcodeblock-single-line-code',
+			},
+			{
+				description: 'should format @TestAnnotation in {@code} blocks',
+				fixture: 'formatcodeblock-test-annotation',
+			},
+			{
+				description: 'should preserve @TestAnnotation with value in {@code} blocks with __FORMAT_FAILED__ prefix',
+				fixture: 'formatcodeblock-test-annotation-value',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const codeContent = loadFixture(fixture, 'input').trim();
+				const expectedCode = loadFixture(fixture, 'output').trim();
+				// Wrap the code content in an ApexDoc comment
+				const input = `public class Test {
+  /**
+   * Example method.
+   * {@code ${codeContent} }
+   */
+  public void method() {}
+}
+`;
+				const result = await formatApex(input);
+				// Extract the code block from the result
+				// Find the {@code tag and extract everything until the closing } on a line with just * }
+				const NOT_FOUND_INDEX = -1;
+				const CODE_TAG_LENGTH = 6;
+				const codeBlockStart = result.indexOf('{@code');
+				if (codeBlockStart === NOT_FOUND_INDEX) {
+					throw new Error(`Could not find {@code} block in result: ${result}`);
+				}
+
+				/**
+				 * Find the content after {@code (skip whitespace and newline).
+				 */
+				let contentStart = codeBlockStart + CODE_TAG_LENGTH;
+				// Skip whitespace and newline after {@code
+				while (contentStart < result.length && (result[contentStart] === ' ' || result[contentStart] === '\n')) {
+					contentStart++;
+				}
+				// Find the closing } that's on a line with just whitespace, asterisk, space, and } (no semicolon)
+				// This distinguishes the closing } of {@code} from the }; in the code
+				// Look for pattern: \n   * } (newline, spaces, asterisk, space, }, but NOT };)
+				const remainingText = result.slice(contentStart);
+				// Find all lines that match the pattern \n\s*\*\s*\}
+				// We want the one that's NOT followed by a semicolon on the same line
+				const lines = remainingText.split('\n');
+				let closingLineIndex = -1;
+				const EMPTY_LINE_LENGTH = 0;
+				for (let i = EMPTY_LINE_LENGTH; i < lines.length; i++) {
+					const line = lines[i];
+					// Match line with just whitespace, asterisk, space, and } (not };)
+					if (/^\s*\*\s*\}$/.test(line)) {
+						closingLineIndex = i;
+						break;
+					}
+				}
+				if (closingLineIndex === NOT_FOUND_INDEX) {
+					throw new Error(`Could not find closing } for {@code} block in result: ${result}`);
+				}
+				// Get all lines up to (but not including) the closing line
+				const ARRAY_START_INDEX = 0;
+				const codeBlockLines = lines.slice(ARRAY_START_INDEX, closingLineIndex);
+				const codeBlockContent = codeBlockLines.join('\n');
+				const ZERO_LENGTH = 0;
+				if (codeBlockContent.length > ZERO_LENGTH) {
+					// Remove comment prefixes (like "   * ") from each line
+					const codeLines = codeBlockContent
+						.split('\n')
+						.map((line) => line.replace(/^\s*\*\s?/, '').trimEnd())
+						.filter((line) => line.length > ZERO_LENGTH || codeBlockContent.includes('\n'));
+					const formattedCode = codeLines.join('\n').trim();
+					expect(formattedCode).toBe(expectedCode);
+				} else {
+					throw new Error(`Code block content is empty in result: ${result}`);
+				}
+			},
+		);
 	});
 
 	describe('ApexDoc annotation normalization', () => {

@@ -38,7 +38,7 @@ const hasMultipleListEntries = (node: Readonly<ApexListInitNode>): boolean =>
 const hasMultipleMapEntries = (node: Readonly<ApexMapInitNode>): boolean =>
 	Array.isArray(node.pairs) && node.pairs.length >= MIN_ENTRIES_FOR_MULTILINE;
 
-const { group, indent, hardline, join, softline, ifBreak } = doc.builders;
+const { group, indent, hardline, join, softline } = doc.builders;
 
 const isNestedInCollection = (
 	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
@@ -65,7 +65,6 @@ const printCollection = (
 	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
 	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	originalPrint: () => Doc,
-	options?: Readonly<ParserOptions>,
 ): Doc => {
 	const { node } = path;
 	const nodeClass = getNodeClass(node);
@@ -82,10 +81,11 @@ const printCollection = (
 	const printedTypes = path.map(typeNormalizingPrint, 'types' as never);
 	const isNested = isNestedInCollection(path);
 	
+	const EMPTY_COLLECTION_LENGTH = 0;
 	// Check if collection is actually empty (no entries at all)
 	const isEmpty = isList
-		? !Array.isArray((node as ApexListInitNode).values) || (node as ApexListInitNode).values.length === 0
-		: !Array.isArray((node as ApexMapInitNode).pairs) || (node as ApexMapInitNode).pairs.length === 0;
+		? !Array.isArray((node as ApexListInitNode).values) || (node as ApexListInitNode).values.length === EMPTY_COLLECTION_LENGTH
+		: !Array.isArray((node as ApexMapInitNode).pairs) || (node as ApexMapInitNode).pairs.length === EMPTY_COLLECTION_LENGTH;
 	
 	// For empty collections (no entries), we still need to handle them to ensure
 	// type parameters can break when they exceed printWidth

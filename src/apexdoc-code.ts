@@ -5,25 +5,22 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import * as prettier from 'prettier';
-import type { AstPath, Doc, ParserOptions } from 'prettier';
-import type { ApexNode } from './types.js';
+import type { ParserOptions } from 'prettier';
 import {
-	getIndentLevel,
-	createIndent,
 	ARRAY_START_INDEX,
-	DEFAULT_TAB_WIDTH,
 	STRING_OFFSET,
-	MIN_INDENT_LEVEL,
 } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
+import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 const CODE_TAG = '{@code';
 const CODE_TAG_LENGTH = CODE_TAG.length;
 const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
-const NOT_FOUND_INDEX = -1;
-const MATCH_GROUP_INDEX = 1;
 const LAST_INDEX_OFFSET = 1;
+const ZERO_LENGTH = 0;
+const SINGLE_LINE_LENGTH = 1;
+const SIMPLE_ANNOTATION_MAX_LENGTH = 100;
 
 /**
  * Extracts code from a code block by counting braces.
@@ -45,17 +42,11 @@ const extractCodeFromBlock = (
 	) as number;
 	let braceCount = INITIAL_BRACE_COUNT;
 	let pos = codeStart;
-	let lastBracePos = codeStart;
-	let lastBraceCount = braceCount;
 	while (pos < text.length && braceCount > ARRAY_START_INDEX) {
 		if (text[pos] === '{') {
 			braceCount++;
-			lastBracePos = pos;
-			lastBraceCount = braceCount;
 		} else if (text[pos] === '}') {
 			braceCount--;
-			lastBracePos = pos;
-			lastBraceCount = braceCount;
 		}
 		pos++;
 	}
@@ -83,128 +74,6 @@ const extractCodeFromBlock = (
 	return { code: trimmedCode, endPos: pos };
 };
 
-/**
- * Extracts code from wrapped formatted code between start and end markers.
- * @param params - Parameters object.
- * @param params.lines - The lines of formatted code.
- * @param params.tabWidth - The tab width for indentation calculation.
- * @param params.useTabs - Whether to use tabs for indentation.
- * @param params.startMarker - Marker to find start of code (e.g., 'public class Temp').
- * @param params.endMarker - Marker to find end of code (e.g., 'void method()').
- * @returns The extracted code lines.
- * @example
- * extractWrappedCode({lines: ['public class Temp {', '  @Test', '  void method() {}'], tabWidth: 2, useTabs: false, startMarker: 'public class Temp', endMarker: 'void method()'})
- */
-const BRACE_REGEX = /\{/g;
-const CLOSE_BRACE_REGEX = /\}/g;
-
-const extractWrappedCode = ({
-	lines,
-	tabWidth,
-	useTabs,
-	startMarker,
-	endMarker,
-}: {
-	readonly lines: readonly string[];
-	readonly tabWidth: number;
-	readonly useTabs: boolean | null | undefined;
-	readonly startMarker: string;
-	readonly endMarker: string;
-}): string[] => {
-	const codeLines: string[] = [];
-	let baseIndent: number = ARRAY_START_INDEX;
-	let braceCount = ARRAY_START_INDEX;
-	let inCode = false;
-	const indentOffset = tabWidth;
-	for (const line of lines) {
-		if (line.includes(startMarker)) {
-			baseIndent = getIndentLevel(line, tabWidth);
-			braceCount = INITIAL_BRACE_COUNT;
-			inCode = true;
-			continue;
-		}
-		if (line.includes(endMarker)) break;
-		if (inCode) {
-			const openBraces = (line.match(BRACE_REGEX) ?? []).length;
-			const closeBraces = (line.match(CLOSE_BRACE_REGEX) ?? []).length;
-			braceCount += openBraces - closeBraces;
-			if (!braceCount && line.trim() === '}') break;
-			const lineIndent = getIndentLevel(line, tabWidth);
-			const indentDiff = lineIndent - baseIndent - indentOffset;
-			const relativeIndent = Math.max(MIN_INDENT_LEVEL, indentDiff);
-			codeLines.push(
-				`${createIndent(relativeIndent, tabWidth, useTabs)}${line.trimStart()}`,
-			);
-		}
-	}
-	return codeLines;
-};
-
-/**
- * Extracts annotation code from formatted wrapped code.
- * @param lines - The lines of formatted code.
- * @param tabWidth - The tab width for indentation calculation.
- * @param useTabs - Whether to use tabs for indentation.
- * @returns The extracted annotation code lines.
- * @example
- * extractAnnotationCode(['public class Temp {', '  @Test', '  void method() {}'], 2, false)
- */
-const extractAnnotationCode = (
-	lines: readonly string[],
-	tabWidth: number,
-	useTabs: boolean | null | undefined,
-): string[] =>
-	extractWrappedCode({
-		endMarker: 'void method()',
-		lines,
-		startMarker: 'public class Temp',
-		tabWidth,
-		useTabs,
-	});
-
-/**
- * Extracts method code from formatted wrapped code using brace counting.
- * @param lines - The lines of formatted code.
- * @param tabWidth - The tab width for indentation calculation.
- * @param useTabs - Whether to use tabs for indentation.
- * @returns The extracted method code lines.
- * @example
- * extractMethodCode(['void method() {', '  System.debug("test");', '}'], 2, false)
- */
-const METHOD_MARKER = 'void method() {';
-
-const extractMethodCode = (
-	lines: readonly string[],
-	tabWidth: number,
-	useTabs: boolean | null | undefined,
-): string[] => {
-	const codeLines: string[] = [];
-	let methodIndent: number = ARRAY_START_INDEX;
-	let braceCount = ARRAY_START_INDEX;
-	let inMethod = false;
-	const indentOffset = tabWidth;
-	for (const line of lines) {
-		if (line.includes(METHOD_MARKER)) {
-			methodIndent = getIndentLevel(line, tabWidth);
-			inMethod = true;
-			braceCount = INITIAL_BRACE_COUNT;
-		} else if (inMethod) {
-			const openBraces = (line.match(BRACE_REGEX) ?? []).length;
-			const closeBraces = (line.match(CLOSE_BRACE_REGEX) ?? []).length;
-			braceCount += openBraces - closeBraces;
-			if (!braceCount && line.trim() === '}') break;
-			const lineIndent = getIndentLevel(line, tabWidth);
-			const indentDiff = lineIndent - methodIndent - indentOffset;
-			const relativeIndent = Math.max(MIN_INDENT_LEVEL, indentDiff);
-			codeLines.push(
-				`${createIndent(relativeIndent, tabWidth, useTabs)}${line.trimStart()}`,
-			);
-		}
-	}
-	return codeLines;
-};
-
-const LEADING_WHITESPACE_REGEX = /^(\s*)/;
 
 /**
  * Formats multiline code block with proper indentation and comment prefix.
@@ -225,14 +94,15 @@ const formatMultilineCodeBlock = (
 	const trimmedFormattedCode = formattedCode.replace(/\n+$/, '');
 	let lines = trimmedFormattedCode.split('\n');
 	// Remove trailing empty lines from the array (in case split created empty strings)
-	while (lines.length > 0 && lines[lines.length - 1].trim().length === 0) {
-		lines = lines.slice(0, -1);
+	const EMPTY_LINE_LENGTH = 0;
+	while (lines.length > ZERO_LENGTH && lines[lines.length - SINGLE_LINE_LENGTH]?.trim().length === EMPTY_LINE_LENGTH) {
+		lines = lines.slice(ZERO_LENGTH, -SINGLE_LINE_LENGTH);
 	}
 	
 	// Preserve exact indentation from embed output: baseIndent + '* ' + embedded line (with its indentation)
-	const prefixedLines = lines.map((line, lineIndex) => {
+	const prefixedLines = lines.map((line) => {
 		// Empty lines just get the comment prefix (no trailing space)
-		if (line.trim().length === ARRAY_START_INDEX) {
+		if (line.trim().length === ZERO_LENGTH) {
 			return commentPrefix.trimEnd();
 		}
 		
@@ -246,30 +116,27 @@ const formatMultilineCodeBlock = (
 };
 
 /**
- * Formats a code block directly using Prettier's textToDoc.
+ * Formats a code block directly using Prettier's format with our plugin.
  * The code is extracted cleanly (no comment indentation) and formatted as-is.
  * @param params - Parameters object.
  * @param params.code - The cleanly extracted code to format (no comment prefixes).
- * @param params.textToDoc - Prettier's textToDoc function.
  * @param params.embedOptions - Parser options for formatting.
- * @param params.currentPluginInstance - Plugin instance for formatting fallback.
+ * @param params.currentPluginInstance - Plugin instance to ensure our wrapped printer is used.
  * @returns The formatted code with preserved relative indentation.
  * @example
- * formatCodeBlockDirect({code: '@IsTest\npublic void method() {}', textToDoc: async (t, o) => {}, embedOptions: {}, currentPluginInstance: undefined})
+ * formatCodeBlockDirect({code: '@IsTest\npublic void method() {}', embedOptions: {}, currentPluginInstance: undefined})
  */
 const formatCodeBlockDirect = async ({
 	code,
-	textToDoc,
 	embedOptions,
 	currentPluginInstance,
 }: {
 	readonly code: string;
-	readonly textToDoc: (text: string, options: ParserOptions) => Promise<Doc>;
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<string> => {
 	// Handle empty code blocks - return empty string immediately
-	if (code.trim().length === 0) {
+	if (code.trim().length === ZERO_LENGTH) {
 		return '';
 	}
 	
@@ -287,303 +154,49 @@ const formatCodeBlockDirect = async ({
 	// For single-line code blocks that are just annotations or simple statements,
 	// normalize and return without formatting (they're not valid Apex code by themselves)
 	// Check if it's a simple annotation or single-line statement
-	const isSimpleAnnotation = /^@\w+/.test(normalizedCode.trim()) && normalizedCode.split('\n').length === 1;
-	if (isSimpleAnnotation && normalizedCode.trim().length < 100) {
+	const isSimpleAnnotation = /^@\w+/.test(normalizedCode.trim()) && normalizedCode.split('\n').length === SINGLE_LINE_LENGTH;
+	if (isSimpleAnnotation && normalizedCode.trim().length < SIMPLE_ANNOTATION_MAX_LENGTH) {
 		// For simple annotations, just return normalized code
 		return normalizedCode;
 	}
 	
-	// CRITICAL: Always use prettier.format with our plugin to ensure wrapped printer is used
-	// textToDoc might use the original prettier-plugin-apex printer instead of our wrapped one
-	// This ensures annotation normalization and custom line breaks are applied
+	// CRITICAL: Use prettier.format with our plugin to ensure wrapped printer is used
+	// This ensures annotation normalization, type normalization, and custom formatting are applied
 	const pluginToUse =
 		currentPluginInstance?.default ??
 		(await import('./index.js')).default;
 	
+	// Create options with our plugin to ensure wrapped printer is used
+	const optionsWithPlugin = {
+		...embedOptions,
+		plugins: [pluginToUse as prettier.Plugin],
+	};
+	
 	// Try apex-anonymous parser first (designed for code snippets)
 	// This handles both complete classes and incomplete code snippets
-	try {
-		const formatted = await prettier.format(normalizedCode, {
-			...embedOptions,
-			parser: 'apex-anonymous',
-			plugins: [pluginToUse as prettier.Plugin],
-		});
-
-		return formatted;
-	} catch (error) {
-		// If apex-anonymous fails, try the regular apex parser
-		// Both parsers format code starting at column 0 (no leading whitespace)
-		// Use normalized code to ensure annotations are normalized
-		// CRITICAL: Use prettier.format with our plugin to ensure wrapped printer is used
-		const formatted = await prettier.format(normalizedCode, {
-			...embedOptions,
-			parser: 'apex',
-			plugins: [pluginToUse as prettier.Plugin],
-		});
-
-		return formatted;
-	}
-};
-
-/**
- * Extracts formatted code from wrapped formatted output.
- * @param params - Parameters object.
- * @param params.formattedWrapped - Wrapped code that has been formatted by Prettier.
- * @param params.isAnnotationCode - Whether this is annotation code.
- * @param params.tabWidth - Tab width for indentation.
- * @param params.useTabs - Use tabs instead of spaces for indentation.
- * @returns The extracted formatted code.
- * @example
- * extractFormattedCode({formattedWrapped: 'public class Temp { void method() {} }', isAnnotationCode: false, tabWidth: 2, useTabs: false})
- */
-const extractFormattedCode = ({
-	formattedWrapped,
-	isAnnotationCode,
-	tabWidth,
-	useTabs,
-}: {
-	readonly formattedWrapped: string;
-	readonly isAnnotationCode: boolean;
-	readonly tabWidth: number;
-	readonly useTabs: boolean | null | undefined;
-}): string => {
-	const lines = formattedWrapped.trim().split('\n');
-
-	if (isAnnotationCode) {
-		const codeLines = extractWrappedCode({
-			endMarker: 'void method()',
-			lines,
-			startMarker: 'public class Temp',
-			tabWidth,
-			useTabs,
-		});
-		return codeLines.length > ARRAY_START_INDEX ? codeLines.join('\n') : '';
-	}
-
-	const codeLines = extractMethodCode(lines, tabWidth, useTabs);
-	return codeLines.length > ARRAY_START_INDEX ? codeLines.join('\n') : '';
-};
-
-/**
- * Processes all code blocks in a comment and returns replacements.
- * @param params - Parameters object.
- * @param params.commentValue - The comment value containing code blocks.
- * @param params.textToDoc - Prettier's textToDoc function.
- * @param params.embedOptions - Parser options.
- * @param params.currentPluginInstance - Plugin instance for formatting fallback.
- * @returns Array of code block replacements.
- * @example
- * processCodeBlocks({commentValue: 'comment with code', textToDoc: async (t, o) => {}, embedOptions: {}, currentPluginInstance: undefined})
- */
-const processCodeBlocks = async ({
-	commentValue,
-	textToDoc,
-	embedOptions,
-	currentPluginInstance,
-}: {
-	readonly commentValue: string;
-	readonly textToDoc: (text: string, options: ParserOptions) => Promise<Doc>;
-	readonly embedOptions: ParserOptions;
-	readonly currentPluginInstance: { default: unknown } | undefined;
-}): Promise<
-	{
-		end: number;
-		formatted: string;
-		start: number;
-	}[]
-> => {
-	const replacements: {
-		end: number;
-		formatted: string;
-		start: number;
-	}[] = [];
-	const tabWidth =
-		typeof embedOptions.tabWidth === 'number'
-			? embedOptions.tabWidth
-			: DEFAULT_TAB_WIDTH;
-	const useTabs: boolean | undefined =
-		typeof embedOptions.useTabs === 'boolean'
-			? embedOptions.useTabs
-			: undefined;
-	let searchPos = ARRAY_START_INDEX;
-
-	while (searchPos < commentValue.length) {
-		const tagPos = commentValue.indexOf(CODE_TAG, searchPos);
-		if (tagPos === NOT_FOUND_INDEX) break;
-
-		const extraction = extractCodeFromBlock(commentValue, tagPos);
-		if (!extraction) {
-			searchPos = tagPos + CODE_TAG_LENGTH;
-			continue;
-		}
-
-		const { code, endPos } = extraction;
-		const trimmedCode = code.trim();
-
-		if (trimmedCode.length === ARRAY_START_INDEX) {
-			replacements.push({ end: endPos, formatted: '', start: tagPos });
-			searchPos = endPos;
-			continue;
-		}
-
 		try {
-			// Format the cleanly extracted code directly (no wrapper if possible)
-			// This preserves the code's natural structure and indentation
-			const formattedCode = await formatCodeBlockDirect({
-				code,
-				currentPluginInstance,
-				embedOptions,
-				textToDoc,
+			const formatted = await prettier.format(normalizedCode, {
+				...optionsWithPlugin,
+				parser: 'apex-anonymous',
 			});
-
-
-			replacements.push({
-				end: endPos,
-				formatted: formattedCode,
-				start: tagPos,
-			});
-		} catch (error) {
-			// If formatting fails, skip this code block
-		}
-
-		searchPos = endPos;
-	}
-
-	return replacements;
-};
-
-/**
- * Applies code block replacements to a comment value.
- * @param commentValue - The original comment value.
- * @param replacements - Array of replacements to apply.
- * @returns The final comment with formatted code blocks.
- * @example
- * applyCodeBlockReplacements('comment', [{start: 4, end: 15, formatted: 'formatted'}])
- */
-const applyCodeBlockReplacements = (
-	commentValue: string,
-	replacements: readonly {
-		readonly end: number;
-		readonly formatted: string;
-		readonly start: number;
-	}[],
-): string => {
-	if (replacements.length === ARRAY_START_INDEX) return commentValue;
-
-	const firstLineMatch = /^(\s*)(\*)\s/m.exec(commentValue);
-	const baseIndent = firstLineMatch?.[MATCH_GROUP_INDEX] ?? '';
-	const commentPrefix = `${baseIndent} * `;
-	let finalComment = commentValue;
-
-	// Apply replacements in reverse order to maintain positions
-	for (
-		let i = replacements.length - LAST_INDEX_OFFSET;
-		i >= ARRAY_START_INDEX;
-		i--
-	) {
-		const replacement = replacements[i];
-		if (replacement) {
-			const before = finalComment.substring(
-				ARRAY_START_INDEX,
-				replacement.start,
-			);
-			const after = finalComment.substring(replacement.end);
-			const trimmedFormatted = replacement.formatted.trim();
-			const formattedWithPrefix = replacement.formatted.includes('\n')
-				? formatMultilineCodeBlock(replacement.formatted, commentPrefix)
-				: trimmedFormatted.length === ARRAY_START_INDEX
-					? EMPTY_CODE_TAG
-					: `{@code ${trimmedFormatted}}`;
-			finalComment = before + formattedWithPrefix + after;
-		}
-	}
-
-	return finalComment;
-};
-
-/**
- * Exports formatCodeBlockDirect and formatMultilineCodeBlock for use in printer.ts
- */
-export { formatCodeBlockDirect, formatMultilineCodeBlock };
-
-/**
- * Creates an embed function for handling code blocks in comments.
- * @param isCommentNode - Function to check if a node is a comment node.
- * @param currentPluginInstance - The current plugin instance for formatting.
- * @param formattedCodeBlocks - Map to store formatted code blocks.
- * @returns The embed function for Prettier.
- * @example
- * createCodeBlockEmbed(isCommentNode, pluginInstance, new Map())
- */
-const createCodeBlockEmbed = (
-	isCommentNode: (node: Readonly<ApexNode> | null | undefined) => boolean,
-	currentPluginInstance: { default: unknown } | undefined,
-	formattedCodeBlocks: Map<string, string>,
-): ((path: unknown, options: unknown) => unknown) => {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier's embed types are complex
-	const customEmbed: any = (path: any, _options: any): any => {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- path.getNode() is a Prettier API
-		const node = path.getNode() as ApexNode;
-
-		// Check if this is a comment node with code blocks
-		if (
-			isCommentNode(node) &&
-			'value' in node &&
-			typeof node['value'] === 'string'
-		) {
-			const commentValue = node['value'];
-			const codeTagPos = commentValue.indexOf(CODE_TAG);
-
-			// If comment contains code blocks, return a function to handle them
-			if (codeTagPos !== NOT_FOUND_INDEX) {
-				// Create a unique key for this comment (using a simple hash of the value)
-				// In a real implementation, we'd use node location or a better identifier
-				const commentKey = `${String(commentValue.length)}-${String(codeTagPos)}`;
-
-				return async (
-					_textToDoc: (
-						text: string,
-						options: ParserOptions,
-					) => Promise<Doc>,
-					_print: (
-						selector?:
-							| (number | string)[]
-							| AstPath
-							| number
-							| string,
-					) => Doc,
-					_embedPath: AstPath,
-					_embedOptions: ParserOptions,
-					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
-				): Promise<Doc | undefined> => {
-					const replacements = await processCodeBlocks({
-						commentValue,
-						currentPluginInstance,
-						embedOptions: _embedOptions,
-						textToDoc: _textToDoc,
-					});
-
-					if (replacements.length > ARRAY_START_INDEX) {
-						const finalComment = applyCodeBlockReplacements(
-							commentValue,
-							replacements,
-						);
-						formattedCodeBlocks.set(commentKey, finalComment);
-					}
-
-					// Return undefined to let Prettier handle the comment normally
-					// printComment will retrieve the formatted version
-					return undefined;
-				};
+			// Remove trailing newlines but preserve the formatted structure
+			return formatted.replace(/\n+$/, '');
+		} catch {
+			// If apex-anonymous fails, try the regular apex parser
+			try {
+				const formatted = await prettier.format(normalizedCode, {
+					...optionsWithPlugin,
+					parser: 'apex',
+				});
+				// Remove trailing newlines but preserve the formatted structure
+				return formatted.replace(/\n+$/, '');
+			} catch {
+				// If both parsers fail, return the code with FORMAT_FAILED prefix
+				return `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
 			}
 		}
-
-		return undefined;
-	};
-
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Prettier's embed types are complex
-	return customEmbed;
 };
+
 
 /**
  * Processes comment lines to handle code block boundaries.
@@ -640,8 +253,7 @@ export {
 	CODE_TAG_LENGTH,
 	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
-	extractAnnotationCode,
-	extractMethodCode,
-	createCodeBlockEmbed,
+	formatCodeBlockDirect,
+	formatMultilineCodeBlock,
 	processCodeBlockLines,
 };

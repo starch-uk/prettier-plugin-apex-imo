@@ -4,12 +4,8 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
-import * as prettier from 'prettier';
-import type { ParserOptions, Plugin } from 'prettier';
-import type { ApexNode } from './types.js';
+import type { ParserOptions } from 'prettier';
 import {
-	findApexDocComments,
-	getCommentIndent,
 	createIndent,
 	normalizeBlockComment,
 	ARRAY_START_INDEX,
@@ -23,6 +19,16 @@ import {
 } from './refs/apexdoc-annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
+const EMPTY_CODE_TAG = '{@code}';
+const INITIAL_BRACE_COUNT = 1;
+const NOT_FOUND_INDEX = -1;
+const INDEX_THREE = 3;
+const INDEX_FOUR = 4;
+const MAX_ANNOTATION_LINE_LENGTH = 20;
+const PARSE_INT_RADIX = 10;
+const SLICE_END_OFFSET = -1;
+const DEFAULT_BRACE_COUNT = 1;
+const ZERO_BRACE_COUNT = 0;
 
 interface CodeBlock {
 	startPos: number;
@@ -35,159 +41,6 @@ interface CodeBlock {
 
 // eslint-disable-next-line @typescript-eslint/no-type-alias -- Using utility type Readonly<T> per optimization plan to reduce duplication
 type ReadonlyCodeBlock = Readonly<CodeBlock>;
-
-import {
-	CODE_TAG,
-	CODE_TAG_LENGTH,
-	EMPTY_CODE_TAG,
-	extractCodeFromBlock,
-	extractAnnotationCode,
-	extractMethodCode,
-} from './apexdoc-code.js';
-
-const INITIAL_BRACE_COUNT = 1;
-const NOT_FOUND_INDEX = -1;
-const LINE_NUMBER_OFFSET = 1;
-const COLUMN_OFFSET = 1;
-const INDEX_THREE = 3;
-const INDEX_FOUR = 4;
-const MAX_ANNOTATION_LINE_LENGTH = 20;
-const PARSE_INT_RADIX = 10;
-
-// Code blocks are now handled via embed function in printer.ts, not via preprocessor
-// This removes the circular dependency between apexdoc.ts and printer.ts
-
-const findApexDocCodeBlocks = (text: Readonly<string>): CodeBlock[] => {
-	const blocks: CodeBlock[] = [];
-	for (const comment of findApexDocComments(text)) {
-		const commentStart = comment.start;
-		const commentText = text.substring(commentStart, comment.end);
-		const commentIndent = getCommentIndent(text, commentStart);
-		for (
-			let searchPos = ARRAY_START_INDEX;
-			searchPos < commentText.length;
-		) {
-			const codeTagPos = commentText.indexOf(CODE_TAG, searchPos);
-			if (codeTagPos === NOT_FOUND_INDEX) break;
-			const extraction = extractCodeFromBlock(commentText, codeTagPos);
-			if (extraction) {
-				const absolutePos = commentStart + codeTagPos;
-				const beforeBlock = text.substring(
-					ARRAY_START_INDEX,
-					absolutePos,
-				);
-				const lastNewlinePos = beforeBlock.lastIndexOf('\n');
-				const extractionEndOffset = extraction.endPos - codeTagPos;
-				blocks.push({
-					code: extraction.code,
-					column: absolutePos - lastNewlinePos - COLUMN_OFFSET,
-					commentIndent,
-					endPos: commentStart + codeTagPos + extractionEndOffset,
-					lineNumber:
-						(beforeBlock.match(/\n/g) ?? []).length +
-						LINE_NUMBER_OFFSET,
-					startPos: absolutePos,
-				});
-				searchPos = codeTagPos + extractionEndOffset;
-			} else {
-				searchPos = codeTagPos + CODE_TAG_LENGTH;
-			}
-		}
-	}
-	return blocks;
-};
-
-const formatCodeBlock = async (
-	code: Readonly<string>,
-	options: Readonly<ParserOptions>,
-	plugin?: Readonly<unknown>,
-): Promise<string> => {
-	try {
-		const trimmedCode = code.trim();
-		const isAnnotationCode = trimmedCode.startsWith('@');
-		const { tabWidth, useTabs } = options;
-		// Detect blank lines in original code that should be preserved
-		// Look for patterns like "}\n\n@" or "}\n\n  public" or "}\n\n  @"
-		const originalLines = code.split('\n');
-		const blankLinePositions = new Set<number>();
-		for (
-			let i = ARRAY_START_INDEX;
-			i < originalLines.length - INDEX_ONE;
-			i++
-		) {
-			const currentLine = originalLines[i]?.trim() ?? '';
-			const nextLine = originalLines[i + INDEX_ONE]?.trim() ?? '';
-			// Check if there's a blank line between closing brace and next declaration
-			if (
-				currentLine === '}' &&
-				originalLines[i + INDEX_ONE]?.trim() === '' &&
-				i + INDEX_TWO < originalLines.length &&
-				(nextLine.startsWith('@') ||
-					nextLine.startsWith('public') ||
-					nextLine.startsWith('private') ||
-					nextLine.startsWith('static') ||
-					nextLine.startsWith('  @') ||
-					nextLine.startsWith('  public') ||
-					nextLine.startsWith('  private') ||
-					nextLine.startsWith('  static'))
-			) {
-				blankLinePositions.add(i + INDEX_ONE);
-			}
-		}
-		// Always use a plugin with the wrapped printer to ensure multi-line list formatting
-		// If a plugin is provided, use it; otherwise import and use the wrapped plugin from index.ts
-		// Note: Code blocks are now primarily handled via embed function, but formatCodeBlock
-		// is still used as a fallback or for direct formatting calls
-		const pluginToUse: Plugin<ApexNode> = plugin
-			? (plugin as Plugin<ApexNode>)
-			: // Import the wrapped plugin to ensure multiline collection formatting
-				// Use dynamic import to avoid circular dependency issues
-				(await import('./index.js')).default;
-		// Normalize type names in code before formatting
-		// This ensures object suffixes and standard object types are normalized
-		// even when code blocks are formatted separately from the main document
-		const { normalizeTypeNamesInCode } = await import('./casing.js');
-		const normalizedCode = normalizeTypeNamesInCode(code);
-		const wrappedCode = isAnnotationCode
-			? `public class Temp { ${normalizedCode} void method() {} }`
-			: `public class Temp { void method() { ${normalizedCode} } }`;
-		const formatted = await prettier.format(wrappedCode, {
-			parser: 'apex',
-			tabWidth,
-			...(useTabs !== undefined && { useTabs }),
-			plugins: [pluginToUse],
-			printWidth: options.printWidth,
-		});
-		const lines = formatted.split('\n');
-		const codeLines = isAnnotationCode
-			? extractAnnotationCode(lines, tabWidth, useTabs)
-			: extractMethodCode(lines, tabWidth, useTabs);
-		// Re-add blank lines where they existed in the original code
-		const resultLines: string[] = [];
-		for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
-			resultLines.push(codeLines[i] ?? '');
-			// Check if we should add a blank line after this line
-			if (i < codeLines.length - INDEX_ONE) {
-				const currentLine = codeLines[i]?.trim() ?? '';
-				const nextLine = codeLines[i + INDEX_ONE]?.trim() ?? '';
-				// Add blank line if current line ends with } and next line starts with @, public, private, or static
-				if (
-					currentLine === '}' &&
-					(nextLine.startsWith('@') ||
-						nextLine.startsWith('public') ||
-						nextLine.startsWith('private') ||
-						nextLine.startsWith('static'))
-				) {
-					resultLines.push('');
-				}
-			}
-		}
-		const result = resultLines.join('\n').trimEnd();
-		return result;
-	} catch {
-		return `${FORMAT_FAILED_PREFIX}${code}`;
-	}
-};
 
 /**
  * Normalizes a single ApexDoc comment value.
@@ -258,12 +111,15 @@ const normalizeSingleApexDocComment = (
 			// Count opening brace in {@code tag
 			let codeBlockBraceCount = INITIAL_BRACE_COUNT;
 			// Count braces in the rest of the line
+			const codeTagIndex = trimmedLineForCodeBlockEarly.indexOf('{@code');
 			for (const char of trimmedLineForCodeBlockEarly.substring(
-				trimmedLineForCodeBlockEarly.indexOf('{@code') +
-					'{@code'.length,
+				codeTagIndex + '{@code'.length,
 			)) {
-				if (char === '{') codeBlockBraceCount++;
-				if (char === '}') codeBlockBraceCount--;
+				if (char === '{') {
+					codeBlockBraceCount++;
+				} else if (char === '}') {
+					codeBlockBraceCount--;
+				}
 			}
 			// Store brace count in the stack entry (as a string representation)
 			codeBlockIndentStackEarly[
@@ -275,21 +131,24 @@ const normalizeSingleApexDocComment = (
 			const currentBraceCount = Number.parseInt(
 				codeBlockIndentStackEarly[
 					codeBlockIndentStackEarly.length - INDEX_ONE
-				] ?? '1',
+				] ?? String(DEFAULT_BRACE_COUNT),
 				PARSE_INT_RADIX,
 			);
 			let newBraceCount = currentBraceCount;
 			// Count braces in this line
 			for (const char of trimmedLineForCodeBlockEarly) {
-				if (char === '{') newBraceCount++;
-				if (char === '}') newBraceCount--;
+				if (char === '{') {
+					newBraceCount++;
+				} else if (char === '}') {
+					newBraceCount--;
+				}
 			}
 			// Update brace count in stack
 			codeBlockIndentStackEarly[
 				codeBlockIndentStackEarly.length - INDEX_ONE
 			] = String(newBraceCount);
 			// Code block ends when brace count reaches 0
-			if (newBraceCount === ARRAY_START_INDEX) {
+			if (newBraceCount === ZERO_BRACE_COUNT) {
 				inCodeBlockEarly = false;
 				codeBlockIndentStackEarly.pop();
 			}
@@ -319,7 +178,7 @@ const normalizeSingleApexDocComment = (
 		// Track code block boundaries
 		if (line.includes('{@code')) {
 			inCodeBlockForSplit = true;
-			codeBlockBraceCountForSplit = 1; // Count the opening brace in {@code
+			codeBlockBraceCountForSplit = DEFAULT_BRACE_COUNT; // Count the opening brace in {@code
 			// Count additional braces in the line
 			const afterCodeTag = line.substring(line.indexOf('{@code') + '{@code'.length);
 			for (const char of afterCodeTag) {
@@ -334,7 +193,7 @@ const normalizeSingleApexDocComment = (
 				if (char === '}') codeBlockBraceCountForSplit--;
 			}
 			// Code block ends when brace count reaches 0
-			if (codeBlockBraceCountForSplit === 0) {
+			if (codeBlockBraceCountForSplit === ZERO_BRACE_COUNT) {
 				inCodeBlockForSplit = false;
 			}
 			// Skip annotation splitting for code block content lines (but not the {@code line itself)
@@ -481,18 +340,21 @@ const normalizeSingleApexDocComment = (
 			const currentBraceCount = Number.parseInt(
 				codeBlockIndentStackForNormalize[
 					codeBlockIndentStackForNormalize.length - INDEX_ONE
-				] ?? '1',
+				] ?? String(DEFAULT_BRACE_COUNT),
 				PARSE_INT_RADIX,
 			);
 			let newBraceCount = currentBraceCount;
 			for (const char of trimmedLine) {
-				if (char === '{') newBraceCount++;
-				if (char === '}') newBraceCount--;
+				if (char === '{') {
+					newBraceCount++;
+				} else if (char === '}') {
+					newBraceCount--;
+				}
 			}
 			codeBlockIndentStackForNormalize[
 				codeBlockIndentStackForNormalize.length - INDEX_ONE
 			] = String(newBraceCount);
-			if (newBraceCount === ARRAY_START_INDEX) {
+			if (newBraceCount === ZERO_BRACE_COUNT) {
 				codeBlockIndentStackForNormalize.pop();
 			}
 		}
@@ -555,30 +417,7 @@ const normalizeSingleApexDocComment = (
 			return line;
 		}
 		// Track code block boundaries using stack
-		const trimmedLineForCodeBlock = line.replace(/^\s*\*\s*/, '').trim();
 		const isCodeBlockStart = line.includes('{@code');
-		// Check if next line is also a closing brace to distinguish code content from {@code} closing brace
-		// Only the {@code} closing brace should end the code block, not code content closing braces
-		// The {@code} closing brace is the LAST standalone '}' (not '};' or '},' etc.)
-		const nextLine = annotationLines[lineIndex + INDEX_ONE];
-		const nextTrimmed = nextLine?.replace(/^\s*\*\s*/, '').trim() ?? '';
-		// isCodeBlockEnd is true only if:
-		// 1. We're in a code block (stack not empty)
-		// 2. This line is just '}' (standalone closing brace)
-		// 3. The next line is NOT also just '}' (if next is '}', this is code content, next is {@code} closing)
-		// 4. The next line does not start with '}' (if it starts with '}', it's code content like '};' or '},')
-
-		/**
-		 * Next line should not start with '}' (not '};' or '},' etc.).
-		 */
-		// CRITICAL: isCodeBlockEnd should ONLY match the {@code} closing brace, NOT code content closing braces
-		// The {@code} closing brace is the LAST standalone '}' that closes the code block
-		// Code content closing braces should be treated as code block content and preserved
-		// We can't reliably detect the {@code} closing brace here without full brace counting
-		// So we'll use a simpler approach: only treat lines as code block ends if they're the actual {@code} closing
-		// For now, we'll be more conservative and NOT mark lines as code block ends here
-		// The code block will be closed when we see the actual {@code} closing brace in the wrapping phase
-		const isCodeBlockEnd = false; // Disable code block end detection here - handle in wrapping phase
 		// Update stack based on code block boundaries
 		if (isCodeBlockStart) {
 			// Push empty string - will detect indentation from first continuation line
@@ -603,7 +442,7 @@ const normalizeSingleApexDocComment = (
 				// consistentPrefixForSpacing is "   * " (includes 1 space after asterisk)
 				// afterAsterisk already contains the correct indentation (1 space + additional if any)
 				// Remove trailing space from consistentPrefixForSpacing and add afterAsterisk (which includes the space + indentation)
-				const basePrefix = consistentPrefixForSpacing.slice(ARRAY_START_INDEX, NOT_FOUND_INDEX); // "   *" (without trailing space)
+				const basePrefix = consistentPrefixForSpacing.slice(ARRAY_START_INDEX, SLICE_END_OFFSET); // "   *" (without trailing space)
 				normalizedLine = `${basePrefix}${afterAsterisk}${content}`;
 			} else {
 				// Line has no asterisk - add one with preserved spacing
@@ -748,12 +587,11 @@ const normalizeSingleApexDocComment = (
 	let inCodeBlockForFinal = false;
 	let codeBlockBraceCountForFinal = 0;
 	const finalLines: string[] = [];
-	for (let lineIndex = 0; lineIndex < annotationNormalizedLines.length; lineIndex++) {
-		const line = annotationNormalizedLines[lineIndex] ?? '';
+	for (const line of annotationNormalizedLines) {
 		// Track code block boundaries
 		if (line.includes('{@code')) {
 			inCodeBlockForFinal = true;
-			codeBlockBraceCountForFinal = 1; // Count the opening brace in {@code
+			codeBlockBraceCountForFinal = DEFAULT_BRACE_COUNT; // Count the opening brace in {@code
 			// Count additional braces in the line
 			const afterCodeTag = line.substring(line.indexOf('{@code') + '{@code'.length);
 			for (const char of afterCodeTag) {
@@ -766,13 +604,16 @@ const normalizeSingleApexDocComment = (
 			// Preserve code block content exactly as-is
 			// IMPORTANT: Check this BEFORE counting braces, so we preserve the closing brace line
 			if (!line.includes('{@code')) {
-				// Count braces in this line
-				for (const char of line) {
-					if (char === '{') codeBlockBraceCountForFinal++;
-					if (char === '}') codeBlockBraceCountForFinal--;
+			// Count braces in this line
+			for (const char of line) {
+				if (char === '{') {
+					codeBlockBraceCountForFinal++;
+				} else if (char === '}') {
+					codeBlockBraceCountForFinal--;
 				}
+			}
 				// Code block ends when brace count reaches 0
-				if (codeBlockBraceCountForFinal === 0) {
+				if (codeBlockBraceCountForFinal === ZERO_BRACE_COUNT) {
 					inCodeBlockForFinal = false;
 				}
 				// Always preserve code block content lines exactly as-is
@@ -781,10 +622,13 @@ const normalizeSingleApexDocComment = (
 			}
 			// For {@code line, count braces but don't skip (need to process it)
 			for (const char of line) {
-				if (char === '{') codeBlockBraceCountForFinal++;
-				if (char === '}') codeBlockBraceCountForFinal--;
+				if (char === '{') {
+					codeBlockBraceCountForFinal++;
+				} else if (char === '}') {
+					codeBlockBraceCountForFinal--;
+				}
 			}
-			if (codeBlockBraceCountForFinal === 0) {
+			if (codeBlockBraceCountForFinal === ZERO_BRACE_COUNT) {
 				inCodeBlockForFinal = false;
 			}
 		}
@@ -1540,60 +1384,9 @@ const normalizeSingleApexDocComment = (
 	return normalizedComment;
 };
 
-/**
- * Normalizes ApexDoc annotations in comment blocks.
- * Converts annotation names to lowercase and normalizes group values.
- * Also wraps long annotation lines based on printWidth.
- * Note: Use backslash-escaped group annotation instead of curly-brace group in JSDoc comments.
- * @param text - The source text containing ApexDoc comments to normalize.
- * @param options - Parser options including printWidth, tabWidth, and useTabs.
- * @returns The text with normalized ApexDoc annotations.
- * @example
- * ```typescript
- * normalizeApexDocAnnotations('@Param input The string', options);
- * // Returns '@param input The string'
- * ```
- */
-const normalizeApexDocAnnotations = (
-	text: Readonly<string>,
-	options: Readonly<ParserOptions>,
-): string => {
-	const comments = findApexDocComments(text);
-	if (comments.length === ARRAY_START_INDEX) return text;
-
-	let result = text;
-	// Process comments in reverse order to maintain positions
-	for (let i = comments.length - INDEX_ONE; i >= ARRAY_START_INDEX; i--) {
-		const comment = comments[i];
-		if (!comment) continue;
-		const commentStart = comment.start;
-		const commentEnd = comment.end;
-		const commentText = result.substring(commentStart, commentEnd);
-		const commentIndent = getCommentIndent(result, commentStart);
-
-		// Use the extracted normalization function
-		const normalizedComment = normalizeSingleApexDocComment(
-			commentText,
-			commentIndent,
-			options,
-		);
-
-		if (normalizedComment !== commentText) {
-			result =
-				result.substring(ARRAY_START_INDEX, commentStart) +
-				normalizedComment +
-				result.substring(commentEnd);
-		}
-	}
-	return result;
-};
-
 export {
 	FORMAT_FAILED_PREFIX,
 	EMPTY_CODE_TAG,
-	findApexDocCodeBlocks,
-	formatCodeBlock,
-	normalizeApexDocAnnotations,
 	normalizeSingleApexDocComment,
 };
 export type { CodeBlock, ReadonlyCodeBlock };
