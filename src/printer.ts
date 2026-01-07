@@ -602,16 +602,44 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
+	// Custom embed function to handle {@code} blocks asynchronously
+	result.embed = async (
+		path: AstPath,
+		options: ParserOptions
+	): Promise<Doc | null> => {
+		const node = path.getValue();
 
+		// Only handle CommentBlock nodes with {@code} blocks
+		if (node && typeof node === 'object' && 'type' in node && node.type === 'CommentBlock') {
+			const commentValue = (node as { value?: string }).value;
+			if (commentValue && commentValue.includes('{@code')) {
+				try {
+					// Process {@code} blocks asynchronously using Apex parser
+					const processedComment = await processCodeBlocksWithApexParserAsync(commentValue, options);
+					if (processedComment !== commentValue) {
+						// Store the processed comment for printComment to use
+						const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
+						const key = `${commentValue.length}-${normalizedComment.indexOf('{@code')}`;
+						formattedCodeBlocks.set(key, processedComment);
+						console.log('Embed: Stored processed comment for key:', key);
+					}
+				} catch (error) {
+					console.error('Embed: Error processing comment:', error);
+				}
+			}
+		}
 
+		// Always return null - no embedding needed for comments
+		return null;
+	};
 
 /**
- * Process {@code} blocks in a comment by formatting each as Apex code.
+ * Process {@code} blocks in a comment by formatting each as Apex code using async parser.
  * @param commentValue - The comment text
  * @param options - Parser options
  * @returns Promise resolving to processed comment
  */
-const processCodeBlocksInComment = async (
+const processCodeBlocksWithApexParserAsync = async (
 	commentValue: string,
 	options: ParserOptions
 ): Promise<string> => {
@@ -630,10 +658,8 @@ const processCodeBlocksInComment = async (
 		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
 
 		try {
-			// Parse the code content as Apex AST
-			const ast = await parseApexForEmbed(codeContent, options);
-			// Format the AST using our custom printer
-			const formattedCode = formatAstWithPrinter(ast, options);
+			// Format the code content using Prettier's format function with our plugin
+			const formattedCode = await formatApexCodeAsync(codeContent, options);
 
 			// Replace the code block with formatted version
 			result = result.substring(0, startIndex + codeTagLength) + '\n' + formattedCode + '\n' + result.substring(endIndex);
@@ -647,6 +673,28 @@ const processCodeBlocksInComment = async (
 	}
 
 	return result;
+};
+
+/**
+ * Format Apex code asynchronously using our plugin's parser and printer.
+ * @param code - Code to format
+ * @param options - Parser options
+ * @returns Promise resolving to formatted code string
+ */
+const formatApexCodeAsync = async (code: string, options: ParserOptions): Promise<string> => {
+	try {
+		// Use Prettier's format function with apex parser and our plugin
+		const prettier = await import('prettier');
+		const result = await prettier.format(code, {
+			...options,
+			parser: 'apex',
+			plugins: [getCurrentPluginInstance()],
+		});
+		return result.trim();
+	} catch (error) {
+		console.log('Failed to format Apex code asynchronously, keeping original:', error);
+		return code;
+	}
 };
 
 /**

@@ -1279,7 +1279,7 @@ export function processApexDocComment(
 		return embedFormattedComment;
 	}
 
-	// Process {@code} blocks using regex-based normalization
+	// Check if there's a pre-formatted version from async embed processing
 	const normalizedComment = processCodeBlocksWithApexParser(commentValue, options);
 
 	// Extract ParagraphTokens and clean up malformed indentation
