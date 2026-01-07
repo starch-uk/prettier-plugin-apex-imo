@@ -51,6 +51,7 @@ async function normalizeCodeSnippetsInComments(
 		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
 		if (endIndex === -1) break;
 
+
 		// Extract the code content
 		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
 
@@ -65,7 +66,7 @@ async function normalizeCodeSnippetsInComments(
 		const commentIndent = options.tabWidth || 2;
 
 		try {
-			// Clean comment markers from the code content
+				// Clean comment markers from the code content
 			let cleanedCode = codeContent.split('\n').map(line => {
 				const trimmed = line.trim();
 				// Remove leading " * " or "*" from comment lines
@@ -109,24 +110,40 @@ async function normalizeCodeSnippetsInComments(
 			}).join('\n');
 
 			// Store replacement info
+			const replacementContent = `\n${formattedCode}\n`;
 			replacements.push({
 				start: startIndex + codeTagLength,
 				end: endIndex,
-				normalized: `\n${formattedCode}\n`
+				normalized: replacementContent
 			});
 
 		} catch (error) {
-			// If normalization fails, keep original
+			// If normalization fails, normalize annotations at least
 			console.warn('Failed to normalize code snippet in comment:', error);
+			const { normalizeAnnotationNamesInText } = await import('./annotations.js');
+			const annotationNormalized = normalizeAnnotationNamesInText(codeContent);
+			replacements.push({
+				start: startIndex + codeTagLength,
+				end: endIndex,
+				normalized: annotationNormalized
+			});
 		}
 
 		startIndex = endIndex + 1;
 	}
 
-	// Apply replacements in reverse order to maintain indices
-	replacements.reverse();
-	for (const replacement of replacements) {
-		result = result.substring(0, replacement.start) + replacement.normalized + result.substring(replacement.end);
+	// Apply replacements from first to last, updating indices as we go
+	replacements.sort((a, b) => a.start - b.start);
+	let offset = 0;
+	for (let i = 0; i < replacements.length; i++) {
+		const replacement = replacements[i];
+		const adjustedStart = replacement.start + offset;
+		const adjustedEnd = replacement.end + offset;
+		const before = result.substring(0, adjustedStart);
+		const after = result.substring(adjustedEnd);
+		const originalSegment = result.substring(adjustedStart, adjustedEnd);
+		result = before + replacement.normalized + after;
+		offset += replacement.normalized.length - (replacement.end - replacement.start);
 	}
 
 	return result;
