@@ -12,6 +12,7 @@ import {
 } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
 import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
+import type { CodeBlockToken } from './comments.js';
 
 const CODE_TAG = '{@code';
 const CODE_TAG_LENGTH = CODE_TAG.length;
@@ -250,12 +251,48 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	});
 };
 
+/**
+ * Formats a CodeBlockToken using formatCodeBlockDirect with effective page width.
+ * @param token - The code block token to format.
+ * @param effectiveWidth - The effective page width (reduced from printWidth).
+ * @param embedOptions - Parser options for formatting.
+ * @param currentPluginInstance - Plugin instance to ensure wrapped printer is used.
+ * @returns Updated CodeBlockToken with formattedCode populated.
+ */
+const formatCodeBlockToken = async ({
+	token,
+	effectiveWidth,
+	embedOptions,
+	currentPluginInstance,
+}: {
+	readonly token: CodeBlockToken;
+	readonly effectiveWidth: number;
+	readonly embedOptions: ParserOptions;
+	readonly currentPluginInstance: { default: unknown } | undefined;
+}): Promise<CodeBlockToken> => {
+	// Use effective width for formatting
+	const formattedCode = await formatCodeBlockDirect({
+		code: token.rawCode,
+		embedOptions: {
+			...embedOptions,
+			printWidth: effectiveWidth,
+		},
+		currentPluginInstance,
+	});
+
+	return {
+		...token,
+		formattedCode,
+	};
+};
+
 export {
 	CODE_TAG,
 	CODE_TAG_LENGTH,
 	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
 	formatCodeBlockDirect,
+	formatCodeBlockToken,
 	formatMultilineCodeBlock,
 	processCodeBlockLines,
 };

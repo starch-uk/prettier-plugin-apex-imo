@@ -111,14 +111,14 @@ const getCommentIndent = (
 
 
 /**
- * Normalizes a block comment to standard format.
+ * Internal function to normalize basic block comment structure.
  * Handles malformed comments by normalizing markers, asterisks, and indentation.
  * @param commentValue - The comment text (e.g., comment block).
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
  * @returns The normalized comment value.
  */
-const normalizeBlockComment = (
+const normalizeBlockCommentBasic = (
 	commentValue: Readonly<string>,
 	commentIndent: number,
 	options: Readonly<{
@@ -184,7 +184,411 @@ const normalizeBlockComment = (
 	return normalizedComment;
 };
 
+/**
+ * Normalizes a block comment to standard format.
+ * Handles malformed comments by normalizing markers, asterisks, and indentation.
+ * Optionally uses token-based system for paragraph wrapping.
+ * @param commentValue - The comment text (e.g., comment block).
+ * @param commentIndent - The indentation level of the comment in spaces.
+ * @param options - Options including tabWidth, useTabs, printWidth, and useTokenSystem.
+ * @returns The normalized comment value.
+ */
+const normalizeBlockComment = (
+	commentValue: Readonly<string>,
+	commentIndent: number,
+	options: Readonly<{
+		readonly tabWidth: number;
+		readonly useTabs?: boolean | null | undefined;
+		readonly printWidth?: number;
+		readonly useTokenSystem?: boolean;
+	}>,
+): string => {
+	// If token system is requested and printWidth is available, use it
+	if (
+		options.useTokenSystem === true &&
+		options.printWidth !== undefined &&
+		options.printWidth > EMPTY
+	) {
+		// First normalize basic structure
+		const basicNormalized = normalizeBlockCommentBasic(
+			commentValue,
+			commentIndent,
+			{
+				tabWidth: options.tabWidth,
+				useTabs: options.useTabs,
+			},
+		);
+
+		// Parse to tokens
+		const tokens = parseCommentToTokens(basicNormalized);
+
+		// Wrap paragraphs if needed
+		const wrappedTokens = wrapParagraphTokens(
+			tokens,
+			options.printWidth,
+			commentIndent,
+			{
+				tabWidth: options.tabWidth,
+				useTabs: options.useTabs,
+			},
+		);
+
+		// Convert back to string
+		return tokensToCommentString(wrappedTokens, commentIndent, {
+			tabWidth: options.tabWidth,
+			useTabs: options.useTabs,
+		});
+	}
+
+	// Use basic normalization (original implementation)
+	return normalizeBlockCommentBasic(commentValue, commentIndent, {
+		tabWidth: options.tabWidth,
+		useTabs: options.useTabs,
+	});
+};
+
 const EMPTY = 0;
+
+// Token type definitions for comment processing
+interface TextToken {
+	readonly type: 'text';
+	readonly content: string;
+	readonly lines: readonly string[];
+}
+
+interface ParagraphToken {
+	readonly type: 'paragraph';
+	readonly content: string;
+	readonly lines: readonly string[];
+	readonly isContinuation: boolean;
+}
+
+interface CodeBlockToken {
+	readonly type: 'code';
+	readonly startPos: number;
+	readonly endPos: number;
+	readonly rawCode: string;
+	readonly formattedCode?: string;
+}
+
+interface AnnotationToken {
+	readonly type: 'annotation';
+	readonly name: string;
+	readonly content: string;
+	readonly followingText?: string;
+}
+
+type CommentToken =
+	| TextToken
+	| ParagraphToken
+	| CodeBlockToken
+	| AnnotationToken;
+
+/**
+ * Parses a normalized comment string into basic tokens.
+ * Detects paragraphs based on empty lines and continuation logic.
+ * Also detects code blocks (pattern: slash-asterisk ... asterisk-slash).
+ * @param normalizedComment - The normalized comment string.
+ * @returns Array of tokens.
+ */
+const parseCommentToTokens = (
+	normalizedComment: Readonly<string>,
+): readonly CommentToken[] => {
+	const lines = normalizedComment.split('\n');
+	// Skip first line (/**) and last line (*/)
+	if (lines.length <= INDEX_TWO) {
+		return [];
+	}
+	const contentLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
+
+	// Join content for code block detection
+	const fullContent = contentLines.join('\n');
+
+	// First detect /* ... */ code blocks (simple detection)
+	// Scan for /* and */ patterns, but avoid matching /** or */
+	const codeBlockPattern = /\/\*(?!\*)([\s\S]*?)\*\//g;
+	const codeBlocks: Array<{ start: number; end: number; content: string }> =
+		[];
+	let match;
+	// Reset regex lastIndex to ensure we start from the beginning
+	codeBlockPattern.lastIndex = ARRAY_START_INDEX;
+	while ((match = codeBlockPattern.exec(fullContent)) !== null) {
+		const start = match.index ?? ARRAY_START_INDEX;
+		const end = (match.index ?? ARRAY_START_INDEX) + (match[0]?.length ?? 0);
+		const content = match[1] ?? '';
+		codeBlocks.push({ start, end, content });
+	}
+
+	// Detect paragraphs based on empty lines and sentence boundaries
+	// Skip code blocks when detecting paragraphs
+	const tokens: CommentToken[] = [];
+	let currentParagraph: string[] = [];
+	let currentParagraphLines: string[] = [];
+	let currentPos = ARRAY_START_INDEX;
+
+	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
+		const line = contentLines[i] ?? '';
+		const lineStartPos = currentPos;
+		const lineEndPos = currentPos + line.length;
+		currentPos = lineEndPos + INDEX_ONE; // +1 for newline
+
+		// Check if this line is inside a code block
+		const isInCodeBlock = codeBlocks.some(
+			(cb) => lineStartPos >= cb.start && lineEndPos <= cb.end,
+		);
+
+		if (isInCodeBlock) {
+			// Finish current paragraph if any, then handle code block
+			if (currentParagraph.length > EMPTY) {
+				tokens.push({
+					type: 'paragraph',
+					content: currentParagraph.join(' '),
+					lines: currentParagraphLines,
+					isContinuation: false,
+				} satisfies ParagraphToken);
+				currentParagraph = [];
+				currentParagraphLines = [];
+			}
+			// Find the code block this line belongs to
+			const codeBlock = codeBlocks.find(
+				(cb) => lineStartPos >= cb.start && lineEndPos <= cb.end,
+			);
+			if (codeBlock) {
+				// Only add code block token once (on first line)
+				const codeBlockStartLine = fullContent
+					.substring(ARRAY_START_INDEX, codeBlock.start)
+					.split('\n').length;
+				if (i === codeBlockStartLine) {
+					tokens.push({
+						type: 'code',
+						startPos: codeBlock.start,
+						endPos: codeBlock.end,
+						rawCode: codeBlock.content,
+					} satisfies CodeBlockToken);
+				}
+			}
+			continue;
+		}
+
+		// Remove comment prefix (*) to check if line is empty
+		const trimmedLine = line.replace(/^\s*\*\s*/, '').trim();
+
+		if (trimmedLine.length === EMPTY) {
+			// Empty line - finish current paragraph if any
+			if (currentParagraph.length > EMPTY) {
+				tokens.push({
+					type: 'paragraph',
+					content: currentParagraph.join(' '),
+					lines: currentParagraphLines,
+					isContinuation: false,
+				} satisfies ParagraphToken);
+				currentParagraph = [];
+				currentParagraphLines = [];
+			}
+			// Empty lines create paragraph boundaries but aren't tokens themselves
+		} else {
+			// Check for sentence boundary: ends with sentence-ending punctuation
+			// and next line starts with capital letter
+			const endsWithSentencePunctuation = /[.!?]\s*$/.test(trimmedLine);
+			const nextLine = contentLines[i + INDEX_ONE];
+			const nextTrimmed =
+				nextLine !== undefined
+					? nextLine.replace(/^\s*\*\s*/, '').trim()
+					: '';
+			const nextStartsWithCapital =
+				nextTrimmed.length > EMPTY && /^[A-Z]/.test(nextTrimmed);
+
+			// Add current line to paragraph
+			currentParagraph.push(trimmedLine);
+			currentParagraphLines.push(line);
+
+			// If this is a sentence boundary, finish current paragraph
+			if (
+				endsWithSentencePunctuation &&
+				nextStartsWithCapital &&
+				nextTrimmed.length > EMPTY
+			) {
+				tokens.push({
+					type: 'paragraph',
+					content: currentParagraph.join(' '),
+					lines: currentParagraphLines,
+					isContinuation: false,
+				} satisfies ParagraphToken);
+				currentParagraph = [];
+				currentParagraphLines = [];
+			}
+		}
+	}
+
+	// Add last paragraph if any
+	if (currentParagraph.length > EMPTY) {
+		tokens.push({
+			type: 'paragraph',
+			content: currentParagraph.join(' '),
+			lines: currentParagraphLines,
+			isContinuation: false,
+		} satisfies ParagraphToken);
+	}
+
+	// If no paragraphs were found, create a single text token
+	if (tokens.length === EMPTY) {
+		const content = contentLines.join('\n');
+		return [
+			{
+				type: 'text',
+				content,
+				lines: contentLines,
+			} satisfies TextToken,
+		];
+	}
+
+	return tokens;
+};
+
+/**
+ * Converts tokens back to a formatted comment string.
+ * Uses wrapped paragraphs if they've been wrapped.
+ * @param tokens - Array of comment tokens.
+ * @param commentIndent - The indentation level of the comment in spaces.
+ * @param options - Options including tabWidth and useTabs.
+ * @returns The formatted comment string.
+ */
+const tokensToCommentString = (
+	tokens: readonly CommentToken[],
+	commentIndent: number,
+	options: Readonly<{
+		readonly tabWidth: number;
+		readonly useTabs?: boolean | null | undefined;
+	}>,
+): string => {
+	const baseIndent = createIndent(
+		commentIndent,
+		options.tabWidth,
+		options.useTabs,
+	);
+	const commentPrefix = `${baseIndent} * `;
+	const lines: string[] = [`${baseIndent}/**`];
+
+	for (const token of tokens) {
+		if (token.type === 'text') {
+			for (const line of token.lines) {
+				// Preserve existing structure if line already has prefix
+				if (line.trimStart().startsWith('*')) {
+					lines.push(line);
+				} else {
+					lines.push(`${commentPrefix}${line.trimStart()}`);
+				}
+			}
+		} else if (token.type === 'paragraph') {
+			// Use wrapped lines if available, otherwise use original lines
+			for (const line of token.lines) {
+				if (line.trimStart().startsWith('*')) {
+					lines.push(line);
+				} else {
+					lines.push(`${commentPrefix}${line.trimStart()}`);
+				}
+			}
+		} else if (token.type === 'code') {
+			// Use formatted code if available, otherwise use raw code
+			const codeToUse = token.formattedCode ?? token.rawCode;
+			if (codeToUse.length > EMPTY) {
+				// Format code block with comment prefix
+				// Split formatted code into lines and add prefix
+				const codeLines = codeToUse.split('\n');
+				for (const codeLine of codeLines) {
+					if (codeLine.trim().length === EMPTY) {
+						// Empty line - just comment prefix
+						lines.push(commentPrefix.trimEnd());
+					} else {
+						lines.push(`${commentPrefix}${codeLine}`);
+					}
+				}
+			}
+		}
+		// Annotation tokens will be handled later
+	}
+
+	lines.push(`${baseIndent} */`);
+	return lines.join('\n');
+};
+
+/**
+ * Wraps paragraph tokens based on effective page width.
+ * Effective width accounts for comment prefix: printWidth - (baseIndent + ' * '.length)
+ * @param tokens - Array of tokens (should be ParagraphTokens).
+ * @param printWidth - The maximum line width.
+ * @param baseIndent - The base indentation level in spaces.
+ * @param options - Options including tabWidth and useTabs.
+ * @returns Array of wrapped paragraph tokens.
+ */
+const wrapParagraphTokens = (
+	tokens: readonly CommentToken[],
+	printWidth: number,
+	baseIndent: number,
+	options: Readonly<{
+		readonly tabWidth: number;
+		readonly useTabs?: boolean | null | undefined;
+	}>,
+): readonly ParagraphToken[] => {
+	const commentPrefixLength = baseIndent + ' * '.length;
+	const effectiveWidth = printWidth - commentPrefixLength;
+
+	const wrappedTokens: ParagraphToken[] = [];
+
+	for (const token of tokens) {
+		if (token.type !== 'paragraph') {
+			// For non-paragraph tokens, wrap them as-is (they'll be handled separately)
+			continue;
+		}
+
+		const words = token.content.split(/\s+/);
+		const wrappedLines: string[] = [];
+		let currentLine: string[] = [];
+
+		for (const word of words) {
+			const testLine =
+				currentLine.length === EMPTY
+					? word
+					: `${currentLine.join(' ')} ${word}`;
+
+			if (testLine.length <= effectiveWidth) {
+				currentLine.push(word);
+			} else {
+				// Line would exceed width, wrap it
+				if (currentLine.length > EMPTY) {
+					wrappedLines.push(currentLine.join(' '));
+				}
+				currentLine = [word];
+			}
+		}
+
+		// Add last line if any
+		if (currentLine.length > EMPTY) {
+			wrappedLines.push(currentLine.join(' '));
+		}
+
+		// Create new paragraph token with wrapped lines
+		// Need to reconstruct lines with comment prefix
+		const baseIndentStr = createIndent(
+			baseIndent,
+			options.tabWidth,
+			options.useTabs,
+		);
+		const commentPrefix = `${baseIndentStr} * `;
+		const wrappedTokenLines = wrappedLines.map(
+			(line) => `${commentPrefix}${line}`,
+		);
+
+		wrappedTokens.push({
+			type: 'paragraph',
+			content: wrappedLines.join(' '),
+			lines: wrappedTokenLines,
+			isContinuation: token.isContinuation,
+		} satisfies ParagraphToken);
+	}
+
+	return wrappedTokens;
+};
 
 export {
 	findApexDocComments,
@@ -192,6 +596,9 @@ export {
 	createIndent,
 	getCommentIndent,
 	normalizeBlockComment,
+	parseCommentToTokens,
+	tokensToCommentString,
+	wrapParagraphTokens,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,
@@ -199,4 +606,11 @@ export {
 	STRING_OFFSET,
 	MIN_INDENT_LEVEL,
 	EMPTY,
+};
+export type {
+	CommentToken,
+	TextToken,
+	ParagraphToken,
+	CodeBlockToken,
+	AnnotationToken,
 };
