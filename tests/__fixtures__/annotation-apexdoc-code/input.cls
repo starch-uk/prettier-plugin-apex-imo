@@ -1,7 +1,13 @@
 /**
  * Test class with annotation examples
  * Example usage:
- * {@code @auraenabled(cacheable=true)}
+ * {@code
+ * public class TestClass {
+ *   @auraenabled(cacheable=true)
+ *   public static void myMethod() {
+ *   }
+ * }
+ * }
  */
 public class TestClass {
   @auraenabled(cacheable=true)
