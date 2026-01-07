@@ -25,10 +25,6 @@ import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
 import { ARRAY_START_INDEX, isMalformedCommentBlock } from './comments.js';
 import { normalizeSingleApexDocComment } from './apexdoc.js';
-import {
-	extractCodeFromBlock,
-} from './apexdoc-code.js';
-import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -146,6 +142,7 @@ const getCurrentOriginalText = (): string | undefined => currentOriginalText;
 
 const getFormattedCodeBlock = (key: string): string | undefined =>
 	formattedCodeBlocks.get(key);
+
 
 const clearFormattedCodeBlocks = (): void => {
 	formattedCodeBlocks.clear();

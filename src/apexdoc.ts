@@ -51,6 +51,36 @@ const SLICE_END_OFFSET = -1;
 const DEFAULT_BRACE_COUNT = 1;
 const ZERO_BRACE_COUNT = 0;
 
+/**
+ * Synchronously normalize {@code} blocks in text by applying annotation and type normalization.
+ * @param text - The text that may contain {@code} blocks.
+ * @returns The text with {@code} blocks normalized.
+ */
+const normalizeCodeBlocksInText = (text: string): string => {
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = text;
+	let startIndex = 0;
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
+		// Normalize annotations and type names in the code content
+		const normalizedCode = normalizeTypeNamesInCode(normalizeAnnotationNamesInText(codeContent));
+		// Replace the code block with normalized version
+		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
+		// Move past this code block
+		startIndex = endIndex + 1;
+	}
+
+	return result;
+};
+
 const isCommentStart = (text: string, pos: number): boolean =>
 	text.substring(pos, pos + COMMENT_START_LENGTH) === COMMENT_START_MARKER;
 
@@ -113,35 +143,6 @@ interface CodeBlock {
 // eslint-disable-next-line @typescript-eslint/no-type-alias -- Using utility type Readonly<T> per optimization plan to reduce duplication
 type ReadonlyCodeBlock = Readonly<CodeBlock>;
 
-/**
- * Synchronously normalize {@code} blocks in text by applying annotation and type normalization.
- * @param text - The text that may contain {@code} blocks.
- * @returns The text with {@code} blocks normalized.
- */
-const normalizeCodeBlocksInText = (text: string): string => {
-	const codeTag = '{@code';
-	const codeTagEnd = '}';
-	const codeTagLength = codeTag.length;
-
-	let result = text;
-	let startIndex = 0;
-
-	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
-		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
-		if (endIndex === -1) break;
-
-		// Extract the code content
-		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
-		// Normalize annotations and type names in the code content
-		const normalizedCode = normalizeTypeNamesInCode(normalizeAnnotationNamesInText(codeContent));
-		// Replace the code block with normalized version
-		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
-		// Move past this code block
-		startIndex = endIndex + 1;
-	}
-
-	return result;
-};
 
 /**
  * Normalizes a single ApexDoc comment value.
