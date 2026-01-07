@@ -542,31 +542,6 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
-	// Add embed function to handle {@code} blocks in comments
-	result.embed = (path: Readonly<AstPath<ApexNode>>, options: Readonly<ParserOptions>) => {
-		const node = path.node;
-
-		// Check if this is a comment node that might contain {@code} blocks
-		if (node && typeof node === 'object' && '@class' in node) {
-			const nodeClass = getNodeClassOptional(node);
-			if (nodeClass && nodeClass.includes('BlockComment')) {
-				const commentValue = (node as any).value;
-				if (typeof commentValue === 'string' && commentValue.includes('{@code')) {
-					// Return async embed function
-					return async (textToDoc: any, print: any, path: any, options: any) => {
-						// Process {@code} blocks using our custom Apex parser/printer
-						const processedComment = processCodeBlocksWithApexParser(commentValue, options);
-
-						// Return the processed comment as a doc
-						return processedComment;
-					};
-				}
-			}
-		}
-
-		return null;
-	};
-
 	return result;
 };
 /**

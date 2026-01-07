@@ -614,7 +614,7 @@ const wrapParagraphTokens = (
  * @param getFormattedCodeBlock - Function to get cached embed-formatted comments.
  * @returns The formatted comment as a Prettier Doc.
  */
-const customPrintComment = (
+const customPrintComment = async (
 	path: Readonly<AstPath<ApexNode>>,
 	_options: Readonly<ParserOptions>,
 	_print: (path: Readonly<AstPath<ApexNode>>) => Doc,
@@ -627,7 +627,7 @@ const customPrintComment = (
 	getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires parameters
-): Doc => {
+): Promise<Doc> => {
 	const node = path.getNode();
 
 	/**
@@ -697,7 +697,7 @@ const customPrintComment = (
 		}
 
 		// Process the ApexDoc comment using the centralized logic
-		const processedComment = processApexDocComment(
+		const processedComment = await processApexDocComment(
 			commentValue,
 			options,
 			getCurrentOriginalText,

@@ -7,6 +7,7 @@ import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { APEX_OBJECT_SUFFIXES } from './refs/object-suffixes.js';
 import { getNodeClassOptional } from './utils.js';
+import { getCurrentPluginInstance } from './printer.js';
 
 /**
  * Normalizes the casing of object type suffixes in a type name.
@@ -327,65 +328,109 @@ const createTypeNormalizingPrint =
 	};
 
 /**
- * Normalizes type names in a code string by finding and normalizing object suffixes and standard object types.
+ * Normalizes type names in a code string using AST-based parsing.
  * This is used for normalizing code blocks in ApexDoc comments before formatting.
+ *
+ * Parses the code using the Apex AST parser to identify identifiers in type contexts
+ * and normalizes standard object names and object suffixes.
+ *
  * @param code - The code string to normalize.
- * @returns The code string with normalized type names.
+ * @returns The normalized code string with correct type names.
  * @example
  * ```typescript
- * normalizeTypeNamesInCode('MyCustomObject__C obj = new MyCustomObject__C();');
- * // Returns 'MyCustomObject__c obj = new MyCustomObject__c();'
+ * await normalizeTypeNamesInCode('account acc = new account(); List<account> accounts = new List<account>();');
+ * // Returns 'Account acc = new Account(); List<Account> accounts = new List<Account>();'
  * ```
  */
-const normalizeTypeNamesInCode = (code: string): string => {
+const normalizeTypeNamesInCode = async (code: string): Promise<string> => {
 	if (!code || typeof code !== 'string') return code;
 
-	let result = code;
+	try {
+		// Parse the code using the Apex anonymous parser
+		const pluginWrapper = getCurrentPluginInstance();
+		const plugin = pluginWrapper?.default;
+		if (!plugin?.parsers?.['apex-anonymous']?.parse) {
+			throw new Error('AST parser not available, cannot normalize code');
+		}
 
-	// First, handle type names with object suffixes (these are safe to normalize)
-	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
-		([, a], [, b]) => b.length - a.length,
-	);
-
-	// Process code to find suffixed type names
-	for (const [, normalizedSuffix] of suffixes) {
-		const escapedSuffix = normalizedSuffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		const pattern = new RegExp(
-			`(?<![a-zA-Z0-9_])([a-zA-Z0-9_]+)${escapedSuffix}(?![a-zA-Z0-9_])`,
-			'gi',
-		);
-		result = result.replace(pattern, (match, prefix: string) => {
-			const fullTypeName = `${prefix}${normalizedSuffix}`;
-			return normalizeTypeName(fullTypeName);
+		const ast = await plugin.parsers['apex-anonymous'].parse(code, {
+			parser: 'apex-anonymous',
 		});
-	}
 
-	// For standard object names without suffixes, use context-aware patterns
-	// Look for patterns that indicate type usage rather than variable usage
-	const standardObjectPatterns = [
-		// Constructor calls: new TypeName(
-		/\bnew\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/gi,
-		// Cast expressions: (TypeName)
-		/\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)/gi,
-		// Generic type parameters: List<TypeName>, Map<TypeName, ...>
-		/(?:List|Map|Set)\s*<\s*([a-zA-Z_][a-zA-Z0-9_]*)\b/gi,
-		// Variable declarations: TypeName variableName [=|;]
-		// Look for identifiers followed by another identifier and then = or ;
-		/\b([a-zA-Z_][a-zA-Z0-9_]*)\s+[a-zA-Z_][a-zA-Z0-9_]*\s*[=;]/gi,
-	];
+		// Find all identifiers that should be normalized
+		const positions: Array<{ start: number; end: number; original: string; normalized: string }> = [];
+		findIdentifiersToNormalize(ast, positions, 0);
 
-	for (const pattern of standardObjectPatterns) {
-		result = result.replace(pattern, (match, typeName: string) => {
-			const normalizedType = normalizeStandardObjectType(typeName);
-			if (normalizedType !== typeName) {
-				return match.replace(typeName, normalizedType);
+		if (positions.length === 0) {
+			return code; // No normalization needed
+		}
+
+		// Sort by position (reverse order to avoid offset issues)
+		positions.sort((a, b) => b.start - a.start);
+
+		// Apply replacements
+		let result = code;
+		for (const pos of positions) {
+			if (pos.start >= 0 && pos.end <= code.length) {
+				const before = result.substring(0, pos.start);
+				const after = result.substring(pos.end);
+				result = before + pos.normalized + after;
 			}
-			return match;
-		});
+		}
+
+		return result;
+	} catch (error) {
+		// If AST parsing fails, return original code unchanged
+		console.warn('Failed to normalize code with AST parsing:', error);
+		return code;
+	}
+};
+
+/**
+ * Traverses an AST and collects positions of identifiers that should be normalized
+ */
+const findIdentifiersToNormalize = (node: any, positions: Array<{ start: number; end: number; original: string; normalized: string }>, offset = 0, path: string[] = []): void => {
+	if (!node || typeof node !== 'object') return;
+
+	// Check if this is an identifier node
+	if (node['@class'] && node['@class'].includes('Identifier') && node.value && typeof node.value === 'string') {
+		const identifier = node.value;
+		const normalized = normalizeTypeName(identifier);
+
+		if (normalized !== identifier && node.loc && typeof node.loc === 'object') {
+			// Try different location field names
+			let startIndex = node.loc.startIndex || node.loc.start || (node.loc.position && node.loc.position.start);
+			let endIndex = node.loc.endIndex || node.loc.end || (node.loc.position && node.loc.position.end);
+
+			// Also try direct properties on the location object
+			if (typeof startIndex !== 'number') {
+				startIndex = (node.loc as any).startIndex || (node.loc as any).start;
+			}
+			if (typeof endIndex !== 'number') {
+				endIndex = (node.loc as any).endIndex || (node.loc as any).end;
+			}
+
+			if (typeof startIndex === 'number' && typeof endIndex === 'number') {
+				positions.push({
+					start: offset + startIndex,
+					end: offset + endIndex,
+					original: identifier,
+					normalized: normalized
+				});
+			}
+		}
 	}
 
-	return result;
+	// Recursively process all properties
+	for (const [key, value] of Object.entries(node)) {
+		if (Array.isArray(value)) {
+			value.forEach((item, index) => findIdentifiersToNormalize(item, positions, offset, [...path, `${key}[${index}]`]));
+		} else if (value && typeof value === 'object' && key !== 'loc') { // Skip loc objects to avoid infinite recursion
+			findIdentifiersToNormalize(value, positions, offset, [...path, key]);
+		}
+	}
 };
+
 
 export {
 	normalizeTypeName,

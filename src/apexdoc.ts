@@ -52,11 +52,11 @@ const DEFAULT_BRACE_COUNT = 1;
 const ZERO_BRACE_COUNT = 0;
 
 /**
- * Synchronously normalize {@code} blocks in text by applying annotation and type normalization.
+ * Asynchronously normalize {@code} blocks in text by applying annotation and type normalization.
  * @param text - The text that may contain {@code} blocks.
  * @returns The text with {@code} blocks normalized.
  */
-const normalizeCodeBlocksInText = (text: string): string => {
+const normalizeCodeBlocksInText = async (text: string): Promise<string> => {
 	const codeTag = '{@code';
 	const codeTagEnd = '}';
 	const codeTagLength = codeTag.length;
@@ -71,7 +71,7 @@ const normalizeCodeBlocksInText = (text: string): string => {
 		// Extract the code content
 		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
 		// Normalize annotations and type names in the code content
-		const normalizedCode = normalizeTypeNamesInCode(normalizeAnnotationNamesInText(codeContent));
+		const normalizedCode = await normalizeTypeNamesInCode(normalizeAnnotationNamesInText(codeContent));
 		// Replace the code block with normalized version
 		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
 		// Move past this code block
@@ -132,7 +132,7 @@ const normalizeCodeContentAsync = async (codeContent: string, options: ParserOpt
 		} catch (parseError) {
 			// If parsing fails, fall back to basic regex normalization
 			console.warn('Failed to parse {@code} block for AST normalization, using regex fallback:', parseError);
-			normalizedCode = normalizeTypeNamesInCode(normalizedCode);
+			normalizedCode = await normalizeTypeNamesInCode(normalizedCode);
 		}
 
 		return normalizedCode;
@@ -376,14 +376,14 @@ const normalizeSingleApexDocComment = (
  * @returns Array of formatted comment lines (without base indentation).
  */
 
-export function processApexDocCommentLines(
+export async function processApexDocCommentLines(
 	commentValue: string,
 	commentIndent: number,
 	options: ParserOptions,
 	getFormattedCodeBlock: (key: string) => string | undefined,
-): string[] {
+): Promise<string[]> {
 	// First, normalize {@code} blocks in the entire comment
-	const codeBlockNormalizedComment = normalizeCodeBlocksInText(commentValue);
+	const codeBlockNormalizedComment = await normalizeCodeBlocksInText(commentValue);
 
 	// Normalize the comment structure
 	const normalizedComment = normalizeSingleApexDocComment(
@@ -1183,12 +1183,12 @@ function processCodeBlock(
  * @param options - Parser options
  * @returns Processed comment with formatted {@code} blocks
  */
-export function processApexDocComment(
+export async function processApexDocComment(
 	commentValue: string,
 	options: ParserOptions,
 	_getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
-): string {
+): Promise<string> {
 	// Check if there's a pre-formatted version from embed processing
 	const codeTagPos = commentValue.indexOf('{@code');
 	const commentKey = codeTagPos !== -1 ? `${commentValue.length}-${codeTagPos}` : null;
@@ -1200,8 +1200,8 @@ export function processApexDocComment(
 		return embedFormattedComment;
 	}
 
-	// Process {@code} blocks using Apex parser and printer (synchronous but AST-based, not regex)
-	const normalizedComment = processCodeBlocksWithApexParser(commentValue, options);
+	// Process {@code} blocks using Apex parser and printer (AST-based)
+	const normalizedComment = await processCodeBlocksWithApexParser(commentValue, options);
 
 	// Extract ParagraphTokens and clean up malformed indentation
 	const tokens = parseCommentToTokens(normalizedComment);

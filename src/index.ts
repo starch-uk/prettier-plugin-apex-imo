@@ -64,7 +64,7 @@ const originalApexPrinter = getApexPrinter();
  * const doc = customPrintComment(path);
  * ```
  */
-const customPrintComment = (
+const customPrintComment = async (
 	path: Readonly<AstPath<ApexNode>>,
 	options: Readonly<ParserOptions>,
 	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
@@ -74,7 +74,7 @@ const customPrintComment = (
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	) => Doc,
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires 4 parameters
-): Doc => {
+): Promise<Doc> => {
 	// Get stored options from printer
 	const storedOptions = getCurrentPrintOptions();
 	if (!storedOptions) {
@@ -93,7 +93,7 @@ const customPrintComment = (
 	}
 
 	// Use the centralized comment processing logic
-	const result = customPrintCommentFn(
+	return await customPrintCommentFn(
 		path,
 		options,
 		print,
@@ -102,7 +102,6 @@ const customPrintComment = (
 		getCurrentOriginalText,
 		getFormattedCodeBlock,
 	);
-	return result;
 };
 
 const wrappedPrinter = {
