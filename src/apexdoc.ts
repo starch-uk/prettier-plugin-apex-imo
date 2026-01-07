@@ -230,16 +230,22 @@ const tokensToApexDocString = (
 							let extraIndent = '';
 							if (i > 0) {
 								const prevLine = codeLines[i - 1]?.trim() ?? '';
-								// If previous line doesn't end with semicolon/brace and this line doesn't start with them,
-								// it's a continuation that should be indented
-								const isContinuation = prevLine.length > 0 &&
-									!prevLine.endsWith(';') &&
-									!prevLine.endsWith('}') &&
-									!prevLine.endsWith('{') &&
-									!codeLine.trim().startsWith('}') &&
-									!codeLine.trim().startsWith('};');
-								if (isContinuation) {
-									extraIndent = '  ';
+								const currentLineTrimmed = codeLine.trim();
+
+								// Don't indent lines that start with closing braces
+								if (currentLineTrimmed.startsWith('}') || currentLineTrimmed.startsWith('};')) {
+									extraIndent = '';
+								} else {
+									// Indent lines that follow opening braces, or are continuations
+									const followsOpeningBrace = prevLine.endsWith('{');
+									const isContinuation = prevLine.length > 0 &&
+										!prevLine.endsWith(';') &&
+										!prevLine.endsWith('}') &&
+										!prevLine.endsWith('{');
+
+									if (followsOpeningBrace || isContinuation) {
+										extraIndent = '  ';
+									}
 								}
 							}
 							lines.push(`${commentPrefix}${extraIndent}${codeLine}`);
