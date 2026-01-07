@@ -23,7 +23,7 @@ import {
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
-import { ARRAY_START_INDEX, isMalformedApexDocComment } from './comments.js';
+import { ARRAY_START_INDEX, isMalformedCommentBlock } from './comments.js';
 import { normalizeSingleApexDocComment } from './apexdoc.js';
 import {
 	extractCodeFromBlock,

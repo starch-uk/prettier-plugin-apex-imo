@@ -32,6 +32,7 @@ import {
 } from './refs/apexdoc-annotations.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
+import { normalizeTypeNamesInCode } from './casing.js';
 import { APEXDOC_GROUP_NAMES } from './refs/apexdoc-annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
@@ -42,9 +43,63 @@ const INDEX_THREE = 3;
 const INDEX_FOUR = 4;
 const MAX_ANNOTATION_LINE_LENGTH = 20;
 const PARSE_INT_RADIX = 10;
+const COMMENT_START_MARKER = '/**';
+const COMMENT_END_MARKER = '*/';
+const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
+const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
 const SLICE_END_OFFSET = -1;
 const DEFAULT_BRACE_COUNT = 1;
 const ZERO_BRACE_COUNT = 0;
+
+const isCommentStart = (text: string, pos: number): boolean =>
+	text.substring(pos, pos + COMMENT_START_LENGTH) === COMMENT_START_MARKER;
+
+const getCommentEndLength = (text: string, pos: number): number => {
+	// Check for standard */ first
+	if (text.substring(pos, pos + COMMENT_END_LENGTH) === COMMENT_END_MARKER) {
+		return COMMENT_END_LENGTH;
+	}
+	// Check for **/, ***/, etc.
+	let asteriskCount = 0;
+	let checkPos = pos;
+	while (checkPos < text.length && text[checkPos] === '*') {
+		asteriskCount++;
+		checkPos++;
+	}
+	// Must have at least 2 asterisks and then a /
+	if (
+		asteriskCount >= INDEX_TWO &&
+		checkPos < text.length &&
+		text[checkPos] === '/'
+	) {
+		return asteriskCount + STRING_OFFSET; // asterisks + /
+	}
+	return ARRAY_START_INDEX; // Not a valid comment end
+};
+
+const findApexDocComments = (
+	text: Readonly<string>,
+): { start: number; end: number }[] => {
+	const comments: { start: number; end: number }[] = [];
+	for (let i = ARRAY_START_INDEX; i < text.length; i++) {
+		if (isCommentStart(text, i)) {
+			const start = i;
+			for (
+				i += COMMENT_START_LENGTH;
+				i < text.length - STRING_OFFSET;
+				i++
+			) {
+				const endLength = getCommentEndLength(text, i);
+				if (endLength > ARRAY_START_INDEX) {
+					comments.push({ end: i + endLength, start });
+					i += endLength - STRING_OFFSET;
+					break;
+				}
+			}
+		}
+	}
+	return comments;
+};
 
 interface CodeBlock {
 	startPos: number;
@@ -57,6 +112,36 @@ interface CodeBlock {
 
 // eslint-disable-next-line @typescript-eslint/no-type-alias -- Using utility type Readonly<T> per optimization plan to reduce duplication
 type ReadonlyCodeBlock = Readonly<CodeBlock>;
+
+/**
+ * Synchronously normalize {@code} blocks in text by applying annotation and type normalization.
+ * @param text - The text that may contain {@code} blocks.
+ * @returns The text with {@code} blocks normalized.
+ */
+const normalizeCodeBlocksInText = (text: string): string => {
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = text;
+	let startIndex = 0;
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
+		// Normalize annotations and type names in the code content
+		const normalizedCode = normalizeTypeNamesInCode(normalizeAnnotationNamesInText(codeContent));
+		// Replace the code block with normalized version
+		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
+		// Move past this code block
+		startIndex = endIndex + 1;
+	}
+
+	return result;
+};
 
 /**
  * Normalizes a single ApexDoc comment value.
@@ -139,7 +224,6 @@ const normalizeSingleApexDocComment = (
  * @param getFormattedCodeBlock - Function to get embed-formatted code blocks.
  * @returns Array of formatted comment lines (without base indentation).
  */
-import { normalizeCodeBlocksInText } from './comments.js';
 
 export function processApexDocCommentLines(
 	commentValue: string,
@@ -790,8 +874,10 @@ const normalizeSingleApexDocCommentWithTokens = async (
 };
 
 export {
+	findApexDocComments,
 	FORMAT_FAILED_PREFIX,
 	EMPTY_CODE_TAG,
+	normalizeCodeBlocksInText,
 	normalizeSingleApexDocComment,
 	parseApexDocTokens,
 	detectAnnotationsInTokens,
@@ -930,6 +1016,61 @@ function processCodeBlock(
 			return [`{@code`, ...lines, `}`];
 		}
 	}
+}
+
+/**
+ * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.
+ * @param commentValue - The raw comment value from the AST
+ * @param options - Parser options
+ * @param _getCurrentOriginalText - Function to get the original source text
+ * @param getFormattedCodeBlock - Function to get cached embed-formatted comments
+ * @returns The processed comment ready for printing
+ */
+export function processApexDocComment(
+	commentValue: string,
+	options: ParserOptions,
+	_getCurrentOriginalText: () => string | undefined,
+	getFormattedCodeBlock: (key: string) => string | undefined,
+): string {
+	// Comment processing without {@code} block normalization
+	const normalizedComment = commentValue;
+
+	// Extract ParagraphTokens and clean up malformed indentation
+	const tokens = parseCommentToTokens(normalizedComment);
+
+	// Clean up indentation in token lines
+	const cleanedTokens = tokens.map(token => {
+		if (token.type === 'paragraph') {
+			const cleanedLines = token.lines.map(line => {
+				// Remove malformed indentation and normalize
+				const match = line.match(/^(\s*)\*?\s*(.*)$/);
+				if (match) {
+					const [, indent, content] = match;
+					// For well-formed comments, preserve existing indentation
+					// Only normalize if there's no asterisk or malformed spacing
+					if (indent.includes('*')) {
+						// Already has asterisk, preserve as-is
+						return line;
+					} else {
+						// No asterisk, add standard formatting
+						return ` * ${content}`;
+					}
+				}
+				return line;
+			});
+			return {
+				...token,
+				lines: cleanedLines,
+			};
+		}
+		return token;
+	});
+
+	// Convert back to normalized comment text
+	return tokensToCommentString(cleanedTokens, 0, {
+		tabWidth: options.tabWidth,
+		useTabs: options.useTabs,
+	});
 }
 
 export type { CodeBlock, ReadonlyCodeBlock };

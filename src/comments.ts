@@ -5,13 +5,8 @@
 import type { ParserOptions, ApexNode } from './types.js';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
-import { normalizeSingleApexDocComment } from './apexdoc.js';
-import { normalizeAnnotationNamesInText } from './annotations.js';
+import { normalizeSingleApexDocComment, processApexDocComment } from './apexdoc.js';
 
-const COMMENT_START_MARKER = '/**';
-const COMMENT_END_MARKER = '*/';
-const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
-const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
 const ARRAY_START_INDEX = 0;
@@ -19,85 +14,8 @@ const STRING_OFFSET = 1;
 const INDEX_ONE = 1;
 const INDEX_TWO = 2;
 
-/**
- * Synchronously normalize {@code} blocks in text by applying annotation normalization.
- * @param text - The text that may contain {@code} blocks.
- * @returns The text with {@code} blocks normalized.
- */
-const normalizeCodeBlocksInText = (text: string): string => {
-	const codeTag = '{@code';
-	const codeTagEnd = '}';
-	const codeTagLength = codeTag.length;
 
-	let result = text;
-	let startIndex = 0;
 
-	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
-		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
-		if (endIndex === -1) break;
-
-		// Extract the code content
-		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
-		// Normalize annotations in the code content
-		const normalizedCode = normalizeAnnotationNamesInText(codeContent);
-		// Replace the code block with normalized version
-		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
-		// Move past this code block
-		startIndex = endIndex + 1;
-	}
-
-	return result;
-};
-
-const isCommentStart = (text: string, pos: number): boolean =>
-	text.substring(pos, pos + COMMENT_START_LENGTH) === COMMENT_START_MARKER;
-
-const getCommentEndLength = (text: string, pos: number): number => {
-	// Check for standard */ first
-	if (text.substring(pos, pos + COMMENT_END_LENGTH) === COMMENT_END_MARKER) {
-		return COMMENT_END_LENGTH;
-	}
-	// Check for **/, ***/, etc.
-	let asteriskCount = 0;
-	let checkPos = pos;
-	while (checkPos < text.length && text[checkPos] === '*') {
-		asteriskCount++;
-		checkPos++;
-	}
-	// Must have at least 2 asterisks and then a /
-	if (
-		asteriskCount >= INDEX_TWO &&
-		checkPos < text.length &&
-		text[checkPos] === '/'
-	) {
-		return asteriskCount + STRING_OFFSET; // asterisks + /
-	}
-	return ARRAY_START_INDEX; // Not a valid comment end
-};
-
-const findApexDocComments = (
-	text: Readonly<string>,
-): { start: number; end: number }[] => {
-	const comments: { start: number; end: number }[] = [];
-	for (let i = ARRAY_START_INDEX; i < text.length; i++) {
-		if (isCommentStart(text, i)) {
-			const start = i;
-			for (
-				i += COMMENT_START_LENGTH;
-				i < text.length - STRING_OFFSET;
-				i++
-			) {
-				const endLength = getCommentEndLength(text, i);
-				if (endLength > ARRAY_START_INDEX) {
-					comments.push({ end: i + endLength, start });
-					i += endLength - STRING_OFFSET;
-					break;
-				}
-			}
-		}
-	}
-	return comments;
-};
 
 const getIndentLevel = (
 	line: Readonly<string>,
@@ -286,11 +204,12 @@ const normalizeBlockComment = (
 const EMPTY = 0;
 
 /**
- * Detects if an ApexDoc comment is malformed.
+ * Detects if a block comment is malformed.
+ * Checks for common formatting issues like extra asterisks, missing asterisks, or inconsistent spacing.
  * @param commentValue - The comment text to check
  * @returns True if the comment is malformed, false otherwise
  */
-function isMalformedApexDocComment(commentValue: string): boolean {
+function isMalformedCommentBlock(commentValue: string): boolean {
 	const lines = commentValue.split('\n');
 
 	// Skip first and last lines (comment markers)
@@ -680,60 +599,6 @@ const wrapParagraphTokens = (
 };
 
 
-/**
- * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.
- * @param commentValue - The raw comment value from the AST
- * @param options - Parser options
- * @param getCurrentOriginalText - Function to get the original source text
- * @param getFormattedCodeBlock - Function to get cached embed-formatted comments
- * @returns The processed comment ready for printing
- */
-	const processApexDocComment = (
-		commentValue: string,
-		options: ParserOptions,
-		_getCurrentOriginalText: () => string | undefined,
-		getFormattedCodeBlock: (key: string) => string | undefined,
-	): string => {
-		// First normalize {@code} blocks synchronously
-		const normalizedComment = normalizeCodeBlocksInText(commentValue);
-
-		// Extract ParagraphTokens and clean up malformed indentation
-		const tokens = parseCommentToTokens(normalizedComment);
-
-		// Clean up indentation in token lines
-		const cleanedTokens = tokens.map(token => {
-			if (token.type === 'paragraph') {
-				const cleanedLines = token.lines.map(line => {
-					// Remove malformed indentation and normalize
-					const match = line.match(/^(\s*)\*?\s*(.*)$/);
-					if (match) {
-						const [, indent, content] = match;
-						// For well-formed comments, preserve existing indentation
-						// Only normalize if there's no asterisk or malformed spacing
-						if (indent.includes('*')) {
-							// Already has asterisk, preserve as-is
-							return line;
-						} else {
-							// No asterisk, add standard formatting
-							return ` * ${content}`;
-						}
-					}
-					return line;
-				});
-				return {
-					...token,
-					lines: cleanedLines,
-				};
-			}
-			return token;
-		});
-
-		// Convert back to normalized comment text
-		return tokensToCommentString(cleanedTokens, 0, {
-			tabWidth: options.tabWidth,
-			useTabs: options.useTabs,
-		});
-	};
 
 
 /**
@@ -849,7 +714,6 @@ const customPrintComment = (
 };
 
 export {
-	findApexDocComments,
 	getIndentLevel,
 	createIndent,
 	getCommentIndent,
@@ -857,10 +721,8 @@ export {
 	parseCommentToTokens,
 	tokensToCommentString,
 	wrapParagraphTokens,
-	processApexDocComment,
 	customPrintComment,
-	isMalformedApexDocComment,
-	normalizeCodeBlocksInText,
+	isMalformedCommentBlock,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,

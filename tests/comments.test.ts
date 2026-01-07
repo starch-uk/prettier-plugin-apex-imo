@@ -5,12 +5,12 @@
 /* eslint-disable @typescript-eslint/no-magic-numbers */
 import { describe, it, expect } from 'vitest';
 import {
-	findApexDocComments,
 	getIndentLevel,
 	createIndent,
 	getCommentIndent,
 	normalizeBlockComment,
 } from '../src/comments.js';
+import { findApexDocComments } from '../src/apexdoc.js';
 import { loadFixture } from './test-utils.js';
 
 describe('comments', () => {

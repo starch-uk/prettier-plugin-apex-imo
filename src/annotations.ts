@@ -16,7 +16,7 @@ import {
 	APEX_ANNOTATION_OPTION_NAMES,
 } from './refs/annotations.js';
 import { getNodeClass } from './utils.js';
-import { findApexDocComments } from './comments.js';
+import { findApexDocComments } from './apexdoc.js';
 
 // Regex is used here for preprocessing text before parsing (annotation normalization).
 // AST manipulation isn't feasible at this stage since we're normalizing annotation names
