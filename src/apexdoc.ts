@@ -122,6 +122,7 @@ const normalizeSingleApexDocComment = (
 	return tokensToApexDocString(finalTokens, commentIndent, {
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
+		printWidth: printWidth,
 	});
 };
 
@@ -143,6 +144,7 @@ const tokensToApexDocString = (
 	options: Readonly<{
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
+		readonly printWidth?: number;
 	}>,
 ): string => {
 	const baseIndent = createIndent(
@@ -190,6 +192,54 @@ const tokensToApexDocString = (
 				content: lines.join('\n'),
 				lines,
 			} satisfies TextToken);
+		} else if (token.type === 'code') {
+			// Render CodeBlockTokens as text tokens with {@code ...} format
+			const codeToUse = token.formattedCode ?? token.rawCode;
+			if (codeToUse.length > EMPTY) {
+				const lines: string[] = [];
+				const codeLines = codeToUse.split('\n');
+
+				// Check if this is a single-line code block that fits within the comment width
+				const isSingleLine = codeLines.length === 1;
+				const singleLineContent = codeLines[0]?.trim() ?? '';
+				const singleLineWithBraces = `{@code ${singleLineContent} }`;
+				const fitsOnOneLine = singleLineWithBraces.length <= options.printWidth - commentPrefix.length;
+
+				if (isSingleLine && fitsOnOneLine) {
+					// Single line format: {@code content }
+					lines.push(`${commentPrefix}${singleLineWithBraces}`);
+				} else {
+					// Multi-line format
+					// Start with {@code
+					lines.push(`${commentPrefix}{@code`);
+
+					// Add formatted code lines with comment prefix
+					// Adjust indentation for code blocks in comments to use consistent indentation
+					for (let i = 0; i < codeLines.length; i++) {
+						const codeLine = codeLines[i] ?? '';
+						if (codeLine.trim().length === EMPTY) {
+							// Empty line - just comment prefix
+							lines.push(commentPrefix.trimEnd());
+						} else {
+							// For code in comments, normalize indentation to be consistent
+							// First line: no extra indent
+							// Continuation lines: 2 spaces indent (standard Apex continuation)
+							const trimmedLine = codeLine.trimStart();
+							const indentStr = i === 0 ? '' : '  ';
+							lines.push(`${commentPrefix}${indentStr}${trimmedLine}`);
+						}
+					}
+
+					// End with }
+					lines.push(`${commentPrefix}}`);
+				}
+
+				apexDocTokens.push({
+					type: 'text',
+					content: lines.join('\n'),
+					lines,
+				} satisfies TextToken);
+			}
 		} else {
 			apexDocTokens.push(token);
 		}
@@ -325,7 +375,6 @@ const detectAnnotationsInTokens = (
 			for (const line of tokenLines) {
 				const matches = [...line.matchAll(annotationPattern)];
 				if (matches.length > EMPTY) {
-					console.log('DEBUG: Found annotation in line:', JSON.stringify(line));
 					hasAnnotations = true;
 					// Process each annotation match
 					for (const match of matches) {
@@ -399,7 +448,11 @@ const detectCodeBlockTokens = (
 
 	for (const token of tokens) {
 		if (token.type === 'text' || token.type === 'paragraph') {
-			const content = token.content;
+			// For paragraphs, work with the lines array to preserve line breaks
+			// For text tokens, reconstruct content from lines
+			const content = token.type === 'paragraph'
+				? token.lines.map(line => line.replace(/^\s*\*\s*/, '')).join('\n')
+				: token.content;
 			let currentPos = ARRAY_START_INDEX;
 			let lastMatchEnd = ARRAY_START_INDEX;
 
@@ -623,6 +676,7 @@ const normalizeSingleApexDocCommentWithTokens = async (
 	return tokensToApexDocString(finalTokens, commentIndent, {
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
+		printWidth: printWidth,
 	});
 };
 
