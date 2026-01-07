@@ -602,10 +602,10 @@ let cachedParser: any = null;
  * @param options - Parser options
  * @returns Promise resolving to processed comment
  */
-const processCodeBlocksWithApexParser = (
+const processCodeBlocksWithApexParser = async (
 	commentValue: string,
 	options: ParserOptions
-): string => {
+): Promise<string> => {
 	const codeTag = '{@code';
 	const codeTagEnd = '}';
 	const codeTagLength = codeTag.length;
@@ -636,8 +636,29 @@ const processCodeBlocksWithApexParser = (
 				return trimmed;
 			}).join('\n').trim();
 
-			// Apply type name normalization using the existing custom printer logic
-			const formattedCode = normalizeTypeNamesInCode(cleanedCode);
+			// Calculate comment indentation - assume 1 level of tabWidth indentation
+			// This is a simplification; in a real implementation, we'd parse the AST to get exact indentation
+			const commentIndent = options.tabWidth || 2;
+
+			// Format the code block using prettier with our plugin and reduced printWidth
+			// Calculate effective width: account for comment indentation dynamically
+			const baseIndent = ' '.repeat(commentIndent); // Use spaces for indentation calculation
+			const commentPrefixLength = baseIndent.length + ' * '.length;
+			const effectiveWidth = (options.printWidth || 80) - commentPrefixLength;
+
+			let formattedCode;
+			try {
+				formattedCode = await prettier.format(cleanedCode, {
+					...options,
+					printWidth: effectiveWidth,
+					parser: 'apex-anonymous',
+					plugins: [getCurrentPluginInstance()?.default ?? (await import('./index.js')).default],
+				});
+				formattedCode = formattedCode.trim();
+			} catch {
+				// Fallback to type normalization only if full formatting fails
+				formattedCode = await normalizeTypeNamesInCode(cleanedCode);
+			}
 
 			// Replace the code block with formatted version
 			result = result.substring(0, startIndex + codeTagLength) + '\n' + formattedCode + '\n' + result.substring(endIndex);

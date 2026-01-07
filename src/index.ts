@@ -60,6 +60,10 @@ async function normalizeCodeSnippetsInComments(
 			continue;
 		}
 
+		// Calculate comment indentation - assume 1 level of tabWidth indentation
+		// This accounts for the base indentation of the containing structure
+		const commentIndent = options.tabWidth || 2;
+
 		try {
 			// Clean comment markers from the code content
 			let cleanedCode = codeContent.split('\n').map(line => {
@@ -73,17 +77,35 @@ async function normalizeCodeSnippetsInComments(
 				return trimmed;
 			}).join('\n').trim();
 
-			// Normalize using AST-based approach
-			const normalizedCode = await normalizeTypeNamesInCode(cleanedCode);
+			// Format the code block using prettier with our plugin and reduced printWidth
+			// Calculate effective width: account for comment indentation dynamically
+			const baseIndent = ' '.repeat(commentIndent); // Use spaces for indentation calculation
+			const commentPrefixLength = baseIndent.length + ' * '.length;
+			const effectiveWidth = (options.printWidth || 80) - commentPrefixLength;
+
+
+			let normalizedCode;
+			try {
+				// Import the plugin dynamically to avoid circular dependency
+				const { default: currentPlugin } = await import('./index.js');
+				normalizedCode = await prettier.format(cleanedCode, {
+					...options,
+					printWidth: effectiveWidth,
+					parser: 'apex-anonymous',
+					plugins: [currentPlugin],
+				});
+				normalizedCode = normalizedCode.trim();
+
+			} catch {
+				// Fallback to type normalization only if full formatting fails
+				normalizedCode = await normalizeTypeNamesInCode(cleanedCode);
+			}
 
 			// Format the normalized code back with proper comment markers
 			const normalizedLines = normalizedCode.split('\n');
-			const formattedCode = normalizedLines.map((line, index) => {
-				if (index === 0) {
-					return line; // First line doesn't need leading space
-				} else {
-					return ` * ${line}`; // Add comment marker for subsequent lines
-				}
+			const indentPrefix = ' '.repeat(commentIndent);
+			const formattedCode = normalizedLines.map((line) => {
+				return `${indentPrefix} * ${line}`; // All lines get the comment prefix
 			}).join('\n');
 
 			// Store replacement info
