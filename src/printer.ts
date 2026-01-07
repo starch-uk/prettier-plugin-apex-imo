@@ -602,37 +602,6 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
-	// Custom embed function to handle {@code} blocks asynchronously
-	result.embed = async (
-		path: AstPath,
-		options: ParserOptions
-	): Promise<Doc | null> => {
-		const node = path.getValue();
-
-		// Only handle CommentBlock nodes with {@code} blocks
-		if (node && typeof node === 'object' && 'type' in node && node.type === 'CommentBlock') {
-			const commentValue = (node as { value?: string }).value;
-			if (commentValue && commentValue.includes('{@code')) {
-				try {
-					// Process {@code} blocks asynchronously using Apex parser
-					const processedComment = await processCodeBlocksWithApexParserAsync(commentValue, options);
-					if (processedComment !== commentValue) {
-						// Store the processed comment for printComment to use
-						const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
-						const key = `${commentValue.length}-${normalizedComment.indexOf('{@code')}`;
-						formattedCodeBlocks.set(key, processedComment);
-						console.log('Embed: Stored processed comment for key:', key);
-					}
-				} catch (error) {
-					console.error('Embed: Error processing comment:', error);
-				}
-			}
-		}
-
-		// Always return null - no embedding needed for comments
-		return null;
-	};
-
 /**
  * Process {@code} blocks in a comment by formatting each as Apex code using async parser.
  * @param commentValue - The comment text
@@ -676,20 +645,43 @@ const processCodeBlocksWithApexParserAsync = async (
 };
 
 /**
- * Format Apex code asynchronously using our plugin's parser and printer.
+ * Format Apex code asynchronously using our plugin's parser and printer directly.
  * @param code - Code to format
  * @param options - Parser options
  * @returns Promise resolving to formatted code string
  */
 const formatApexCodeAsync = async (code: string, options: ParserOptions): Promise<string> => {
 	try {
-		// Use Prettier's format function with apex parser and our plugin
-		const prettier = await import('prettier');
-		const result = await prettier.format(code, {
+		// Get the plugin instance
+		const plugin = getCurrentPluginInstance();
+		if (!plugin?.parsers?.apex?.parse || !plugin?.printers?.apex?.print) {
+			throw new Error('Apex parser or printer not available');
+		}
+
+		// Parse the code
+		const ast = plugin.parsers.apex.parse(code, {
 			...options,
 			parser: 'apex',
-			plugins: [getCurrentPluginInstance()],
 		});
+
+		// Create a path for the AST
+		const path = {
+			getValue: () => ast,
+			getParentNode: () => null,
+			getName: () => null,
+			getNode: () => ast,
+			getRoot: () => ast,
+			call: () => {},
+			callParent: () => {},
+			stack: [ast],
+		} as AstPath;
+
+		// Use the printer to format the AST
+		const doc = plugin.printers.apex.print(path, options);
+
+		// Convert Doc to string using Prettier's internal function
+		const { printDocToString } = await import('prettier');
+		const result = printDocToString(doc, options).formatted;
 		return result.trim();
 	} catch (error) {
 		console.log('Failed to format Apex code asynchronously, keeping original:', error);
