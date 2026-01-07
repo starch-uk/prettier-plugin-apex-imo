@@ -395,20 +395,31 @@ const findIdentifiersToNormalize = (node: any, positions: Array<{ start: number;
 	// Check if this is an identifier node
 	if (node['@class'] && node['@class'].includes('Identifier') && node.value && typeof node.value === 'string') {
 		const identifier = node.value;
-		const normalized = normalizeTypeName(identifier);
 
-		if (normalized !== identifier && node.loc && typeof node.loc === 'object') {
-			// Direct access to location properties
-			const startIndex = node.loc.startIndex;
-			const endIndex = node.loc.endIndex;
+		// Only normalize identifiers that are in type contexts, not variable names
+		const isInTypeContext = path.some(segment =>
+			segment === 'type' ||
+			segment === 'typeref' ||
+			segment === 'types' ||
+			(segment.includes && segment.includes('type'))
+		);
 
-			if (typeof startIndex === 'number' && typeof endIndex === 'number') {
-				positions.push({
-					start: offset + startIndex,
-					end: offset + endIndex,
-					original: identifier,
-					normalized: normalized
-				});
+		if (isInTypeContext) {
+			const normalized = normalizeTypeName(identifier);
+
+			if (normalized !== identifier && node.loc && typeof node.loc === 'object') {
+				// Direct access to location properties
+				const startIndex = node.loc.startIndex;
+				const endIndex = node.loc.endIndex;
+
+				if (typeof startIndex === 'number' && typeof endIndex === 'number') {
+					positions.push({
+						start: offset + startIndex,
+						end: offset + endIndex,
+						original: identifier,
+						normalized: normalized
+					});
+				}
 			}
 		}
 	}
