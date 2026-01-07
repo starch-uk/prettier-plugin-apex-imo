@@ -89,6 +89,7 @@ const formatMultilineCodeBlock = (
 	formattedCode: string,
 	commentPrefix: string,
 ): string => {
+
 	// CRITICAL: Remove trailing empty lines from formatted code
 	// Prettier may add trailing newlines, which would create empty lines inside {@code} blocks
 	// We want the code block to end immediately after the last non-empty line
@@ -101,19 +102,20 @@ const formatMultilineCodeBlock = (
 	}
 	
 	// Preserve exact indentation from embed output: baseIndent + '* ' + embedded line (with its indentation)
-	const prefixedLines = lines.map((line) => {
+	const prefixedLines = lines.map((line, index) => {
 		// Empty lines just get the comment prefix (no trailing space)
 		if (line.trim().length === ZERO_LENGTH) {
 			return commentPrefix.trimEnd();
 		}
-		
+
 		// Preserve the exact indentation from the embed output
 		// The line from embed already has the correct indentation (0, 2, 4, 6 spaces, etc.)
 		// We just add the comment prefix before it
-		return `${commentPrefix}${line}`;
+		const result = `${commentPrefix}${line}`;
+		return result;
 	});
 	
-	return `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()}}`;
+	return `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()} }`;
 };
 
 /**

@@ -74,12 +74,66 @@ const normalizeSingleApexDocComment = (
 	const { printWidth, tabWidth } = options;
 	const tabWidthValue = tabWidth;
 
+	// Check if this comment contains {@code} blocks using token-based detection
+	const commentTokens = parseCommentToTokens(commentValue);
+	const hasCodeBlocks = commentTokens.some(token =>
+		token.type === 'paragraph' && containsApexDocContent(token.content)
+	);
+
+
 	// Token-based implementation
 	// First normalize basic structure
 	let normalizedComment = normalizeBlockComment(commentValue, commentIndent, {
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
 	});
+
+	// NORMALIZE CODE BLOCK INDENTATION: After normalizeBlockComment standardizes indentation,
+	// identify code block lines and apply consistent indentation for continuation lines.
+	const normalizedLines = normalizedComment.split('\n');
+
+	// Process lines to normalize code block indentation
+	let inCodeBlock = false;
+	let firstCodeLineIndex = -1;
+	const processedLines = normalizedLines.map((line, index) => {
+		if (index === 0 || index === normalizedLines.length - 1) return line; // Skip first and last lines
+
+		// Detect {@code block start
+		if (line.includes('{@code')) {
+			inCodeBlock = true;
+			firstCodeLineIndex = -1;
+			return line;
+		}
+
+		// Detect {@code block end
+		if (inCodeBlock && line.includes('}')) {
+			inCodeBlock = false;
+			return line;
+		}
+
+		if (inCodeBlock) {
+			const match = line.match(/^(\s*)\*(\s*)(.+)$/);
+			if (match) {
+				const [, baseIndent, asteriskSpace, content] = match;
+				const trimmedContent = content.trimStart();
+
+				if (firstCodeLineIndex === -1 && trimmedContent) {
+					// This is the first non-empty code line
+					firstCodeLineIndex = index;
+					return baseIndent + '*' + asteriskSpace + trimmedContent;
+				} else if (trimmedContent) {
+					// This is a continuation line - ensure consistent indentation
+					// Use 2 spaces more than the first code line
+					const result = baseIndent + '*' + '  ' + trimmedContent;
+					return result;
+				}
+			}
+		}
+
+		return line;
+	});
+
+	normalizedComment = processedLines.join('\n');
 
 	// Parse to tokens and get effective width
 	const { tokens: initialTokens, effectiveWidth } = parseApexDocTokens(
@@ -220,36 +274,14 @@ const tokensToApexDocString = (
 					lines.push(`${commentPrefix}{@code`);
 
 					// Add formatted code lines with comment prefix
-					// Preserve the relative indentation from the embed formatter
-					for (let i = 0; i < codeLines.length; i++) {
-						const codeLine = codeLines[i] ?? '';
+					// Preserve the exact indentation from the embed formatter
+					for (const codeLine of codeLines) {
 						if (codeLine.trim().length === EMPTY) {
 							// Empty line - just comment prefix
 							lines.push(commentPrefix.trimEnd());
 						} else {
-							// Check if this is a continuation line that needs indentation
-							let extraIndent = '';
-							if (i > 0) {
-								const prevLine = codeLines[i - 1]?.trim() ?? '';
-								const currentLineTrimmed = codeLine.trim();
-
-								// Don't indent lines that start with closing braces
-								if (currentLineTrimmed.startsWith('}') || currentLineTrimmed.startsWith('};')) {
-									extraIndent = '';
-								} else {
-									// Indent lines that follow opening braces, or are continuations
-									const followsOpeningBrace = prevLine.endsWith('{');
-									const isContinuation = prevLine.length > 0 &&
-										!prevLine.endsWith(';') &&
-										!prevLine.endsWith('}') &&
-										!prevLine.endsWith('{');
-
-									if (followsOpeningBrace || isContinuation) {
-										extraIndent = '  ';
-									}
-								}
-							}
-							lines.push(`${commentPrefix}${extraIndent}${codeLine}`);
+							// Just add comment prefix to the line as-is
+							lines.push(`${commentPrefix}${codeLine}`);
 						}
 					}
 
@@ -364,6 +396,46 @@ const containsApexDocContent = (content: string): boolean => {
 	return false;
 };
 
+
+/**
+ * Normalizes comment annotations to lowercase (JSDoc format).
+ * @param text - The text to normalize.
+ * @returns The text with annotations lowercased.
+ */
+const normalizeCommentAnnotations = (text: string): string => {
+	// Simple regex to find @AnnotationName and convert to @annotationname
+	return text.replace(/(@\w+)/g, (match) => match.toLowerCase());
+};
+
+/**
+ * Normalizes annotations outside {@code} blocks while preserving {@code} block content.
+ * @param commentValue - The comment value to normalize.
+ * @returns The comment with annotations normalized outside {@code} blocks.
+ */
+const normalizeAnnotationsOutsideCodeBlocks = (commentValue: string): string => {
+	let result = '';
+	let lastIndex = 0;
+
+	// Find all {@code} blocks
+	const codeRegex = /\{@code[\s\S]*?\}/g;
+	let match;
+
+	while ((match = codeRegex.exec(commentValue)) !== null) {
+		// Process text before this {@code} block
+		const beforeCode = commentValue.substring(lastIndex, match.index);
+		const normalizedBefore = normalizeCommentAnnotations(beforeCode);
+
+		// Add normalized text + the {@code} block unchanged
+		result += normalizedBefore + match[0];
+		lastIndex = match.index + match[0].length;
+	}
+
+	// Process remaining text after the last {@code} block
+	const afterCode = commentValue.substring(lastIndex);
+	result += normalizeCommentAnnotations(afterCode);
+
+	return result;
+};
 
 /**
  * Detects annotations in tokens and converts TextTokens/ParagraphTokens to AnnotationTokens.
