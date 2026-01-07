@@ -645,8 +645,8 @@ const processApexDocComment = (
 	getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): string => {
-	// For this test case, hardcode commentIndent to 2
-	const commentIndent = 2;
+	// Don't add base indentation, apexdoc.ts handles indentation
+	const commentIndent = 0;
 
 	// Detect malformed comments BEFORE any processing
 	const isMalformedComment = (() => {
