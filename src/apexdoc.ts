@@ -319,6 +319,7 @@ const normalizeSingleApexDocComment = (
 		const trimmedLine = line.replace(/^\s*\*\s*/, '').trim();
 
 		// Track code block boundaries using brace counting
+		let codeBlockStartedOnThisLine = false;
 		if (trimmedLine.includes('{@code')) {
 			codeBlockIndentStackForNormalize.push('');
 			let codeBlockBraceCount = INITIAL_BRACE_COUNT;
@@ -331,12 +332,19 @@ const normalizeSingleApexDocComment = (
 			codeBlockIndentStackForNormalize[
 				codeBlockIndentStackForNormalize.length - INDEX_ONE
 			] = String(codeBlockBraceCount);
+			codeBlockStartedOnThisLine = true;
+			// If the code block closes on the same line, pop from stack immediately
+			if (codeBlockBraceCount === ZERO_BRACE_COUNT) {
+				codeBlockIndentStackForNormalize.pop();
+			}
 		}
 
-		const inCodeBlock =
+		const inCodeBlockBeforeUpdate =
 			codeBlockIndentStackForNormalize.length > ARRAY_START_INDEX;
 
-		if (inCodeBlock) {
+		if (inCodeBlockBeforeUpdate && !codeBlockStartedOnThisLine) {
+			// Only count braces on the entire line if we didn't just start a code block on this line
+			// (because we already counted braces after {@code above)
 			const currentBraceCount = Number.parseInt(
 				codeBlockIndentStackForNormalize[
 					codeBlockIndentStackForNormalize.length - INDEX_ONE
@@ -358,6 +366,11 @@ const normalizeSingleApexDocComment = (
 				codeBlockIndentStackForNormalize.pop();
 			}
 		}
+
+		// Recalculate inCodeBlock AFTER updating the stack
+		// This ensures we correctly detect when a code block closes on the same line
+		const inCodeBlock =
+			codeBlockIndentStackForNormalize.length > ARRAY_START_INDEX;
 
 		// Only normalize annotations if NOT inside a code block
 		// Annotations inside code blocks should use normal annotation normalization (PascalCase)
