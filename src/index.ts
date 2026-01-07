@@ -12,7 +12,7 @@ import type { ApexNode } from './types.js';
 import { normalizeSingleApexDocComment } from './apexdoc.js';
 import { processCodeBlockLines } from './apexdoc-code.js';
 import {
-	getIndentLevel,
+	customPrintComment as customPrintCommentFn,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,
@@ -55,182 +55,54 @@ const originalApexPrinter = getApexPrinter();
  * The original printApexDocComment trims each line, which removes our carefully
  * calculated wrapping. This version preserves the line structure we created.
  * @param path - The AST path to the comment node.
- * @param _options - Parser options (unused but required by Prettier API).
- * @param _print - Print function (unused but required by Prettier API).
- * @param _originalPrintComment - Original print comment function (unused but required by Prettier API).
+ * @param options - Parser options (unused but required by Prettier API).
+ * @param print - Print function (unused but required by Prettier API).
+ * @param originalPrintComment - Original print comment function (unused but required by Prettier API).
  * @returns The formatted comment as a Prettier Doc.
  * @example
  * ```typescript
  * const doc = customPrintComment(path);
  * ```
  */
-
 const customPrintComment = (
 	path: Readonly<AstPath<ApexNode>>,
-	_options: Readonly<ParserOptions>,
-	_print: (path: Readonly<AstPath<ApexNode>>) => Doc,
-	_originalPrintComment: (
+	options: Readonly<ParserOptions>,
+	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+	originalPrintComment: (
 		path: Readonly<AstPath<ApexNode>>,
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	) => Doc,
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires 4 parameters
 ): Doc => {
-	const node = path.getNode();
-
-	/**
-	 * Check if this is an ApexDoc comment using the same logic as prettier-plugin-apex.
-	 * But be more lenient: allow malformed comments (lines without asterisks) to be detected as ApexDoc
-	 * if they start with / ** and end with * /.
-	 * @param comment - The comment node to check.
-	 * @returns True if the comment is an ApexDoc comment, false otherwise.
-	 * @example
-	 * ```typescript
-	 * const isDoc = isApexDoc(commentNode);
-	 * ```
-	 */
-	const isApexDoc = (comment: unknown): boolean => {
-		if (
-			comment === null ||
-			comment === undefined ||
-			typeof comment !== 'object' ||
-			!('value' in comment) ||
-			typeof comment.value !== 'string'
-		) {
-			return false;
+	// Get stored options from printer
+	const storedOptions = getCurrentPrintOptions();
+	if (!storedOptions) {
+		// Fallback to original behavior if options not available
+		const originalPrintCommentFn = (
+			originalApexPrinter as Record<string, unknown>
+		)['printComment'] as
+			| ((path: Readonly<AstPath<ApexNode>>) => Doc)
+			| undefined;
+		if (originalPrintCommentFn) {
+			return originalPrintCommentFn(path);
 		}
-		const commentValue = (comment as { value: string }).value;
-		// Must start with /** and end with */
-		if (
-			!commentValue.trimStart().startsWith('/**') ||
-			!commentValue.trimEnd().endsWith('*/')
-		) {
-			return false;
-		}
-		const lines = commentValue.split('\n');
-		// For well-formed ApexDoc, all middle lines should have asterisks
-		// For malformed ApexDoc, we still want to detect it if it starts with /** and ends with */
-		// If it has at least one middle line with an asterisk, treat it as ApexDoc
-		// If it has NO asterisks but starts with /** and ends with */, also treat it as ApexDoc
-		// (so we can normalize it by adding asterisks)
-		if (lines.length <= INDEX_ONE) return false;
-		const middleLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
-		// If at least one middle line has an asterisk, treat it as ApexDoc (even if malformed)
-		if (
-			middleLines.some((commentLine) =>
-				commentLine.trim().startsWith('*'),
-			)
-		) {
-			return true;
-		}
-		// If no middle lines have asterisks but comment starts with /** and ends with */,
-		// treat it as ApexDoc so we can normalize it (add asterisks)
-		return middleLines.length > ARRAY_START_INDEX;
-	};
-
-	if (
-		node !== null &&
-		isApexDoc(node) &&
-		'value' in node &&
-		typeof node['value'] === 'string'
-	) {
-		const commentNode = node as unknown as { value: string };
-		const commentValue = commentNode.value;
-		if (commentValue === '') return '';
-
-		// Get stored options from printer
-		const options = getCurrentPrintOptions();
-		if (!options) {
-			// Fallback to original behavior if options not available
-			const originalPrintComment = (
-				originalApexPrinter as Record<string, unknown>
-			)['printComment'] as
-				| ((path: Readonly<AstPath<ApexNode>>) => Doc)
-				| undefined;
-			if (originalPrintComment) {
-				return originalPrintComment(path);
-			}
-			return commentValue;
-		}
-
-		// Calculate comment indent from the original text
-		// The comment value from AST might not include leading spaces, so we need to check the original text
-		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- options.tabWidth can be undefined in ParserOptions
-		const tabWidthValue = options.tabWidth ?? DEFAULT_TAB_WIDTH;
-		const originalText = getCurrentOriginalText();
-		let commentIndent = 0;
-		const commentLines = commentValue.split('\n');
-		const firstLine = commentLines[ARRAY_START_INDEX];
-		if (originalText !== undefined && originalText !== '') {
-			// Find the comment start in the original text
-			const commentStart = originalText.indexOf(commentValue.trimStart());
-			if (commentStart >= ARRAY_START_INDEX) {
-				// Find the start of the line containing the comment
-				const lineStart =
-					originalText.lastIndexOf('\n', commentStart) + INDEX_ONE;
-				const linePrefix = originalText.substring(
-					lineStart,
-					commentStart,
-				);
-				commentIndent = getIndentLevel(linePrefix, tabWidthValue);
-			} else if (firstLine !== undefined) {
-				// Fallback: try to get indent from first line of comment value
-				commentIndent = getIndentLevel(firstLine, tabWidthValue);
-			}
-		} else if (firstLine !== undefined) {
-			// Fallback: try to get indent from first line of comment value
-			commentIndent = getIndentLevel(firstLine, tabWidthValue);
-		}
-
-		// Check if embed has already formatted code blocks for this comment
-		// Create a key to look up formatted version (same logic as in embed)
-		const codeTagPos = commentValue.indexOf('{@code');
-		const commentKey = `${String(commentValue.length)}-${String(codeTagPos)}`;
-		const embedFormattedComment = getFormattedCodeBlock(commentKey);
-
-		// Use embed-formatted comment if available, otherwise normalize the original
-		// Code blocks are now handled via embed function (using textToDoc) instead of preprocessor
-		// CRITICAL: Even if embed has formatted the code blocks, we still need to normalize annotations
-		// The embed function only formats code blocks, it doesn't normalize ApexDoc annotations
-		// So we always normalize the comment (either the embed-formatted version or the original)
-		const commentToNormalize = embedFormattedComment ?? commentValue;
-		const normalizedComment = normalizeSingleApexDocComment(
-			commentToNormalize,
-			commentIndent,
-			options,
-		);
-
-		// Copy of printApexDocComment from prettier-plugin-apex:
-		// function printApexDocComment(comment) {
-		//     const lines = comment.value.split("\n");
-		//     return [
-		//         join(hardline, lines.map((commentLine, index) => (index > 0 ? " " : "") +
-		//             (index < lines.length - 1
-		//                 ? commentLine.trim()
-		//                 : commentLine.trimStart()))),
-		//     ];
-		// }
-		const lines = normalizedComment.split('\n');
-		const { join, hardline } = prettier.doc.builders;
-
-		// Process code block lines using the function from apexdoc-code.ts
-		const processedLines = processCodeBlockLines(lines);
-
-		return [join(hardline, [...processedLines])];
+		const node = path.getNode();
+		const commentNode = node as { value?: string };
+		return commentNode.value ?? '';
 	}
 
-	// For non-ApexDoc comments, use the original behavior
-	const originalPrintComment = (
-		originalApexPrinter as Record<string, unknown>
-	)['printComment'] as
-		| ((path: Readonly<AstPath<ApexNode>>) => Doc)
-		| undefined;
-	if (originalPrintComment) {
-		return originalPrintComment(path);
-	}
-	// Fallback if printComment doesn't exist
-	const commentNode = node as { value?: string };
-	return commentNode.value ?? '';
+	// Use the centralized comment processing logic
+	const result = customPrintCommentFn(
+		path,
+		options,
+		print,
+		originalPrintComment,
+		storedOptions,
+		getCurrentOriginalText,
+		getFormattedCodeBlock,
+	);
+	return result;
 };
 
 const wrappedPrinter = {

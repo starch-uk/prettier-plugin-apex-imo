@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import * as prettier from 'prettier';
 import type { ParserOptions } from 'prettier';
+import { normalizeTypeNamesInCode } from './casing.js';
 import {
 	ARRAY_START_INDEX,
 	STRING_OFFSET,
@@ -101,22 +102,28 @@ const formatMultilineCodeBlock = (
 		lines = lines.slice(ZERO_LENGTH, -SINGLE_LINE_LENGTH);
 	}
 	
-	// Preserve exact indentation from embed output: baseIndent + '* ' + embedded line (with its indentation)
+	// Apply consistent indentation for code block continuation lines
 	const prefixedLines = lines.map((line, index) => {
 		// Empty lines just get the comment prefix (no trailing space)
 		if (line.trim().length === ZERO_LENGTH) {
 			return commentPrefix.trimEnd();
 		}
 
-		// Preserve the exact indentation from the embed output
-		// The line from embed already has the correct indentation (0, 2, 4, 6 spaces, etc.)
-		// We just add the comment prefix before it
-		const result = `${commentPrefix}${line}`;
-		return result;
+		// First code line: use standard comment prefix
+		if (index === 0) {
+			return `${commentPrefix}${line}`;
+		}
+
+		// Continuation lines: use 2 spaces after * for visual distinction
+		const basePrefix = commentPrefix.substring(0, commentPrefix.lastIndexOf('*') + 1); // '   *'
+		const continuationPrefix = basePrefix + '  '; // '   *  '
+		return `${continuationPrefix}${line.trimStart()}`;
 	});
 	
-	return `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()} }`;
+	const result = `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()} }`;
+	return result;
 };
+
 
 /**
  * Formats a code block directly using Prettier's format with our plugin.
