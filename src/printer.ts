@@ -624,17 +624,9 @@ const createWrappedPrinter = (
 					_embedOptions: ParserOptions,
 					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
 				): Promise<Doc | undefined> => {
-
-					// Normalize the comment first (same as processApexDocCommentLines does)
-					// to ensure consistent key generation
-					const normalizedComment = normalizeSingleApexDocComment(
-						commentValue,
-						0, // commentIndent - embed handles its own indentation
-						_embedOptions,
-					);
-					// Create a unique key for this comment (must match processApexDocCommentLines)
-					const normalizedCodeTagPos = normalizedComment.indexOf('{@code');
-					const commentKey = normalizedCodeTagPos !== -1 ? `${String(normalizedComment.length)}-${String(normalizedCodeTagPos)}` : null;
+					// Create a key based on the original comment for {@code} block processing
+					const codeTagPos = commentValue.indexOf('{@code');
+					const commentKey = codeTagPos !== -1 ? `${String(commentValue.length)}-${String(codeTagPos)}` : null;
 
 					// CRITICAL: Use textToDoc instead of prettier.format
 					// textToDoc uses the same printer context (our wrapped printer with type normalization)

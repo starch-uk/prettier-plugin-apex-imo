@@ -5,9 +5,6 @@
 import type { ParserOptions, ApexNode } from './types.js';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
-import { normalizeSingleApexDocComment, processParagraphToken as processApexDocToken, processApexDocCommentLines } from './apexdoc.js';
-import { processCodeBlockLines, formatCodeBlockForComment, extractCodeFromBlock } from './apexdoc-code.js';
-import { normalizeAnnotationNamesInText } from './annotations.js';
 
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -650,20 +647,6 @@ const wrapParagraphTokens = (
 	return wrappedTokens;
 };
 
-// Types for comment tokenization
-export interface ParagraphToken {
-	type: 'paragraph';
-	content: string;
-	isApexDoc: boolean;
-}
-
-export interface CodeBlockToken {
-	type: 'code-block';
-	content: string;
-	isSingleLine: boolean;
-}
-
-export type CommentToken = ParagraphToken | CodeBlockToken;
 
 /**
  * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.
@@ -673,199 +656,43 @@ export type CommentToken = ParagraphToken | CodeBlockToken;
  * @param getFormattedCodeBlock - Function to get cached embed-formatted comments
  * @returns The processed comment ready for printing
  */
-const processApexDocComment = (
-	commentValue: string,
-	options: ParserOptions,
-	getCurrentOriginalText: () => string | undefined,
-	getFormattedCodeBlock: (key: string) => string | undefined,
-): string => {
-		// Don't add base indentation, let Prettier handle it
-	let commentIndent = 0;
+	const processApexDocComment = (
+		commentValue: string,
+		options: ParserOptions,
+		_getCurrentOriginalText: () => string | undefined,
+		_getFormattedCodeBlock: (key: string) => string | undefined,
+	): string => {
+		// Extract ParagraphTokens and clean up malformed indentation
+		const tokens = parseCommentToTokens(commentValue);
 
-	// Detect malformed comments BEFORE any processing
-	const isMalformedComment = isMalformedApexDocComment(commentValue);
-
-	if (isMalformedComment) {
-		// #region agent log
-		fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				location: 'comments.ts:processApexDocComment',
-				message: 'Processing malformed comment',
-				data: { commentValue: commentValue.substring(0, 200) + '...' },
-				timestamp: Date.now(),
-				sessionId: 'debug-malformed',
-				runId: 'malformed-processing',
-				hypothesisId: 'nested-comment-issue'
-			})
-		}).catch(() => {});
-		// #endregion
-
-		// For malformed comments, use zero indentation to rebuild cleanly
-		commentIndent = 0;
-
-		// For malformed comments, extract clean content and use normal processing
-		const lines = commentValue.split('\n');
-		const contentLines: string[] = [];
-
-		// Extract content lines, ignoring malformed structure and normalizing indentation
-		let hasCodeBlocks = false;
-		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i] ?? '';
-			const trimmed = line.trim();
-
-			// Skip comment markers
-			if (trimmed.startsWith('/**') || trimmed.startsWith('*/') || trimmed === '**/') {
-				continue;
-			}
-
-			// Extract content from lines that have it
-			const contentMatch = line.match(/^\s*\*?\s*(.*)$/);
-			if (contentMatch) {
-				let content = contentMatch[1] ?? '';
-				// Remove leading asterisks and extra spaces
-				content = content.replace(/^\*+\s*/, '');
-				contentLines.push(content);
-
-				// Check for {@code} blocks
-				if (content.includes('{@code')) {
-					hasCodeBlocks = true;
-				}
-			}
-		}
-
-		// For cleaned malformed comments, don't use any normalization that might create nested structures
-		// Just rebuild with consistent indentation
-		const baseIndent = ' '.repeat(commentIndent);
-		const rebuiltLines: string[] = [baseIndent + '/**'];
-
-		for (const content of contentLines) {
-			if (content.trim()) {
-				rebuiltLines.push(`${baseIndent} * ${content}`);
-			} else {
-				rebuiltLines.push(`${baseIndent} *`);
-			}
-		}
-
-		rebuiltLines.push(baseIndent + ' */');
-
-		const normalizedComment = rebuiltLines.join('\n');
-
-		// #region agent log
-		fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				location: 'comments.ts:processApexDocComment',
-				message: 'Rebuilt malformed comment',
-				data: { normalizedComment: normalizedComment.substring(0, 200) + '...', hasCodeBlocks },
-				timestamp: Date.now(),
-				sessionId: 'debug-malformed',
-				runId: 'malformed-processing',
-				hypothesisId: 'nested-comment-issue'
-			})
-		}).catch(() => {});
-		// #endregion
-
-		// Return the cleaned comment - embed will handle {@code} blocks
-		return normalizedComment;
-
-		// Rebuild a clean comment
-		const cleanCommentLines = ['/**', ...contentLines.map(line => ` * ${line}`), ' */'];
-		const cleanComment = cleanCommentLines.join('\n');
-
-	}
-
-	// For well-formed comments, delegate to apexdoc.ts to get formatted lines
-	const formattedLines = processApexDocCommentLines(commentValue, commentIndent, options, getFormattedCodeBlock);
-
-	// Add base indentation and comment prefix to each line
-	const baseIndent = ' '.repeat(commentIndent);
-	const indentedLines: string[] = [];
-
-	for (const line of formattedLines) {
-		if (line.trim() === '') {
-			continue; // Skip empty lines
-		} else {
-			indentedLines.push(baseIndent + ' * ' + line);
-		}
-	}
-
-	// Handle first and last lines specially
-	if (indentedLines.length > 0) {
-		indentedLines.unshift('/**');
-		// Append the closing */ instead of replacing the last line
-		// This preserves any } from {@code} blocks
-		indentedLines.push(' */');
-	}
-
-	return indentedLines.join('\n');
-};
-
-/**
- * Tokenizes a comment into paragraph tokens.
- */
-export function tokenizeCommentIntoParagraphs(commentValue: string): ParagraphToken[] {
-	const lines = commentValue.split('\n');
-	const tokens: ParagraphToken[] = [];
-
-	// Remove /** and */ lines
-	const contentLines = lines.slice(1, -1);
-
-	// Group lines into paragraphs (separated by empty lines)
-	let currentParagraph: string[] = [];
-
-	for (const line of contentLines) {
-		const trimmed = line.trim();
-		if (trimmed === '' || trimmed === '*') {
-			// Empty line or just *, end current paragraph
-			if (currentParagraph.length > 0) {
-				tokens.push({
-					type: 'paragraph',
-					content: currentParagraph.join('\n'),
-					isApexDoc: currentParagraph.some(line => line.includes('@') || line.includes('{@code')),
+		// Clean up indentation in token lines
+		const cleanedTokens = tokens.map(token => {
+			if (token.type === 'paragraph') {
+				const cleanedLines = token.lines.map(line => {
+					// Remove malformed indentation and normalize
+					const match = line.match(/^(\s*)\*?\s*(.*)$/);
+					if (match) {
+						const [, indent, content] = match;
+						// Normalize to consistent indentation
+						return ` * ${content}`;
+					}
+					return line;
 				});
-				currentParagraph = [];
+				return {
+					...token,
+					lines: cleanedLines,
+				};
 			}
-		} else {
-			// Remove leading * and space
-			const content = line.replace(/^\s*\*\s*/, '');
-			currentParagraph.push(content);
-		}
-	}
-
-	// Add final paragraph if any
-	if (currentParagraph.length > 0) {
-		tokens.push({
-			type: 'paragraph',
-			content: currentParagraph.join('\n'),
-			isApexDoc: currentParagraph.some(line => line.includes('@')),
+			return token;
 		});
-	}
 
-	return tokens;
-}
-
-/**
- * Processes a paragraph token, delegating to apexdoc.ts for ApexDoc content.
- */
-function processParagraphToken(
-	token: ParagraphToken,
-	options: ParserOptions,
-	getFormattedCodeBlock: (key: string) => string | undefined,
-	commentKey: string | null,
-): string[] {
-	// Calculate reduced pageWidth for {@code} blocks (subtract comment indentation)
-	const reducedPageWidth = Math.max(20, options.printWidth - 4); // 4 for " * " prefix
-	const embedOptions = {
-		...options,
-		printWidth: reducedPageWidth,
+		// Convert back to normalized comment text
+		return tokensToCommentString(cleanedTokens, 0, {
+			tabWidth: options.tabWidth,
+			useTabs: options.useTabs,
+		});
 	};
 
-	// Use the imported function from apexdoc.js
-	return processApexDocToken(token, options, getFormattedCodeBlock, commentKey, embedOptions);
-}
 
 /**
  * Custom printComment function that preserves our wrapped lines.
@@ -990,9 +817,7 @@ export {
 	EMPTY,
 };
 export type {
-	CommentToken,
 	TextToken,
-	ParagraphToken,
 	CodeBlockToken,
 	AnnotationToken,
 };
