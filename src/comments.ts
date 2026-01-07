@@ -676,9 +676,9 @@ const processApexDocComment = (
 		// Handle first and last lines specially (relative indentation)
 		if (processedLines.length > 0) {
 			processedLines.unshift('/**');
-			if (processedLines.length > 1) {
-				processedLines[processedLines.length - 1] = ' */';
-			}
+			// Append the closing */ instead of replacing the last line
+			// This preserves any } from {@code} blocks
+			processedLines.push(' */');
 		}
 
 		return processedLines.join('\n');
