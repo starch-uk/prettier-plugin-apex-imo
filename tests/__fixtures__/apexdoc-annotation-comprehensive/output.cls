@@ -22,9 +22,9 @@ public class ComprehensiveTest {
   /**
    * Test with {@code} blocks between annotations.
    * @author Developer
-   * {@code String test = 'example';}
+   * {@code String test = 'example'; }
    * @since 1.0
-   * {@code Integer num = 42;}
+   * {@code Integer num = 42; }
    * @version 2.0
    * @see ExampleClass
    */
@@ -43,7 +43,7 @@ public class ComprehensiveTest {
    * @deprecated This is deprecated
    * @group Class
    * @example
-   * {@code Test t = new Test();}
+   * {@code Test t = new Test(); }
    */
   public void comprehensiveCasing() {
   }
@@ -74,9 +74,7 @@ public class ComprehensiveTest {
    * };
    * }
    * @param input Input value
-   * {@code
-   * Map<String, Integer> map = new Map<String, Integer>{'key' => 1};
-   * }
+   * {@code Map<String, Integer> bob = new Map<String, Integer>{ 'key' => 1 }; }
    * @return result
    * @group Method
    */

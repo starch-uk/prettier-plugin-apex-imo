@@ -72,7 +72,7 @@ public class ComprehensiveTest {
    * }
    * @Param input Input value
    * {@code
-   * Map<String, Integer> map = new Map<String, Integer>{'key' => 1};
+   * Map<String, Integer> bob = new Map<String, Integer>{'key' => 1};
    * }
    * @Return result
    * @Group method
