@@ -3,7 +3,6 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
-import type { AstPath, Doc } from 'prettier';
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { APEX_OBJECT_SUFFIXES } from './refs/object-suffixes.js';
@@ -370,8 +369,9 @@ const normalizeTypeNamesInCode = (code: string): string => {
 		/\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)/gi,
 		// Generic type parameters: List<TypeName>, Map<TypeName, ...>
 		/(?:List|Map|Set)\s*<\s*([a-zA-Z_][a-zA-Z0-9_]*)\b/gi,
-		// Return type declarations: TypeName methodName
-		// This is tricky - we need to be careful not to match variable declarations
+		// Variable declarations: TypeName variableName [=|;]
+		// Look for identifiers followed by another identifier and then = or ;
+		/\b([a-zA-Z_][a-zA-Z0-9_]*)\s+[a-zA-Z_][a-zA-Z0-9_]*\s*[=;]/gi,
 	];
 
 	for (const pattern of standardObjectPatterns) {

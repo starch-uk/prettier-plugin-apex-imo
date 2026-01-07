@@ -542,6 +542,31 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
+	// Add embed function to handle {@code} blocks in comments
+	result.embed = (path: Readonly<AstPath<ApexNode>>, options: Readonly<ParserOptions>) => {
+		const node = path.node;
+
+		// Check if this is a comment node that might contain {@code} blocks
+		if (node && typeof node === 'object' && '@class' in node) {
+			const nodeClass = getNodeClassOptional(node);
+			if (nodeClass && nodeClass.includes('BlockComment')) {
+				const commentValue = (node as any).value;
+				if (typeof commentValue === 'string' && commentValue.includes('{@code')) {
+					// Return async embed function
+					return async (textToDoc: any, print: any, path: any, options: any) => {
+						// Process {@code} blocks using our custom Apex parser/printer
+						const processedComment = processCodeBlocksWithApexParser(commentValue, options);
+
+						// Return the processed comment as a doc
+						return processedComment;
+					};
+				}
+			}
+		}
+
+		return null;
+	};
+
 	return result;
 };
 /**
@@ -621,13 +646,28 @@ const processCodeBlocksWithApexParser = (
 		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
 
 		try {
-			// Format the code content using Apex parser and printer
-			const formattedCode = formatApexCodeWithParser(codeContent, options);
+			// Extract the code content and clean it
+			let cleanedCode = codeContent;
+
+			// Remove comment markers from each line (ApexDoc format: " * code")
+			cleanedCode = cleanedCode.split('\n').map(line => {
+				const trimmed = line.trim();
+				// Remove leading " * " or "*" from comment lines
+				if (trimmed.startsWith('* ')) {
+					return trimmed.substring(2);
+				} else if (trimmed.startsWith('*')) {
+					return trimmed.substring(1);
+				}
+				return trimmed;
+			}).join('\n').trim();
+
+			// Apply type name normalization using the existing custom printer logic
+			const formattedCode = normalizeTypeNamesInCode(cleanedCode);
 
 			// Replace the code block with formatted version
 			result = result.substring(0, startIndex + codeTagLength) + '\n' + formattedCode + '\n' + result.substring(endIndex);
 		} catch (error) {
-			console.log('Embed: Failed to format code block asynchronously, keeping original:', error);
+			console.log('Embed: Failed to format code block, keeping original:', error);
 			// Keep original if formatting fails
 		}
 
@@ -638,53 +678,6 @@ const processCodeBlocksWithApexParser = (
 	return result;
 };
 
-/**
- * Format Apex code using the plugin's parser and printer.
- * @param code - Code to format
- * @param options - Parser options
- * @returns Formatted code
- */
-const formatApexCodeWithParser = (code: string, options: ParserOptions): string => {
-	try {
-		// Get the plugin instance
-		const plugin = getCurrentPluginInstance();
-		if (!plugin?.parsers?.apex?.parse || !plugin?.printers?.apex?.print) {
-			throw new Error('Apex parser or printer not available for formatting');
-		}
-
-		// Parse the code
-		const ast = plugin.parsers.apex.parse(code, {
-			...options,
-			parser: 'apex',
-		});
-
-		// Create a path for the AST
-		const path = {
-			getValue: () => ast,
-			getParentNode: () => null,
-			getName: () => null,
-			getNode: () => ast,
-			getRoot: () => ast,
-			call: () => {},
-			callParent: () => {},
-			stack: [ast],
-		} as AstPath;
-
-		// Use the printer to format the AST
-		const doc = plugin.printers.apex.print(path, options);
-
-		// For simple formatting, return the doc as string if it's a string, otherwise keep original
-		if (typeof doc === 'string') {
-			return doc;
-		}
-
-		console.log('Complex Doc returned, keeping original code');
-		return code;
-	} catch (error) {
-		console.log('Failed to format Apex code with parser, keeping original:', error);
-		return code;
-	}
-};
 
 
 export {
