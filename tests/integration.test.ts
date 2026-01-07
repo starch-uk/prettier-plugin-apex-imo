@@ -411,6 +411,10 @@ describe('prettier-plugin-apex-imo integration', () => {
 				fixture: 'apexdoc-invalid-apex',
 			},
 			{
+				description: 'should format @AuraEnabled annotation in {@code} blocks',
+				fixture: 'apexdoc-code-block-annotation',
+			},
+			{
 				description:
 					'should handle multiple {@code} blocks in one file',
 				fixture: 'apexdoc-multiple-blocks',
@@ -466,10 +470,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 			{
 				description: 'should format @Deprecated annotation in {@code} blocks',
 				fixture: 'formatcodeblock-deprecated',
-			},
-			{
-				description: 'should format @AuraEnabled annotation in {@code} blocks',
-				fixture: 'formatcodeblock-annotation',
 			},
 			{
 				description: 'should preserve invalid Apex code in {@code} blocks with __FORMAT_FAILED__ prefix',
