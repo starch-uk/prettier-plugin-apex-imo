@@ -757,5 +757,6 @@ export {
 	getCurrentPrintOptions,
 	getCurrentPluginInstance,
 	getFormattedCodeBlock,
+	processCodeBlocksWithApexParser,
 	setCurrentPluginInstance,
 };
