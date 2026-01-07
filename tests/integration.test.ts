@@ -529,15 +529,38 @@ describe('prettier-plugin-apex-imo integration', () => {
 				while (contentStart < result.length && (result[contentStart] === ' ' || result[contentStart] === '\n')) {
 					contentStart++;
 				}
-				// Find the closing } that's on a line with just whitespace, asterisk, space, and } (no semicolon)
-				// This distinguishes the closing } of {@code} from the }; in the code
-				// Look for pattern: \n   * } (newline, spaces, asterisk, space, }, but NOT };)
+				// Check if this is a single-line code block: {@code ...} or {@code ...; }
+				// Look for the closing } on the same line or next line
 				const remainingText = result.slice(contentStart);
-				// Find all lines that match the pattern \n\s*\*\s*\}
-				// We want the one that's NOT followed by a semicolon on the same line
 				const lines = remainingText.split('\n');
 				let closingLineIndex = -1;
 				const EMPTY_LINE_LENGTH = 0;
+				const ARRAY_START_INDEX = 0;
+				
+				// First, check if this is a single-line code block: {@code ...} or {@code ...; }
+				// Single-line format has the closing } on the same line as the content
+				const firstLine = lines[ARRAY_START_INDEX] ?? '';
+				// Match single-line format: content followed by optional space and }
+				// Handle both: "content}" and "content }" and "content; }"
+				// The pattern captures content up to (but not including) the closing }
+				// We need to handle: "content}" and "content }" and "content; }"
+				const singleLineMatch = firstLine.match(/^(.+?)\s*\}\s*$/);
+				if (singleLineMatch && !firstLine.includes('\n')) {
+					// Single-line code block - extract content directly
+					// The content might have trailing space before }, so trim it
+					let codeBlockContent = singleLineMatch[1]?.trimEnd() ?? '';
+					const ZERO_LENGTH = 0;
+					if (codeBlockContent.length > ZERO_LENGTH) {
+						expect(codeBlockContent).toBe(expectedCode);
+					} else {
+						throw new Error(`Code block content is empty in result: ${result}`);
+					}
+					return;
+				}
+				
+				// Multiline format: find the closing } that's on a line with just whitespace, asterisk, space, and } (no semicolon)
+				// This distinguishes the closing } of {@code} from the }; in the code
+				// Look for pattern: \n   * } (newline, spaces, asterisk, space, }, but NOT };)
 				for (let i = EMPTY_LINE_LENGTH; i < lines.length; i++) {
 					const line = lines[i];
 					// Match line with just whitespace, asterisk, space, and } (not };)
@@ -550,7 +573,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 					throw new Error(`Could not find closing } for {@code} block in result: ${result}`);
 				}
 				// Get all lines up to (but not including) the closing line
-				const ARRAY_START_INDEX = 0;
 				const codeBlockLines = lines.slice(ARRAY_START_INDEX, closingLineIndex);
 				const codeBlockContent = codeBlockLines.join('\n');
 				const ZERO_LENGTH = 0;

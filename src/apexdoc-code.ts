@@ -151,12 +151,14 @@ const formatCodeBlockDirect = async ({
 	// This ensures annotations like @auraenabled become @AuraEnabled
 	const normalizedCode = normalizeAnnotationNamesInText(code);
 	
-	// For single-line code blocks that are just annotations or simple statements,
-	// normalize and return without formatting (they're not valid Apex code by themselves)
-	// Check if it's a simple annotation or single-line statement
-	const isSimpleAnnotation = /^@\w+/.test(normalizedCode.trim()) && normalizedCode.split('\n').length === SINGLE_LINE_LENGTH;
-	if (isSimpleAnnotation && normalizedCode.trim().length < SIMPLE_ANNOTATION_MAX_LENGTH) {
-		// For simple annotations, just return normalized code
+	// For single-line code blocks that are just bare annotations (without values),
+	// normalize annotation names but don't try to format (they're not valid Apex code by themselves)
+	// Annotations with values should be attempted to format (they may fail, which is expected for some)
+	const trimmedNormalized = normalizedCode.trim();
+	const isBareAnnotation = /^@\w+\s*$/.test(trimmedNormalized) && normalizedCode.split('\n').length === SINGLE_LINE_LENGTH;
+	if (isBareAnnotation && trimmedNormalized.length < SIMPLE_ANNOTATION_MAX_LENGTH) {
+		// For bare annotations (no values), normalize annotation names but return without formatting
+		// Annotation normalization (PascalCase) is already applied by normalizeAnnotationNamesInText above
 		return normalizedCode;
 	}
 	

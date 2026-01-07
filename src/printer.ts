@@ -29,6 +29,7 @@ import {
 	formatCodeBlockDirect,
 	formatMultilineCodeBlock,
 } from './apexdoc-code.js';
+import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -745,7 +746,7 @@ const createWrappedPrinter = (
 											)
 										: trimmedFormatted.length === ZERO
 											? '{@code}'
-											: trimmedFormatted.endsWith(';')
+											: trimmedFormatted.endsWith(';') || trimmedFormatted.startsWith(FORMAT_FAILED_PREFIX)
 												? `{@code ${trimmedFormatted} }`
 												: `{@code ${trimmedFormatted}}`;
 								finalComment =
