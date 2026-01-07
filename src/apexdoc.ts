@@ -7,6 +7,7 @@
 import type { ParserOptions } from 'prettier';
 import { formatCodeBlockContent } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
+import { tokenizeCommentIntoParagraphs } from './comments.js';
 import {
 	createIndent,
 	normalizeBlockComment,
@@ -182,6 +183,62 @@ const normalizeSingleApexDocComment = (
 		printWidth: printWidth,
 	});
 };
+
+/**
+ * Processes an ApexDoc comment and returns formatted lines ready for indentation.
+ * This function handles normalization, tokenization, and embed processing.
+ * @param commentValue - The raw comment value.
+ * @param commentIndent - The indentation level of the comment in spaces.
+ * @param options - Parser options.
+ * @param getFormattedCodeBlock - Function to get embed-formatted code blocks.
+ * @returns Array of formatted comment lines (without base indentation).
+ */
+export function processApexDocCommentLines(
+	commentValue: string,
+	commentIndent: number,
+	options: ParserOptions,
+	getFormattedCodeBlock: (key: string) => string | undefined,
+): string[] {
+	// Normalize the comment structure
+	const normalizedComment = normalizeSingleApexDocComment(
+		commentValue,
+		commentIndent,
+		options,
+	);
+
+	// Check if embed has already formatted code blocks
+	const codeTagPos = normalizedComment.indexOf('{@code');
+	const commentKey = codeTagPos !== -1 ? `${String(normalizedComment.length)}-${String(codeTagPos)}` : null;
+	const embedFormattedComment = getFormattedCodeBlock(commentKey);
+
+	if (embedFormattedComment) {
+		// Use tokenization for embed-formatted comments
+		const paragraphTokens = tokenizeCommentIntoParagraphs(normalizedComment);
+
+		// Process each paragraph token
+		const processedLines: string[] = [];
+
+		for (const token of paragraphTokens) {
+			const tokenLines = processParagraphToken(token, options, getFormattedCodeBlock, commentKey);
+			// Add lines with relative indentation (* )
+			for (const line of tokenLines) {
+				if (line.trim() === '') {
+					continue; // Skip empty lines
+				} else {
+					processedLines.push(line);
+				}
+			}
+		}
+
+		return processedLines;
+	} else {
+		// Use normalized comment with code block processing
+		const lines = normalizedComment.split('\n');
+		const processedLines = processCodeBlockLines(lines);
+
+		return processedLines.split('\n');
+	}
+}
 
 /**
  * Converts ApexDoc comment tokens (including AnnotationTokens) back into a
