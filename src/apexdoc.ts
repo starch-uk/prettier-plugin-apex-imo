@@ -8,7 +8,7 @@ import type { ParserOptions } from 'prettier';
 import { formatCodeBlockContent, processCodeBlockLines } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
 import { tokenizeCommentIntoParagraphs } from './comments.js';
-import { getCurrentPluginInstance } from './printer.js';
+import { getCurrentPluginInstance, processCodeBlocksWithApexParser } from './printer.js';
 import {
 	createIndent,
 	normalizeBlockComment,
@@ -1279,7 +1279,7 @@ export function processApexDocComment(
 		return embedFormattedComment;
 	}
 
-	// Check if there's a pre-formatted version from async embed processing
+	// Process {@code} blocks using Apex parser and printer (synchronous but AST-based, not regex)
 	const normalizedComment = processCodeBlocksWithApexParser(commentValue, options);
 
 	// Extract ParagraphTokens and clean up malformed indentation

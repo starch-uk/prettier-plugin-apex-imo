@@ -602,17 +602,6 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
-	// Custom embed function to handle {@code} blocks asynchronously
-	result.embed = async (
-		path: AstPath,
-		options: ParserOptions
-	): Promise<Doc | null> => {
-		// For {@code} block processing, we don't use embed for comments
-		// since comments are handled by printComment
-		// This embed function is for other embedded content if needed
-		return null;
-	};
-
 
 /**
  * Parse Apex code for embed processing.
@@ -665,6 +654,96 @@ const formatAstWithPrinter = (ast: ApexNode, options: ParserOptions): string => 
  * @returns Promise resolving to parsed AST
  */
 let cachedParser: any = null;
+
+/**
+ * Process {@code} blocks in a comment asynchronously using Apex parser and printer.
+ * @param commentValue - The comment text
+ * @param options - Parser options
+ * @returns Promise resolving to processed comment
+ */
+const processCodeBlocksWithApexParser = (
+	commentValue: string,
+	options: ParserOptions
+): string => {
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = commentValue;
+	let startIndex = 0;
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
+
+		try {
+			// Format the code content using Apex parser and printer
+			const formattedCode = formatApexCodeWithParser(codeContent, options);
+
+			// Replace the code block with formatted version
+			result = result.substring(0, startIndex + codeTagLength) + '\n' + formattedCode + '\n' + result.substring(endIndex);
+		} catch (error) {
+			console.log('Embed: Failed to format code block asynchronously, keeping original:', error);
+			// Keep original if formatting fails
+		}
+
+		// Move past this code block
+		startIndex = endIndex + 1;
+	}
+
+	return result;
+};
+
+/**
+ * Format Apex code using the plugin's parser and printer.
+ * @param code - Code to format
+ * @param options - Parser options
+ * @returns Formatted code
+ */
+const formatApexCodeWithParser = (code: string, options: ParserOptions): string => {
+	try {
+		// Get the plugin instance
+		const plugin = getCurrentPluginInstance();
+		if (!plugin?.parsers?.apex?.parse || !plugin?.printers?.apex?.print) {
+			throw new Error('Apex parser or printer not available for formatting');
+		}
+
+		// Parse the code
+		const ast = plugin.parsers.apex.parse(code, {
+			...options,
+			parser: 'apex',
+		});
+
+		// Create a path for the AST
+		const path = {
+			getValue: () => ast,
+			getParentNode: () => null,
+			getName: () => null,
+			getNode: () => ast,
+			getRoot: () => ast,
+			call: () => {},
+			callParent: () => {},
+			stack: [ast],
+		} as AstPath;
+
+		// Use the printer to format the AST
+		const doc = plugin.printers.apex.print(path, options);
+
+		// For simple formatting, return the doc as string if it's a string, otherwise keep original
+		if (typeof doc === 'string') {
+			return doc;
+		}
+
+		console.log('Complex Doc returned, keeping original code');
+		return code;
+	} catch (error) {
+		console.log('Failed to format Apex code with parser, keeping original:', error);
+		return code;
+	}
+};
 
 
 	// @ts-expect-error TS2375 -- exactOptionalPropertyTypes causes type mismatch with Prettier's embed API
