@@ -194,15 +194,12 @@ const tokensToApexDocString = (
 				lines,
 			} satisfies TextToken);
 		} else if (token.type === 'code') {
-			console.log('DEBUG: Rendering code token, rawCode:', JSON.stringify(token.rawCode));
 			// Render CodeBlockTokens as text tokens with {@code ...} format
 			let codeToUse = token.formattedCode ?? token.rawCode;
-			console.log('DEBUG: codeToUse before normalization:', JSON.stringify(codeToUse));
 			// In sync version, normalize annotations in the code
 			if (!token.formattedCode) {
 				codeToUse = normalizeAnnotationNamesInText(codeToUse);
 			}
-			console.log('DEBUG: codeToUse after normalization:', JSON.stringify(codeToUse));
 			if (codeToUse.length > EMPTY) {
 				const lines: string[] = [];
 				const codeLines = codeToUse.split('\n');
@@ -223,13 +220,29 @@ const tokensToApexDocString = (
 
 					// Add formatted code lines with comment prefix
 					// Preserve the relative indentation from the embed formatter
-					for (const codeLine of codeLines) {
+					for (let i = 0; i < codeLines.length; i++) {
+						const codeLine = codeLines[i] ?? '';
 						if (codeLine.trim().length === EMPTY) {
 							// Empty line - just comment prefix
 							lines.push(commentPrefix.trimEnd());
 						} else {
-							// Preserve the indentation that the embed formatter already applied
-							lines.push(`${commentPrefix}${codeLine}`);
+							// Check if this is a continuation line that needs indentation
+							let extraIndent = '';
+							if (i > 0) {
+								const prevLine = codeLines[i - 1]?.trim() ?? '';
+								// If previous line doesn't end with semicolon/brace and this line doesn't start with them,
+								// it's a continuation that should be indented
+								const isContinuation = prevLine.length > 0 &&
+									!prevLine.endsWith(';') &&
+									!prevLine.endsWith('}') &&
+									!prevLine.endsWith('{') &&
+									!codeLine.trim().startsWith('}') &&
+									!codeLine.trim().startsWith('};');
+								if (isContinuation) {
+									extraIndent = '  ';
+								}
+							}
+							lines.push(`${commentPrefix}${extraIndent}${codeLine}`);
 						}
 					}
 
@@ -314,23 +327,8 @@ const processParagraphTokensForApexDoc = (
 			// Check if this paragraph contains ApexDoc-specific content
 			const hasApexDocContent = containsApexDocContent(token.content);
 
-			if (hasApexDocContent) {
-				// Keep as paragraph token - let ApexDoc detection functions handle it
-				processedTokens.push(token);
-			} else {
-				// Pass through as regular comment - convert to text token
-				// For paragraphs without ApexDoc content, create lines that match the content structure
-				const words = token.content.split(' ');
-				const lines = words.map(word =>
-					word.length > EMPTY ? ` * ${word}` : ' *'
-				);
-
-				processedTokens.push({
-					type: 'text',
-					content: token.content,
-					lines,
-				} satisfies TextToken);
-			}
+			// Keep all paragraphs as paragraphs - they will be handled correctly by tokensToCommentString
+			processedTokens.push(token);
 		} else {
 			// Keep other token types as-is
 			processedTokens.push(token);
@@ -485,11 +483,14 @@ const detectCodeBlockTokens = (
 				if (codeTagStart > lastMatchEnd) {
 					const textBeforeCode = content.substring(lastMatchEnd, codeTagStart);
 					if (textBeforeCode.length > EMPTY) {
-						newTokens.push({
-							type: 'text',
-							content: textBeforeCode,
-							lines: textBeforeCode.split('\n'),
-						} satisfies TextToken);
+						const lines = textBeforeCode.split('\n').filter(line => line.trim().length > 0);
+						if (lines.length > 0) {
+							newTokens.push({
+								type: 'text',
+								content: textBeforeCode,
+								lines: lines.map(line => ` * ${line}`),
+							} satisfies TextToken);
+						}
 					}
 				}
 
