@@ -23,7 +23,7 @@ import {
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
-import { ARRAY_START_INDEX } from './comments.js';
+import { ARRAY_START_INDEX, isMalformedApexDocComment } from './comments.js';
 import { normalizeSingleApexDocComment } from './apexdoc.js';
 import {
 	extractCodeFromBlock,
@@ -624,6 +624,12 @@ const createWrappedPrinter = (
 					_embedOptions: ParserOptions,
 					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
 				): Promise<Doc | undefined> => {
+					// Check if this is a malformed comment
+					const isMalformed = isMalformedApexDocComment(commentValue);
+					if (isMalformed) {
+						return undefined; // Skip embed processing for malformed comments
+					}
+
 					// Normalize the comment first (same as processApexDocCommentLines does)
 					// to ensure consistent key generation
 					const normalizedComment = normalizeSingleApexDocComment(

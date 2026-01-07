@@ -6,7 +6,8 @@ import type { ParserOptions, ApexNode } from './types.js';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import { normalizeSingleApexDocComment, processParagraphToken as processApexDocToken, processApexDocCommentLines } from './apexdoc.js';
-import { processCodeBlockLines, formatCodeBlockForComment } from './apexdoc-code.js';
+import { processCodeBlockLines, formatCodeBlockForComment, extractCodeFromBlock } from './apexdoc-code.js';
+import { normalizeAnnotationNamesInText } from './annotations.js';
 
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -254,6 +255,39 @@ const normalizeBlockComment = (
 };
 
 const EMPTY = 0;
+
+/**
+ * Detects if an ApexDoc comment is malformed.
+ * @param commentValue - The comment text to check
+ * @returns True if the comment is malformed, false otherwise
+ */
+function isMalformedApexDocComment(commentValue: string): boolean {
+	const lines = commentValue.split('\n');
+
+	// Skip first and last lines (comment markers)
+	for (let i = 1; i < lines.length - 1; i++) {
+		const line = lines[i] ?? '';
+
+		// Check for lines with multiple consecutive asterisks (**, ***, ****)
+		if (/\*{2,}/.test(line)) {
+			return true;
+		}
+
+		// Check for lines without asterisk prefix but with content
+		const trimmed = line.trim();
+		if (trimmed && !trimmed.startsWith('*') && trimmed.length > 0) {
+			return true;
+		}
+
+		// Check for inconsistent spacing around asterisks
+		// Look for patterns like "*   " (multiple spaces after *) or inconsistent spacing
+		if (/^\s+\*\s{2,}/.test(line) || /^\s+\*\s*$/.test(line)) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 // Token type definitions for comment processing
 interface TextToken {
@@ -649,47 +683,66 @@ const processApexDocComment = (
 	const commentIndent = 0;
 
 	// Detect malformed comments BEFORE any processing
-	const isMalformedComment = (() => {
+	const isMalformedComment = isMalformedApexDocComment(commentValue);
+
+	if (isMalformedComment) {
+		// For malformed comments, extract clean content and use normal processing
 		const lines = commentValue.split('\n');
+		const contentLines: string[] = [];
 
-		// Skip first and last lines (comment markers)
-		for (let i = 1; i < lines.length - 1; i++) {
+		// Extract content lines, ignoring malformed structure and normalizing indentation
+		let hasCodeBlocks = false;
+		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i] ?? '';
-
-			// Check for lines with multiple consecutive asterisks (**, ***, ****)
-			if (/\*{2,}/.test(line)) {
-				return true;
-			}
-
-			// Check for lines without asterisk prefix but with content
 			const trimmed = line.trim();
-			if (trimmed && !trimmed.startsWith('*') && trimmed.length > 0) {
-				return true;
+
+			// Skip comment markers
+			if (trimmed.startsWith('/**') || trimmed.startsWith('*/') || trimmed === '**/') {
+				continue;
 			}
 
-			// Check for inconsistent spacing around asterisks
-			// Look for patterns like "*   " (multiple spaces after *) or inconsistent spacing
-			if (/^\s+\*\s{2,}/.test(line) || /^\s+\*\s*$/.test(line)) {
-				return true;
+			// Extract content from lines that have it
+			const contentMatch = line.match(/^\s*\*?\s*(.*)$/);
+			if (contentMatch) {
+				let content = contentMatch[1] ?? '';
+				// Remove leading asterisks and extra spaces
+				content = content.replace(/^\*+\s*/, '');
+				contentLines.push(content);
+
+				// Check for {@code} blocks
+				if (content.includes('{@code')) {
+					hasCodeBlocks = true;
+				}
 			}
 		}
 
-		return false;
-	})();
+		// For cleaned malformed comments, don't use any normalization that might create nested structures
+		// Just rebuild with consistent indentation
+		const baseIndent = ' '.repeat(commentIndent);
+		const rebuiltLines: string[] = [baseIndent + '/**'];
 
-	if (isMalformedComment) {
-		// Use normalization without embed system for malformed comments
-		const normalizedComment = normalizeSingleApexDocComment(
-			commentValue,
-			commentIndent,
-			options,
-		);
+		for (const content of contentLines) {
+			if (content.trim()) {
+				rebuiltLines.push(`${baseIndent} * ${content}`);
+			} else {
+				rebuiltLines.push(`${baseIndent} *`);
+			}
+		}
 
-		// Process code block lines
-		const lines = normalizedComment.split('\n');
-		const processedLines = processCodeBlockLines(lines);
+		rebuiltLines.push(baseIndent + ' */');
 
+		const normalizedComment = rebuiltLines.join('\n');
+
+		// Process code block lines to handle {@code} blocks
+		const processedLines = processCodeBlockLines(normalizedComment.split('\n'));
 		return processedLines.join('\n');
+
+		return normalizedComment;
+
+		// Rebuild a clean comment
+		const cleanCommentLines = ['/**', ...contentLines.map(line => ` * ${line}`), ' */'];
+		const cleanComment = cleanCommentLines.join('\n');
+
 	}
 
 	// For well-formed comments, delegate to apexdoc.ts to get formatted lines
@@ -895,6 +948,7 @@ export {
 	wrapParagraphTokens,
 	processApexDocComment,
 	customPrintComment,
+	isMalformedApexDocComment,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,
