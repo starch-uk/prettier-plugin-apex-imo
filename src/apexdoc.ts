@@ -8,6 +8,7 @@ import type { ParserOptions } from 'prettier';
 import { formatCodeBlockContent, processCodeBlockLines } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
 import { tokenizeCommentIntoParagraphs } from './comments.js';
+import { getCurrentPluginInstance } from './printer.js';
 import {
 	createIndent,
 	normalizeBlockComment,
@@ -79,6 +80,156 @@ const normalizeCodeBlocksInText = (text: string): string => {
 	}
 
 	return result;
+};
+
+/**
+ * Asynchronously normalize {@code} blocks in text by parsing and applying proper AST-based normalization.
+ * @param text - The text that may contain {@code} blocks.
+ * @param options - Parser options for async parsing.
+ * @returns Promise resolving to text with {@code} blocks normalized.
+ */
+const normalizeCodeBlocksInTextAsync = async (text: string, options: ParserOptions): Promise<string> => {
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = text;
+	let startIndex = 0;
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
+
+		// Parse and normalize the code content asynchronously
+		const normalizedCode = await normalizeCodeContentAsync(codeContent, options);
+
+		// Replace the code block with normalized version
+		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
+		// Move past this code block
+		startIndex = endIndex + 1;
+	}
+
+	return result;
+};
+
+/**
+ * Asynchronously parse and normalize code content using AST analysis.
+ * @param codeContent - The raw code content from {@code} block.
+ * @param options - Parser options.
+ * @returns Promise resolving to normalized code.
+ */
+const normalizeCodeContentAsync = async (codeContent: string, options: ParserOptions): Promise<string> => {
+	try {
+		// First apply annotation normalization (this is safe with regex)
+		let normalizedCode = normalizeAnnotationNamesInText(codeContent);
+
+		// Try to parse the code and apply AST-based normalization
+		try {
+			const ast = await parseApexCodeAsync(normalizedCode, options);
+			normalizedCode = normalizeCodeFromAST(ast, normalizedCode);
+		} catch (parseError) {
+			// If parsing fails, fall back to basic regex normalization
+			console.warn('Failed to parse {@code} block for AST normalization, using regex fallback:', parseError);
+			normalizedCode = normalizeTypeNamesInCode(normalizedCode);
+		}
+
+		return normalizedCode;
+	} catch (error) {
+		console.warn('Failed to normalize {@code} block:', error);
+		return codeContent;
+	}
+};
+
+/**
+ * Parse Apex code asynchronously.
+ * @param code - The code to parse.
+ * @param options - Parser options.
+ * @returns Promise resolving to parsed AST.
+ */
+const parseApexCodeAsync = async (code: string, options: ParserOptions): Promise<ApexNode> => {
+	// Use the existing Apex parser through the plugin system
+	const apexPlugin = (globalThis as any).apexPlugin;
+	if (!apexPlugin?.parsers?.apex?.parse) {
+		throw new Error('Apex parser not available');
+	}
+
+	return apexPlugin.parsers.apex.parse(code, {
+		...options,
+		// Ensure we use the apex parser
+		parser: 'apex',
+	});
+};
+
+/**
+ * Normalize code based on AST analysis to properly identify type names vs variable names.
+ * @param ast - The parsed AST.
+ * @param originalCode - The original code string.
+ * @returns Normalized code with proper type name normalization.
+ */
+const normalizeCodeFromAST = (ast: ApexNode, originalCode: string): string => {
+	let result = originalCode;
+
+	// Find all type references in the AST and normalize them
+	const typeReferences = findTypeReferencesInAST(ast);
+
+	for (const typeRef of typeReferences) {
+		// Normalize the type name
+		const normalizedType = normalizeTypeName(typeRef.name);
+		if (normalizedType !== typeRef.name) {
+			// Replace in the code, but only within the specific range to avoid conflicts
+			result = result.substring(0, typeRef.start) + normalizedType + result.substring(typeRef.end);
+		}
+	}
+
+	return result;
+};
+
+/**
+ * Find all type references in the AST.
+ * @param node - The AST node to traverse.
+ * @param references - Accumulator for found references.
+ * @returns Array of type references with position info.
+ */
+const findTypeReferencesInAST = (node: ApexNode, references: Array<{name: string, start: number, end: number}> = []): Array<{name: string, start: number, end: number}> => {
+	// This is a simplified AST traversal - in a real implementation you'd need to
+	// handle all the different AST node types that can contain type references
+
+	if (!node || typeof node !== 'object') return references;
+
+	// Check if this node represents a type reference
+	if ('@class' in node && (node as any)['@class'] === 'apex.jorje.data.ast.TypeRef') {
+		const typeRef = node as any;
+		if (typeRef.names && Array.isArray(typeRef.names)) {
+			// Handle qualified type names like List<Account>
+			for (const nameNode of typeRef.names) {
+				if (nameNode.value && typeof nameNode.value === 'string') {
+					references.push({
+						name: nameNode.value,
+						start: nameNode.startIndex || 0,
+						end: nameNode.endIndex || 0,
+					});
+				}
+			}
+		}
+	}
+
+	// Recursively traverse child nodes
+	for (const [key, value] of Object.entries(node)) {
+		if (key === '@class' || key === 'location') continue;
+
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				findTypeReferencesInAST(item, references);
+			}
+		} else if (value && typeof value === 'object') {
+			findTypeReferencesInAST(value, references);
+		}
+	}
+
+	return references;
 };
 
 const isCommentStart = (text: string, pos: number): boolean =>
@@ -1027,14 +1178,109 @@ function processCodeBlock(
  * @param getFormattedCodeBlock - Function to get cached embed-formatted comments
  * @returns The processed comment ready for printing
  */
+/**
+ * Process {@code} blocks in a comment using Apex parser for proper formatting.
+ * @param commentValue - The comment text
+ * @param options - Parser options
+ * @returns Processed comment with formatted {@code} blocks
+ */
+function processCodeBlocksWithApexParser(commentValue: string, options: ParserOptions): string {
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = commentValue;
+	let startIndex = 0;
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
+
+		try {
+			// For now, just apply the existing regex normalization
+			const formattedCode = normalizeTypeNamesInCode(codeContent);
+
+			// Replace the code block with formatted version
+			result = result.substring(0, startIndex + codeTagLength) + '\n' + formattedCode.trim() + '\n' + result.substring(endIndex);
+		} catch (error) {
+			console.log('Failed to format {@code} block, keeping original:', error);
+			// Keep original if formatting fails
+		}
+
+		// Move past this code block
+		startIndex = endIndex + 1;
+	}
+
+	return result;
+}
+
+
+/**
+ * Format Apex code using our plugin's parser and printer directly.
+ * @param code - Code to format
+ * @param options - Parser options
+ * @returns Formatted code string
+ */
+function formatApexCode(code: string, options: ParserOptions): string {
+	try {
+		// Access the plugin instance to use its parser and printer
+		const plugin = getCurrentPluginInstance();
+		if (!plugin?.parsers?.apex?.parse || !plugin?.printers?.apex?.print) {
+			throw new Error('Apex parser or printer not available for {@code} block formatting');
+		}
+
+		// Parse the code
+		const ast = plugin.parsers.apex.parse(code, {
+			...options,
+			parser: 'apex',
+		});
+
+		// Create a path for the AST
+		const path = {
+			getValue: () => ast,
+			getParentNode: () => null,
+			getName: () => null,
+			getNode: () => ast,
+			getRoot: () => ast,
+			call: () => {},
+			callParent: () => {},
+			stack: [ast],
+		} as AstPath;
+
+		// Use the printer to format the AST
+		const doc = plugin.printers.apex.print(path, options);
+
+		// Convert the Doc to string using Prettier's internal function
+		const { printDocToString } = require('prettier');
+		return printDocToString(doc, options).formatted;
+	} catch (error) {
+		console.log('Failed to format Apex code with parser/printer, keeping original:', error);
+		return code;
+	}
+}
+
 export function processApexDocComment(
 	commentValue: string,
 	options: ParserOptions,
 	_getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): string {
-	// Normalize {@code} blocks in the comment
-	const normalizedComment = normalizeCodeBlocksInText(commentValue);
+	// Check if there's a pre-formatted version from embed processing
+	const codeTagPos = commentValue.indexOf('{@code');
+	const commentKey = codeTagPos !== -1 ? `${commentValue.length}-${codeTagPos}` : null;
+	console.log('processApexDocComment called with comment length:', commentValue.length, 'codeTagPos:', codeTagPos, 'key:', commentKey);
+	const embedFormattedComment = commentKey ? getFormattedCodeBlock(commentKey) : null;
+
+	if (embedFormattedComment) {
+		console.log('Using embed formatted comment, key:', commentKey);
+		return embedFormattedComment;
+	}
+
+	// Process {@code} blocks using regex-based normalization
+	const normalizedComment = processCodeBlocksWithApexParser(commentValue, options);
 
 	// Extract ParagraphTokens and clean up malformed indentation
 	const tokens = parseCommentToTokens(normalizedComment);

@@ -13,7 +13,7 @@ import type {
 	ApexAnnotationNode,
 } from './types.js';
 
-const { group, indent, softline, ifBreak, line } = doc.builders;
+const { group, indent, softline, ifBreak, line, join, hardline } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
 	normalizeTypeName,
@@ -25,6 +25,8 @@ import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
 import { ARRAY_START_INDEX, isMalformedCommentBlock } from './comments.js';
 import { normalizeSingleApexDocComment } from './apexdoc.js';
+import { normalizeTypeNamesInCode, normalizeTypeName } from './casing.js';
+import { normalizeAnnotationNamesInText } from './annotations.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -140,8 +142,16 @@ const getCurrentPrintOptions = (): Readonly<ParserOptions> | undefined =>
 
 const getCurrentOriginalText = (): string | undefined => currentOriginalText;
 
+const getCurrentPluginInstance = (): { default: unknown } | undefined =>
+	currentPluginInstance;
+
 const getFormattedCodeBlock = (key: string): string | undefined =>
 	formattedCodeBlocks.get(key);
+
+
+
+
+
 
 
 
@@ -592,11 +602,105 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
-	// Wrap original embed to ensure our custom printer is used
-	if (originalPrinter.embed) {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier's embed types are complex
-		result.embed = ((...args: any[]) => (originalPrinter.embed as any)(...args)) as any;
+
+
+
+/**
+ * Process {@code} blocks in a comment by formatting each as Apex code.
+ * @param commentValue - The comment text
+ * @param options - Parser options
+ * @returns Promise resolving to processed comment
+ */
+const processCodeBlocksInComment = async (
+	commentValue: string,
+	options: ParserOptions
+): Promise<string> => {
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = commentValue;
+	let startIndex = 0;
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
+
+		try {
+			// Parse the code content as Apex AST
+			const ast = await parseApexForEmbed(codeContent, options);
+			// Format the AST using our custom printer
+			const formattedCode = formatAstWithPrinter(ast, options);
+
+			// Replace the code block with formatted version
+			result = result.substring(0, startIndex + codeTagLength) + '\n' + formattedCode + '\n' + result.substring(endIndex);
+		} catch (error) {
+			console.log('Embed: Failed to format code block, keeping original:', error);
+			// Keep original if formatting fails
+		}
+
+		// Move past this code block
+		startIndex = endIndex + 1;
 	}
+
+	return result;
+};
+
+/**
+ * Parse Apex code for embed processing.
+ * @param code - Code to parse
+ * @param options - Parser options
+ * @returns Promise resolving to parsed AST
+ */
+const parseApexForEmbed = async (code: string, options: ParserOptions): Promise<ApexNode> => {
+	// Use the existing parser infrastructure - access through the stored plugin instance
+	if (!currentPluginInstance?.parsers?.apex?.parse) {
+		throw new Error('Apex parser not available for embed processing');
+	}
+
+	return currentPluginInstance.parsers.apex.parse(code, {
+		...options,
+		parser: 'apex',
+	});
+};
+
+/**
+ * Format an AST using the current printer.
+ * @param ast - The AST to format
+ * @param options - Parser options
+ * @returns Formatted string
+ */
+const formatAstWithPrinter = (ast: ApexNode, options: ParserOptions): string => {
+	// Create a path for the AST
+	const path = {
+		getValue: () => ast,
+		getParentNode: () => null,
+		getName: () => null,
+		getNode: () => ast,
+		getRoot: () => ast,
+		call: () => {},
+		callParent: () => {},
+		stack: [ast],
+	} as AstPath;
+
+	// Use the current printer to format the AST
+	const doc = options.printer.print(path, options);
+
+	// Convert Doc to string - this is a simplified approach
+	// In a real implementation, you'd need to use Prettier's doc printer
+	return doc.toString();
+};
+
+/**
+ * Parse Apex code for embed processing.
+ * @param code - Code to parse
+ * @returns Promise resolving to parsed AST
+ */
+let cachedParser: any = null;
+
 
 	// @ts-expect-error TS2375 -- exactOptionalPropertyTypes causes type mismatch with Prettier's embed API
 	return result;
@@ -607,6 +711,7 @@ export {
 	createWrappedPrinter,
 	getCurrentOriginalText,
 	getCurrentPrintOptions,
+	getCurrentPluginInstance,
 	getFormattedCodeBlock,
 	setCurrentPluginInstance,
 };

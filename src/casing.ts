@@ -341,61 +341,50 @@ const createTypeNormalizingPrint =
 const normalizeTypeNamesInCode = (code: string): string => {
 	if (!code || typeof code !== 'string') return code;
 
-	let normalizedCode = code;
+	let result = code;
 
-	// First, handle type names with object suffixes
-	// Create a regex pattern to match type names with object suffixes
-	// Match type names followed by object suffixes (e.g., MyCustomObject__C, Account__c)
-	// Sort suffixes by length descending to match longest first (e.g., __DataCategorySelection before __c)
+	// First, handle type names with object suffixes (these are safe to normalize)
 	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
 		([, a], [, b]) => b.length - a.length,
 	);
 
-	// Process code line by line to avoid issues with word boundaries and context
-	const lines = normalizedCode.split('\n');
-	const suffixNormalizedLines = lines.map((line) => {
-		let normalizedLine = line;
-		// Try each suffix pattern (longest first)
-		for (const [, normalizedSuffix] of suffixes) {
-			// Escape special regex characters in suffix
-			const escapedSuffix = normalizedSuffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			// Match type names with this suffix
-			// Pattern: [a-zA-Z0-9_]+ followed by the suffix
-			// Use negative lookbehind/lookahead to ensure we're matching a complete type name
-			// (not part of a larger identifier)
-			const pattern = new RegExp(
-				`(?<![a-zA-Z0-9_])([a-zA-Z0-9_]+)${escapedSuffix}(?![a-zA-Z0-9_])`,
-				'gi',
-			);
-			normalizedLine = normalizedLine.replace(pattern, (match, prefix: string) => {
-				// Reconstruct the full type name with original casing for prefix
-				const fullTypeName = `${prefix}${normalizedSuffix}`;
-				// Normalize the full type name (handles both prefix and suffix normalization)
-				return normalizeTypeName(fullTypeName);
-			});
-		}
-		return normalizedLine;
-	});
-
-	normalizedCode = suffixNormalizedLines.join('\n');
-
-	// Then, handle standalone standard object type names (without suffixes)
-	// This handles cases like "account" -> "Account" in type contexts
-	const lines2 = normalizedCode.split('\n');
-	const fullyNormalizedLines = lines2.map((line) => {
-		let normalizedLine = line;
-		// Find all potential identifiers and check if they're standard objects
-		// Use word boundaries to avoid matching parts of larger identifiers
-		const identifierPattern = /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
-		normalizedLine = normalizedLine.replace(identifierPattern, (match) => {
-			// Check if this identifier is a standard object that needs normalization
-			const normalized = normalizeStandardObjectType(match);
-			return normalized !== match ? normalized : match;
+	// Process code to find suffixed type names
+	for (const [, normalizedSuffix] of suffixes) {
+		const escapedSuffix = normalizedSuffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		const pattern = new RegExp(
+			`(?<![a-zA-Z0-9_])([a-zA-Z0-9_]+)${escapedSuffix}(?![a-zA-Z0-9_])`,
+			'gi',
+		);
+		result = result.replace(pattern, (match, prefix: string) => {
+			const fullTypeName = `${prefix}${normalizedSuffix}`;
+			return normalizeTypeName(fullTypeName);
 		});
-		return normalizedLine;
-	});
+	}
 
-	return fullyNormalizedLines.join('\n');
+	// For standard object names without suffixes, use context-aware patterns
+	// Look for patterns that indicate type usage rather than variable usage
+	const standardObjectPatterns = [
+		// Constructor calls: new TypeName(
+		/\bnew\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/gi,
+		// Cast expressions: (TypeName)
+		/\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)/gi,
+		// Generic type parameters: List<TypeName>, Map<TypeName, ...>
+		/(?:List|Map|Set)\s*<\s*([a-zA-Z_][a-zA-Z0-9_]*)\b/gi,
+		// Return type declarations: TypeName methodName
+		// This is tricky - we need to be careful not to match variable declarations
+	];
+
+	for (const pattern of standardObjectPatterns) {
+		result = result.replace(pattern, (match, typeName: string) => {
+			const normalizedType = normalizeStandardObjectType(typeName);
+			if (normalizedType !== typeName) {
+				return match.replace(typeName, normalizedType);
+			}
+			return match;
+		});
+	}
+
+	return result;
 };
 
 export {
