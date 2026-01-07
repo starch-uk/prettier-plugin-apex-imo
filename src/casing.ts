@@ -340,16 +340,20 @@ const createTypeNormalizingPrint =
  */
 const normalizeTypeNamesInCode = (code: string): string => {
 	if (!code || typeof code !== 'string') return code;
+
+	let normalizedCode = code;
+
+	// First, handle type names with object suffixes
 	// Create a regex pattern to match type names with object suffixes
 	// Match type names followed by object suffixes (e.g., MyCustomObject__C, Account__c)
 	// Sort suffixes by length descending to match longest first (e.g., __DataCategorySelection before __c)
 	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
 		([, a], [, b]) => b.length - a.length,
 	);
-	
+
 	// Process code line by line to avoid issues with word boundaries and context
-	const lines = code.split('\n');
-	const normalizedLines = lines.map((line) => {
+	const lines = normalizedCode.split('\n');
+	const suffixNormalizedLines = lines.map((line) => {
 		let normalizedLine = line;
 		// Try each suffix pattern (longest first)
 		for (const [, normalizedSuffix] of suffixes) {
@@ -372,7 +376,26 @@ const normalizeTypeNamesInCode = (code: string): string => {
 		}
 		return normalizedLine;
 	});
-	return normalizedLines.join('\n');
+
+	normalizedCode = suffixNormalizedLines.join('\n');
+
+	// Then, handle standalone standard object type names (without suffixes)
+	// This handles cases like "account" -> "Account" in type contexts
+	const lines2 = normalizedCode.split('\n');
+	const fullyNormalizedLines = lines2.map((line) => {
+		let normalizedLine = line;
+		// Find all potential identifiers and check if they're standard objects
+		// Use word boundaries to avoid matching parts of larger identifiers
+		const identifierPattern = /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
+		normalizedLine = normalizedLine.replace(identifierPattern, (match) => {
+			// Check if this identifier is a standard object that needs normalization
+			const normalized = normalizeStandardObjectType(match);
+			return normalized !== match ? normalized : match;
+		});
+		return normalizedLine;
+	});
+
+	return fullyNormalizedLines.join('\n');
 };
 
 export {

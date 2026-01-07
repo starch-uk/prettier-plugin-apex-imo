@@ -1033,8 +1033,8 @@ export function processApexDocComment(
 	_getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): string {
-	// Comment processing without {@code} block normalization
-	const normalizedComment = commentValue;
+	// Normalize {@code} blocks in the comment
+	const normalizedComment = normalizeCodeBlocksInText(commentValue);
 
 	// Extract ParagraphTokens and clean up malformed indentation
 	const tokens = parseCommentToTokens(normalizedComment);
