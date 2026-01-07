@@ -14,6 +14,7 @@ import {
 	ARRAY_START_INDEX,
 	INDEX_ONE,
 	INDEX_TWO,
+	STRING_OFFSET,
 	EMPTY,
 } from './comments.js';
 import type {
@@ -89,9 +90,13 @@ const normalizeSingleApexDocComment = (
 		},
 	);
 
-	// Detect annotations (skip code blocks - they're handled by embed)
-	let tokens = initialTokens.filter((t) => t.type !== 'code');
+	// Process paragraph tokens: decide whether to pass through as regular comments
+	// or let them be processed by ApexDoc detection functions
+	let tokens = processParagraphTokensForApexDoc(initialTokens, normalizedComment);
+
+	// Detect annotations and code blocks in tokens that contain ApexDoc content
 	tokens = detectAnnotationsInTokens(tokens);
+	tokens = detectCodeBlockTokens(tokens, normalizedComment);
 
 	// Normalize annotations
 	tokens = normalizeAnnotationTokens(tokens);
@@ -110,18 +115,9 @@ const normalizeSingleApexDocComment = (
 	}
 
 	// Convert tokens back to string
-	// Wrap paragraphs if needed
-	const finalTokens = printWidth
-		? wrapParagraphTokens(
-				tokens,
-				printWidth,
-				commentIndent,
-				{
-					tabWidth: tabWidthValue,
-					useTabs: options.useTabs,
-				},
-			)
-		: tokens;
+	// For now, skip paragraph wrapping to avoid filtering out text tokens
+	// TODO: Implement proper paragraph wrapping that preserves all token types
+	const finalTokens = tokens;
 
 	return tokensToApexDocString(finalTokens, commentIndent, {
 		tabWidth: tabWidthValue,
@@ -235,13 +231,75 @@ const parseApexDocTokens = (
 	const effectiveWidth = printWidth - commentPrefixLength;
 
 	// Parse comment to tokens using the basic parser
-	const tokens = parseCommentToTokens(normalizedComment);
+	let tokens = parseCommentToTokens(normalizedComment);
+
+	// Process paragraph tokens: decide whether to pass through as regular comments
+	// or let them be processed by ApexDoc detection functions
+	tokens = processParagraphTokensForApexDoc(tokens, normalizedComment);
 
 	return {
 		tokens,
 		effectiveWidth,
 	};
 };
+
+/**
+ * Processes paragraph tokens to decide whether they should be passed through as regular comments
+ * or broken up into ApexDoc-specific tokens (annotations, code blocks).
+ * @param tokens - Array of comment tokens including paragraph tokens.
+ * @param originalComment - The original normalized comment string for position tracking.
+ * @returns Array of processed tokens.
+ */
+const processParagraphTokensForApexDoc = (
+	tokens: readonly CommentToken[],
+	originalComment: Readonly<string>,
+): readonly CommentToken[] => {
+	const processedTokens: CommentToken[] = [];
+
+	for (const token of tokens) {
+		if (token.type === 'paragraph') {
+			// Check if this paragraph contains ApexDoc-specific content
+			const hasApexDocContent = containsApexDocContent(token.content);
+
+			if (hasApexDocContent) {
+				// Keep as paragraph token - let ApexDoc detection functions handle it
+				processedTokens.push(token);
+			} else {
+				// Pass through as regular comment - convert to text token
+				processedTokens.push({
+					type: 'text',
+					content: token.content,
+					lines: token.lines,
+				} satisfies TextToken);
+			}
+		} else {
+			// Keep other token types as-is
+			processedTokens.push(token);
+		}
+	}
+
+	return processedTokens;
+};
+
+/**
+ * Checks if a paragraph content contains ApexDoc-specific elements like annotations or code blocks.
+ * @param content - The paragraph content to check.
+ * @returns True if the content contains ApexDoc elements.
+ */
+const containsApexDocContent = (content: string): boolean => {
+	// Check for annotations (@param, @return, etc.)
+	if (/@\w+/.test(content)) {
+		return true;
+	}
+
+	// Check for code blocks ({@code ...})
+	if (/{@code[^}]*}/.test(content)) {
+		return true;
+	}
+
+	return false;
+};
+
 
 /**
  * Detects annotations in tokens and converts TextTokens/ParagraphTokens to AnnotationTokens.
