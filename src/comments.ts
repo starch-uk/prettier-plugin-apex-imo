@@ -387,6 +387,21 @@ const parseCommentToTokens = (
 			}
 			// Empty lines create paragraph boundaries but aren't tokens themselves
 		} else {
+			// Check if this line starts with @ (annotation)
+			const isAnnotationLine = trimmedLine.startsWith('@');
+
+			// If current line is an annotation, finish current paragraph first
+			if (isAnnotationLine && currentParagraph.length > EMPTY) {
+				tokens.push({
+					type: 'paragraph',
+					content: currentParagraph.join(' '),
+					lines: currentParagraphLines,
+					isContinuation: false,
+				} satisfies ParagraphToken);
+				currentParagraph = [];
+				currentParagraphLines = [];
+			}
+
 			// Check for sentence boundary: ends with sentence-ending punctuation
 			// and next line starts with capital letter
 			const endsWithSentencePunctuation = /[.!?]\s*$/.test(trimmedLine);
@@ -402,11 +417,12 @@ const parseCommentToTokens = (
 			currentParagraph.push(trimmedLine);
 			currentParagraphLines.push(line);
 
-			// If this is a sentence boundary, finish current paragraph
+			// If this is a sentence boundary or we're at an annotation line, finish current paragraph
 			if (
-				endsWithSentencePunctuation &&
-				nextStartsWithCapital &&
-				nextTrimmed.length > EMPTY
+				(endsWithSentencePunctuation &&
+					nextStartsWithCapital &&
+					nextTrimmed.length > EMPTY) ||
+				isAnnotationLine
 			) {
 				tokens.push({
 					type: 'paragraph',

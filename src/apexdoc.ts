@@ -123,8 +123,84 @@ const normalizeSingleApexDocComment = (
 			)
 		: tokens;
 
-	return tokensToCommentString(finalTokens, commentIndent, {
+	return tokensToApexDocString(finalTokens, commentIndent, {
 		tabWidth: tabWidthValue,
+		useTabs: options.useTabs,
+	});
+};
+
+/**
+ * Converts ApexDoc comment tokens (including AnnotationTokens) back into a
+ * normalized comment string.
+ * This function is ApexDoc-aware and knows how to render annotation tokens,
+ * but defers the final comment construction (including the opening and closing
+ * comment markers) to the
+ * generic tokensToCommentString helper from comments.ts.
+ * @param tokens - Array of comment tokens (may include AnnotationTokens).
+ * @param commentIndent - The indentation level of the comment in spaces.
+ * @param options - Options including tabWidth and useTabs.
+ * @returns The formatted ApexDoc comment string.
+ */
+const tokensToApexDocString = (
+	tokens: readonly CommentToken[],
+	commentIndent: number,
+	options: Readonly<{
+		readonly tabWidth: number;
+		readonly useTabs?: boolean | null | undefined;
+	}>,
+): string => {
+	const baseIndent = createIndent(
+		commentIndent,
+		options.tabWidth,
+		options.useTabs,
+	);
+	const commentPrefix = `${baseIndent} * `;
+
+	const apexDocTokens: CommentToken[] = [];
+
+	for (const token of tokens) {
+		if (token.type === 'annotation') {
+			// Render AnnotationTokens as text tokens with fully formatted comment lines.
+			// tokensToCommentString will preserve lines that already start with '*'.
+			const contentLines =
+				token.content.length > EMPTY
+					? token.content.split('\n')
+					: [''];
+
+			const lines: string[] = [];
+			const annotationName = token.name;
+
+			// First line includes the @annotation name
+			const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
+			const firstLine =
+				firstContent.length > EMPTY
+					? `${commentPrefix}@${annotationName} ${firstContent}`
+					: `${commentPrefix}@${annotationName}`;
+			lines.push(firstLine);
+
+			// Subsequent lines are continuation of the annotation content
+			for (let i = INDEX_ONE; i < contentLines.length; i++) {
+				const lineContent = contentLines[i] ?? '';
+				if (lineContent.length > EMPTY) {
+					lines.push(`${commentPrefix}${lineContent}`);
+				} else {
+					// Preserve a blank annotation continuation line
+					lines.push(commentPrefix.trimEnd());
+				}
+			}
+
+			apexDocTokens.push({
+				type: 'text',
+				content: lines.join('\n'),
+				lines,
+			} satisfies TextToken);
+		} else {
+			apexDocTokens.push(token);
+		}
+	}
+
+	return tokensToCommentString(apexDocTokens, commentIndent, {
+		tabWidth: options.tabWidth,
 		useTabs: options.useTabs,
 	});
 };
@@ -191,6 +267,7 @@ const detectAnnotationsInTokens = (
 			for (const line of tokenLines) {
 				const matches = [...line.matchAll(annotationPattern)];
 				if (matches.length > EMPTY) {
+					console.log('DEBUG: Found annotation in line:', JSON.stringify(line));
 					hasAnnotations = true;
 					// Process each annotation match
 					for (const match of matches) {
@@ -485,7 +562,7 @@ const normalizeSingleApexDocCommentWithTokens = async (
 			)
 		: tokens;
 
-	return tokensToCommentString(finalTokens, commentIndent, {
+	return tokensToApexDocString(finalTokens, commentIndent, {
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
 	});
