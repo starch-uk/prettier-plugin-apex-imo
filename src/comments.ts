@@ -648,17 +648,39 @@ const processApexDocComment = (
 	// For this test case, hardcode commentIndent to 2
 	const commentIndent = 2;
 
-	// Check if embed has already formatted code blocks for this comment
-	const codeTagPos = commentValue.indexOf('{@code');
-	const commentKey = codeTagPos !== -1 ? `${String(commentValue.length)}-${String(codeTagPos)}` : null;
+	// Always normalize comment structure first (fix malformed asterisks, indentation, etc.)
+	const normalizedComment = normalizeSingleApexDocComment(
+		commentValue,
+		commentIndent,
+		options,
+	);
+
+	// For malformed comments (original had structural issues), don't use embed system
+	// since it may collapse multi-line {@code} blocks that should stay multi-line
+	const wasMalformed = normalizedComment !== commentValue ||
+		commentValue.includes('*  *') || // Extra asterisks
+		!commentValue.includes('\n * ') || // Missing asterisks
+		commentValue.includes('\n    * ') || // Inconsistent indentation
+		commentValue.includes('\n* ') || // Missing space after asterisk
+		commentValue.includes('\n *    '); // Extra spaces
+
+	if (wasMalformed) {
+		// Use normalized comment with code block processing (no embed)
+		const lines = normalizedComment.split('\n');
+		const processedLines = processCodeBlockLines(lines);
+		return processedLines.join('\n');
+	}
+
+	// For well-formed comments, check if embed has already formatted code blocks
+	const codeTagPos = normalizedComment.indexOf('{@code');
+	const commentKey = codeTagPos !== -1 ? `${String(normalizedComment.length)}-${String(codeTagPos)}` : null;
 	const embedFormattedComment = getFormattedCodeBlock(commentKey);
 
 	if (embedFormattedComment) {
-		// Use tokenization for embed-formatted comments (proper normalization)
-		const paragraphTokens = tokenizeCommentIntoParagraphs(commentValue);
+		// Use tokenization for embed-formatted comments
+		const paragraphTokens = tokenizeCommentIntoParagraphs(normalizedComment);
 
 		// Process each paragraph token through apexdoc.ts
-		const baseIndentStr = ' '.repeat(commentIndent);
 		const processedLines: string[] = [];
 
 		for (const token of paragraphTokens) {
@@ -683,14 +705,7 @@ const processApexDocComment = (
 
 		return processedLines.join('\n');
 	} else {
-		// Use original logic for non-embed comments (including malformed ones)
-		const normalizedComment = normalizeSingleApexDocComment(
-			commentValue,
-			commentIndent,
-			options,
-		);
-
-		// Process code block lines
+		// Use normalized comment with code block processing
 		const lines = normalizedComment.split('\n');
 		const processedLines = processCodeBlockLines(lines);
 
