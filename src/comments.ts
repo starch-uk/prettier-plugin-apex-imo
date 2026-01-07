@@ -6,6 +6,7 @@ import type { ParserOptions, ApexNode } from './types.js';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import { normalizeSingleApexDocComment } from './apexdoc.js';
+import { normalizeAnnotationNamesInText } from './annotations.js';
 
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -17,6 +18,36 @@ const ARRAY_START_INDEX = 0;
 const STRING_OFFSET = 1;
 const INDEX_ONE = 1;
 const INDEX_TWO = 2;
+
+/**
+ * Synchronously normalize {@code} blocks in text by applying annotation normalization.
+ * @param text - The text that may contain {@code} blocks.
+ * @returns The text with {@code} blocks normalized.
+ */
+const normalizeCodeBlocksInText = (text: string): string => {
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = text;
+	let startIndex = 0;
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
+		// Normalize annotations in the code content
+		const normalizedCode = normalizeAnnotationNamesInText(codeContent);
+		// Replace the code block with normalized version
+		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
+		// Move past this code block
+		startIndex = endIndex + 1;
+	}
+
+	return result;
+};
 
 const isCommentStart = (text: string, pos: number): boolean =>
 	text.substring(pos, pos + COMMENT_START_LENGTH) === COMMENT_START_MARKER;
@@ -661,10 +692,13 @@ const wrapParagraphTokens = (
 		commentValue: string,
 		options: ParserOptions,
 		_getCurrentOriginalText: () => string | undefined,
-		_getFormattedCodeBlock: (key: string) => string | undefined,
+		getFormattedCodeBlock: (key: string) => string | undefined,
 	): string => {
+		// First normalize {@code} blocks synchronously
+		const normalizedComment = normalizeCodeBlocksInText(commentValue);
+
 		// Extract ParagraphTokens and clean up malformed indentation
-		const tokens = parseCommentToTokens(commentValue);
+		const tokens = parseCommentToTokens(normalizedComment);
 
 		// Clean up indentation in token lines
 		const cleanedTokens = tokens.map(token => {
@@ -674,8 +708,15 @@ const wrapParagraphTokens = (
 					const match = line.match(/^(\s*)\*?\s*(.*)$/);
 					if (match) {
 						const [, indent, content] = match;
-						// Normalize to consistent indentation
-						return ` * ${content}`;
+						// For well-formed comments, preserve existing indentation
+						// Only normalize if there's no asterisk or malformed spacing
+						if (indent.includes('*')) {
+							// Already has asterisk, preserve as-is
+							return line;
+						} else {
+							// No asterisk, add standard formatting
+							return ` * ${content}`;
+						}
 					}
 					return line;
 				});
@@ -819,6 +860,7 @@ export {
 	processApexDocComment,
 	customPrintComment,
 	isMalformedApexDocComment,
+	normalizeCodeBlocksInText,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,

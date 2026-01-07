@@ -235,6 +235,8 @@ const createWrappedPrinter = (
 		| null
 		| undefined;
 } => {
+	const result: Required<Printer<ApexNode>> = { ...originalPrinter };
+
 	const customPrint = (
 		path: Readonly<AstPath<ApexNode>>,
 		options: Readonly<ParserOptions>,
@@ -590,210 +592,14 @@ const createWrappedPrinter = (
 		return fallback();
 	};
 
-	// Custom embed function to handle code blocks in comments
-	// This allows us to format code blocks asynchronously using textToDoc
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier's embed types are complex
-	const customEmbed: any = (path: any, options: any): any => {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- path.getNode() is a Prettier API
-		const node = path.getNode() as ApexNode;
+	result.print = customPrint;
 
-		// Check if this is a comment node with code blocks
-		if (
-			isCommentNode(node) &&
-			'value' in node &&
-			typeof node['value'] === 'string'
-		) {
-			const commentValue = node['value'];
-			const codeTagPos = commentValue.indexOf(CODE_TAG);
-
-			// If comment contains code blocks, return a function to handle them
-			if (codeTagPos !== NOT_FOUND_INDEX) {
-				return async (
-					_textToDoc: (
-						text: string,
-						options: ParserOptions,
-					) => Promise<Doc>,
-					_print: (
-						selector?:
-							| (number | string)[]
-							| AstPath
-							| number
-							| string,
-					) => Doc,
-					_embedPath: AstPath,
-					_embedOptions: ParserOptions,
-					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
-				): Promise<Doc | undefined> => {
-					// Extract and format {@code} blocks in the comment
-					if (!commentValue.includes(CODE_TAG)) {
-						return undefined;
-					}
-
-					let processedComment = commentValue;
-					let searchPos = 0;
-					const replacements: Array<{start: number; end: number; replacement: string}> = [];
-
-					while (searchPos < processedComment.length) {
-						const tagPos = processedComment.indexOf(CODE_TAG, searchPos);
-						if (tagPos === -1) break;
-
-						const extraction = extractCodeFromBlock(processedComment, tagPos);
-						if (!extraction) {
-							searchPos = tagPos + 6;
-							continue;
-						}
-
-						const { code, endPos } = extraction;
-
-						// Normalize annotations
-						const normalizedCode = normalizeAnnotationNamesInText(code);
-						const trimmedCode = normalizedCode.trim();
-
-						if (trimmedCode.length === 0) {
-							replacements.push({ start: tagPos, end: endPos, replacement: '{@code}' });
-						} else {
-							// For bare annotations
-							const isBareAnnotation = /^@\w+\s*$/.test(trimmedCode) && normalizedCode.split('\n').length === 1;
-							if (isBareAnnotation && trimmedCode.length < 100) {
-								replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${normalizedCode}}` });
-							} else {
-								// Format using prettier.format with our plugin to use custom printer
-								try {
-									const pluginToUse = currentPluginInstance?.default ?? (await import('./index.js')).default;
-									const formatted = await prettier.format(normalizedCode, {
-										..._embedOptions,
-										parser: 'apex-anonymous',
-										plugins: [pluginToUse],
-										printWidth: _embedOptions.printWidth ? Math.max(40, _embedOptions.printWidth - 4) : 80,
-									});
-									const cleanFormatted = formatted.replace(/\n+$/, '');
-									replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${cleanFormatted}}` });
-								} catch {
-									try {
-										const pluginToUse = currentPluginInstance?.default ?? (await import('./index.js')).default;
-										const formatted = await prettier.format(normalizedCode, {
-											..._embedOptions,
-											parser: 'apex',
-											plugins: [pluginToUse],
-											printWidth: _embedOptions.printWidth ? Math.max(40, _embedOptions.printWidth - 4) : 80,
-										});
-										const cleanFormatted = formatted.replace(/\n+$/, '');
-										replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${cleanFormatted}}` });
-									} catch {
-										replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${normalizedCode}}` });
-									}
-								}
-							}
-						}
-
-						searchPos = endPos;
-					}
-
-					// Store formatted comment for use in printComment
-					if (replacements.length > 0) {
-						let finalComment = processedComment;
-						for (const replacement of replacements.reverse()) {
-							finalComment = finalComment.slice(0, replacement.start) + replacement.replacement + finalComment.slice(replacement.end);
-						}
-						const commentKey = `${commentValue.length}-${commentValue.indexOf(CODE_TAG)}`;
-						formattedCodeBlocks.set(commentKey, finalComment);
-					}
-
-					// Return undefined to let Prettier handle the comment normally
-					return undefined;;
-				};
-			}
-		}
-
-		// For non-comment nodes or comments without code blocks, use original embed if it exists
-
-		if (originalPrinter.embed) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call -- Prettier's embed types are complex
-			return (originalPrinter.embed as any)(path, options);
-		}
-
-		return undefined;
-	};
-
-	const result = {
-		...originalPrinter,
-		print: customPrint,
-	};
-	// Wrap embed to handle code blocks in comments
-	// If original has embed, we need to call it first, then handle code blocks
-	// If original doesn't have embed, we add our custom one
+	// Wrap original embed to ensure our custom printer is used
 	if (originalPrinter.embed) {
-		// Wrap original embed to also handle code blocks
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier's embed types are complex
-		result.embed = (path: any, options: any): any => {
-			// First try our custom logic for code blocks in comments
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- Prettier's embed types are complex
-			const customResult = customEmbed(path, options);
-			// If we returned a function (for async handling), use that
-			if (typeof customResult === 'function') {
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Prettier's embed types are complex
-				return customResult;
-			}
-			// If we returned undefined (didn't handle it), try original embed
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment -- Prettier's embed types are complex
-			const originalResult = (originalPrinter.embed as any)(
-				path,
-				options,
-			);
-			// If original also returned undefined, return undefined
-			if (originalResult === undefined) {
-				return undefined;
-			}
-			// If original returned a function, we need to wrap it to also handle code blocks
-			if (typeof originalResult === 'function') {
-				return async (
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier embed types are complex
-					textToDoc: any,
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier embed types are complex
-					print: any,
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier embed types are complex
-					embedPath: any,
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prettier embed types are complex
-					embedOptions: any,
-					// eslint-disable-next-line @typescript-eslint/max-params, @typescript-eslint/no-explicit-any -- Prettier embed API requires 4 parameters
-				): Promise<any> => {
-					// Call original embed's async function
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment -- Prettier's embed types are complex
-					const originalDoc = await originalResult(
-						textToDoc,
-						print,
-						embedPath,
-						embedOptions,
-					);
-					// Also try our custom logic (it will return undefined if not a comment with code blocks)
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- Prettier's embed types are complex
-					const customDoc = await customEmbed(
-						embedPath,
-						embedOptions,
-					);
-					if (typeof customDoc === 'function') {
-						// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment -- Prettier's embed types are complex
-						const customResultDoc = await customDoc(
-							textToDoc,
-							print,
-							embedPath,
-							embedOptions,
-						);
-						// If both returned results, prefer custom (code blocks)
-						return customResultDoc ?? originalDoc;
-					}
-					return originalDoc;
-				};
-			}
-			// If original returned a Doc, return it
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Prettier's embed types are complex
-			return originalResult;
-		};
-	} else {
-		// No original embed, add our custom one
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Prettier's embed types are complex
-		result.embed = customEmbed;
+		result.embed = ((...args: any[]) => (originalPrinter.embed as any)(...args)) as any;
 	}
+
 	// @ts-expect-error TS2375 -- exactOptionalPropertyTypes causes type mismatch with Prettier's embed API
 	return result;
 };

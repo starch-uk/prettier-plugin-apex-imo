@@ -139,15 +139,20 @@ const normalizeSingleApexDocComment = (
  * @param getFormattedCodeBlock - Function to get embed-formatted code blocks.
  * @returns Array of formatted comment lines (without base indentation).
  */
+import { normalizeCodeBlocksInText } from './comments.js';
+
 export function processApexDocCommentLines(
 	commentValue: string,
 	commentIndent: number,
 	options: ParserOptions,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): string[] {
+	// First, normalize {@code} blocks in the entire comment
+	const codeBlockNormalizedComment = normalizeCodeBlocksInText(commentValue);
+
 	// Normalize the comment structure
 	const normalizedComment = normalizeSingleApexDocComment(
-		commentValue,
+		codeBlockNormalizedComment,
 		0, // Use 0 for consistency with embed function
 		options,
 	);
