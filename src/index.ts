@@ -37,8 +37,6 @@ async function normalizeCodeSnippetsInComments(
 	text: string,
 	options: ParserOptions<ApexNode>,
 ): Promise<string> {
-	console.log('Preprocess: Starting normalization of code snippets in comments');
-	console.log('Preprocess: Input text length:', text.length);
 	const codeTag = '{@code';
 	const codeTagEnd = '}';
 	const codeTagLength = codeTag.length;
@@ -75,12 +73,8 @@ async function normalizeCodeSnippetsInComments(
 				return trimmed;
 			}).join('\n').trim();
 
-			console.log('Preprocess: Found code snippet:', cleanedCode);
-
 			// Normalize using AST-based approach
 			const normalizedCode = await normalizeTypeNamesInCode(cleanedCode);
-
-			console.log('Preprocess: Normalized to:', normalizedCode);
 
 			// Format the normalized code back with proper comment markers
 			const normalizedLines = normalizedCode.split('\n');
@@ -112,9 +106,6 @@ async function normalizeCodeSnippetsInComments(
 	for (const replacement of replacements) {
 		result = result.substring(0, replacement.start) + replacement.normalized + result.substring(replacement.end);
 	}
-
-	console.log('Preprocess: Applied', replacements.length, 'replacements');
-	console.log('Preprocess: Final result length:', result.length);
 
 	return result;
 }

@@ -402,8 +402,6 @@ const findIdentifiersToNormalize = (node: any, positions: Array<{ start: number;
 			const startIndex = node.loc.startIndex;
 			const endIndex = node.loc.endIndex;
 
-			console.log(`Processing identifier "${identifier}": startIndex=${startIndex}, endIndex=${endIndex}, loc=`, node.loc);
-
 			if (typeof startIndex === 'number' && typeof endIndex === 'number') {
 				positions.push({
 					start: offset + startIndex,
