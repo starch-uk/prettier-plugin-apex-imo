@@ -77,137 +77,8 @@ const extractCodeFromBlock = (
 };
 
 
-/**
- * Formats multiline code block with proper indentation and comment prefix.
- * Preserves brace alignment by tracking opening brace indentation.
- * @param formattedCode - The formatted code to prefix.
- * @param commentPrefix - The comment prefix (e.g., "   * ").
- * @returns The formatted code block with comment prefix.
- * @example
- * formatMultilineCodeBlock('  System.debug("test");', '   * ')
- */
-const formatMultilineCodeBlock = (
-	formattedCode: string,
-	commentPrefix: string,
-): string => {
-
-	// CRITICAL: Remove trailing empty lines from formatted code
-	// Prettier may add trailing newlines, which would create empty lines inside {@code} blocks
-	// We want the code block to end immediately after the last non-empty line
-	const trimmedFormattedCode = formattedCode.replace(/\n+$/, '');
-	let lines = trimmedFormattedCode.split('\n');
-	// Remove trailing empty lines from the array (in case split created empty strings)
-	const EMPTY_LINE_LENGTH = 0;
-	while (lines.length > ZERO_LENGTH && lines[lines.length - SINGLE_LINE_LENGTH]?.trim().length === EMPTY_LINE_LENGTH) {
-		lines = lines.slice(ZERO_LENGTH, -SINGLE_LINE_LENGTH);
-	}
-	
-	// Apply consistent indentation for code block continuation lines
-	const prefixedLines = lines.map((line, index) => {
-		// Empty lines just get the comment prefix (no trailing space)
-		if (line.trim().length === ZERO_LENGTH) {
-			return commentPrefix.trimEnd();
-		}
-
-		// First code line: use standard comment prefix
-		if (index === 0) {
-			return `${commentPrefix}${line}`;
-		}
-
-		// Continuation lines: use 2 spaces after * for visual distinction
-		const basePrefix = commentPrefix.substring(0, commentPrefix.lastIndexOf('*') + 1); // '   *'
-		const continuationPrefix = basePrefix + '  '; // '   *  '
-		return `${continuationPrefix}${line.trimStart()}`;
-	});
-	
-	const result = `{@code\n${prefixedLines.join('\n')}\n${commentPrefix.trimEnd()} }`;
-	return result;
-};
 
 
-/**
- * Formats a code block directly using Prettier's format with our plugin.
- * The code is extracted cleanly (no comment indentation) and formatted as-is.
- * @param params - Parameters object.
- * @param params.code - The cleanly extracted code to format (no comment prefixes).
- * @param params.embedOptions - Parser options for formatting.
- * @param params.currentPluginInstance - Plugin instance to ensure our wrapped printer is used.
- * @returns The formatted code with preserved relative indentation.
- * @example
- * formatCodeBlockDirect({code: '@IsTest\npublic void method() {}', embedOptions: {}, currentPluginInstance: undefined})
- */
-const formatCodeBlockDirect = async ({
-	code,
-	embedOptions,
-	currentPluginInstance,
-}: {
-	readonly code: string;
-	readonly embedOptions: ParserOptions;
-	readonly currentPluginInstance: { default: unknown } | undefined;
-}): Promise<string> => {
-	// Handle empty code blocks - return empty string immediately
-	if (code.trim().length === ZERO_LENGTH) {
-		return '';
-	}
-	
-	// CRITICAL: Normalize annotations in the code before formatting
-	// This is the ONLY place where annotations inside {@code} blocks are normalized
-	// ApexDoc normalization (normalizeSingleApexDocComment) skips code block content entirely
-	// This separation ensures:
-	// 1. Code formatting is handled by embed function (Prettier)
-	// 2. Annotation normalization for code blocks happens here (separate from ApexDoc normalization)
-	// 3. ApexDoc normalization only processes annotations OUTSIDE code blocks
-	// textToDoc should use our wrapped parser, but to be safe, we normalize here
-	// This ensures annotations like @auraenabled become @AuraEnabled
-	const normalizedCode = normalizeAnnotationNamesInText(code);
-	
-	// For single-line code blocks that are just bare annotations (without values),
-	// normalize annotation names but don't try to format (they're not valid Apex code by themselves)
-	// Annotations with values should be attempted to format (they may fail, which is expected for some)
-	const trimmedNormalized = normalizedCode.trim();
-	const isBareAnnotation = /^@\w+\s*$/.test(trimmedNormalized) && normalizedCode.split('\n').length === SINGLE_LINE_LENGTH;
-	if (isBareAnnotation && trimmedNormalized.length < SIMPLE_ANNOTATION_MAX_LENGTH) {
-		// For bare annotations (no values), normalize annotation names but return without formatting
-		// Annotation normalization (PascalCase) is already applied by normalizeAnnotationNamesInText above
-		return normalizedCode;
-	}
-	
-	// CRITICAL: Use prettier.format with our plugin to ensure wrapped printer is used
-	// This ensures annotation normalization, type normalization, and custom formatting are applied
-	const pluginToUse =
-		currentPluginInstance?.default ??
-		(await import('./index.js')).default;
-	
-	// Create options with our plugin to ensure wrapped printer is used
-	const optionsWithPlugin = {
-		...embedOptions,
-		plugins: [pluginToUse as prettier.Plugin],
-	};
-	
-	// Try apex-anonymous parser first (designed for code snippets)
-	// This handles both complete classes and incomplete code snippets
-		try {
-			const formatted = await prettier.format(normalizedCode, {
-				...optionsWithPlugin,
-				parser: 'apex-anonymous',
-			});
-			// Remove trailing newlines but preserve the formatted structure
-			return formatted.replace(/\n+$/, '');
-		} catch {
-			// If apex-anonymous fails, try the regular apex parser
-			try {
-				const formatted = await prettier.format(normalizedCode, {
-					...optionsWithPlugin,
-					parser: 'apex',
-				});
-				// Remove trailing newlines but preserve the formatted structure
-				return formatted.replace(/\n+$/, '');
-			} catch {
-				// If both parsers fail, return the code with FORMAT_FAILED prefix
-				return `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
-			}
-		}
-};
 
 
 /**
@@ -261,7 +132,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 };
 
 /**
- * Formats a CodeBlockToken using formatCodeBlockDirect with effective page width.
+ * Formats a CodeBlockToken using prettier with our plugin and effective page width.
  * @param token - The code block token to format.
  * @param effectiveWidth - The effective page width (reduced from printWidth).
  * @param embedOptions - Parser options for formatting.
@@ -279,20 +150,84 @@ const formatCodeBlockToken = async ({
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<CodeBlockToken> => {
+	// Normalize annotations first
+	const normalizedCode = normalizeAnnotationNamesInText(token.rawCode);
+
 	// Use effective width for formatting
-	const formattedCode = await formatCodeBlockDirect({
-		code: token.rawCode,
-		embedOptions: {
-			...embedOptions,
-			printWidth: effectiveWidth,
-		},
-		currentPluginInstance,
-	});
+	const optionsWithPlugin = {
+		...embedOptions,
+		printWidth: effectiveWidth,
+		plugins: [currentPluginInstance?.default ?? (await import('./index.js')).default],
+	};
+
+	let formatted;
+	try {
+		formatted = await prettier.format(normalizedCode, {
+			...optionsWithPlugin,
+			parser: 'apex-anonymous',
+		});
+	} catch {
+		try {
+			formatted = await prettier.format(normalizedCode, {
+				...optionsWithPlugin,
+				parser: 'apex',
+			});
+		} catch {
+			formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
+		}
+	}
 
 	return {
 		...token,
-		formattedCode,
+		formattedCode: formatted.replace(/\n+$/, ''),
 	};
+};
+
+/**
+ * Formats {@code} block content for comment processing, returning formatted lines.
+ * This is used when {@code} blocks are found during comment processing (not embed phase).
+ * @param codeContent - The raw code content from inside {@code ... }
+ * @param embedOptions - Parser options with reduced printWidth for comment context
+ * @param currentPluginInstance - Plugin instance for formatting
+ * @returns Array of formatted code lines (without comment prefixes)
+ */
+const formatCodeBlockForComment = async ({
+	codeContent,
+	embedOptions,
+	currentPluginInstance,
+}: {
+	readonly codeContent: string;
+	readonly embedOptions: ParserOptions;
+	readonly currentPluginInstance: { default: unknown } | undefined;
+}): Promise<readonly string[]> => {
+	// Normalize annotations first
+	const normalizedCode = normalizeAnnotationNamesInText(codeContent);
+
+	// Format using prettier
+	const optionsWithPlugin = {
+		...embedOptions,
+		plugins: [currentPluginInstance?.default ?? (await import('./index.js')).default],
+	};
+
+	let formatted;
+	try {
+		formatted = await prettier.format(normalizedCode, {
+			...optionsWithPlugin,
+			parser: 'apex-anonymous',
+		});
+	} catch {
+		try {
+			formatted = await prettier.format(normalizedCode, {
+				...optionsWithPlugin,
+				parser: 'apex',
+			});
+		} catch {
+			formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
+		}
+	}
+
+	// Split into lines and return as array
+	return formatted.replace(/\n+$/, '').split('\n');
 };
 
 export {
@@ -300,8 +235,7 @@ export {
 	CODE_TAG_LENGTH,
 	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
-	formatCodeBlockDirect,
 	formatCodeBlockToken,
-	formatMultilineCodeBlock,
+	formatCodeBlockForComment,
 	processCodeBlockLines,
 };

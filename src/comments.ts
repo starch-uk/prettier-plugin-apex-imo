@@ -6,7 +6,7 @@ import type { ParserOptions, ApexNode } from './types.js';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import { normalizeSingleApexDocComment, processParagraphToken as processApexDocToken, processApexDocCommentLines } from './apexdoc.js';
-import { processCodeBlockLines } from './apexdoc-code.js';
+import { processCodeBlockLines, formatCodeBlockForComment } from './apexdoc-code.js';
 
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -645,7 +645,7 @@ const processApexDocComment = (
 	getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): string => {
-	// Don't add base indentation, apexdoc.ts handles indentation
+	// Don't add base indentation, let Prettier handle it
 	const commentIndent = 0;
 
 	// Detect malformed comments BEFORE any processing

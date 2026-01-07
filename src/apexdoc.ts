@@ -5,7 +5,7 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { ParserOptions } from 'prettier';
-import { formatCodeBlockContent } from './apexdoc-code.js';
+import { formatCodeBlockContent, processCodeBlockLines } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
 import { tokenizeCommentIntoParagraphs } from './comments.js';
 import {
@@ -202,7 +202,7 @@ export function processApexDocCommentLines(
 	// Normalize the comment structure
 	const normalizedComment = normalizeSingleApexDocComment(
 		commentValue,
-		commentIndent,
+		0, // Use 0 for consistency with embed function
 		options,
 	);
 
@@ -236,7 +236,7 @@ export function processApexDocCommentLines(
 		const lines = normalizedComment.split('\n');
 		const processedLines = processCodeBlockLines(lines);
 
-		return processedLines.split('\n');
+		return processedLines.join('\n').split('\n');
 	}
 }
 
@@ -934,7 +934,19 @@ function processCodeBlock(
 		if (embedResult) {
 			// Parse embed result to extract the formatted code
 			const embedContent = embedResult.replace(/^\/\*\*\n/, '').replace(/\n \*\/\n?$/, '');
-			const lines = embedContent.split('\n').map(line => {
+
+			// Extract base indentation from the first code line (spaces before *)
+			const embedLines = embedContent.split('\n');
+			let baseIndent = '';
+			for (const line of embedLines) {
+				const match = line.match(/^(\s*)\*/);
+				if (match) {
+					baseIndent = match[1] ?? '';
+					break;
+				}
+			}
+
+			const lines = embedLines.map(line => {
 				// Remove the standard comment prefix but preserve relative indentation
 				const match = line.match(/^(\s*\*\s?)(.*)$/);
 				if (match) {
@@ -954,9 +966,8 @@ function processCodeBlock(
 				const fullyNormalizedCode = normalizeTypeNamesInCode(normalizedCode);
 				let normalizedLines = fullyNormalizedCode.split('\n');
 
-				// Adjust indentation to match expected fixture format
-				// The fixture expects all lines to have no leading spaces
-				normalizedLines = normalizedLines.map(line => line.trimStart());
+				// For embed results, the formatted code is stored without comment prefixes
+				// comments.ts will handle adding the proper indentation
 
 				return [`{@code`, ...normalizedLines, `}`];
 			}

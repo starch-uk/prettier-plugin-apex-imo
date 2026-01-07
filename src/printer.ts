@@ -24,10 +24,9 @@ import {
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
+import { normalizeSingleApexDocComment } from './apexdoc.js';
 import {
 	extractCodeFromBlock,
-	formatCodeBlockDirect,
-	formatMultilineCodeBlock,
 } from './apexdoc-code.js';
 import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
@@ -609,10 +608,6 @@ const createWrappedPrinter = (
 
 			// If comment contains code blocks, return a function to handle them
 			if (codeTagPos !== NOT_FOUND_INDEX) {
-				// Create a unique key for this comment (using a simple hash of the value)
-				// In a real implementation, we'd use node location or a better identifier
-				const commentKey = `${String(commentValue.length)}-${String(codeTagPos)}`;
-
 				return async (
 					_textToDoc: (
 						text: string,
@@ -629,6 +624,16 @@ const createWrappedPrinter = (
 					_embedOptions: ParserOptions,
 					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
 				): Promise<Doc | undefined> => {
+					// Normalize the comment first (same as processApexDocCommentLines does)
+					// to ensure consistent key generation
+					const normalizedComment = normalizeSingleApexDocComment(
+						commentValue,
+						0, // commentIndent - embed handles its own indentation
+						_embedOptions,
+					);
+					// Create a unique key for this comment (must match processApexDocCommentLines)
+					const normalizedCodeTagPos = normalizedComment.indexOf('{@code');
+					const commentKey = normalizedCodeTagPos !== -1 ? `${String(normalizedComment.length)}-${String(normalizedCodeTagPos)}` : null;
 
 					// CRITICAL: Use textToDoc instead of prettier.format
 					// textToDoc uses the same printer context (our wrapped printer with type normalization)
@@ -692,15 +697,69 @@ const createWrappedPrinter = (
 						// This preserves the code's natural structure and indentation
 						// Use adjusted embed options with reduced printWidth
 						try {
-							const formattedCode = await formatCodeBlockDirect({
-								code,
-								currentPluginInstance,
-								embedOptions: adjustedEmbedOptions,
-							});
+							// Normalize annotations in the code before formatting
+							// This ensures annotations like @auraenabled become @AuraEnabled
+							const normalizedCode = normalizeAnnotationNamesInText(code);
+
+							// Handle empty code blocks
+							if (normalizedCode.trim().length === 0) {
+								codeBlockReplacements.push({
+									end: endPos,
+									formatted: '',
+									start: tagPos,
+								});
+								searchPos = endPos;
+								continue;
+							}
+
+							// For single-line code blocks that are just bare annotations (without values),
+							// normalize annotation names but don't try to format (they're not valid Apex code by themselves)
+							const trimmedNormalized = normalizedCode.trim();
+							const isBareAnnotation = /^@\w+\s*$/.test(trimmedNormalized) && normalizedCode.split('\n').length === 1;
+							if (isBareAnnotation && trimmedNormalized.length < 100) {
+								// For bare annotations, just use the normalized code
+								codeBlockReplacements.push({
+									end: endPos,
+									formatted: normalizedCode,
+									start: tagPos,
+								});
+								searchPos = endPos;
+								continue;
+							}
+
+							// Format using prettier with our plugin
+							const pluginToUse = currentPluginInstance?.default ?? (await import('./index.js')).default;
+							const optionsWithPlugin = {
+								...adjustedEmbedOptions,
+								plugins: [pluginToUse as prettier.Plugin],
+							};
+
+							let formatted;
+							try {
+								// Try apex-anonymous parser first (designed for code snippets)
+								formatted = await prettier.format(normalizedCode, {
+									...optionsWithPlugin,
+									parser: 'apex-anonymous',
+								});
+							} catch {
+								try {
+									// If apex-anonymous fails, try the regular apex parser
+									formatted = await prettier.format(normalizedCode, {
+										...optionsWithPlugin,
+										parser: 'apex',
+									});
+								} catch {
+									// If both parsers fail, use the normalized code with FORMAT_FAILED prefix
+									formatted = `[FORMAT_FAILED]${normalizedCode}`;
+								}
+							}
+
+							// Remove trailing newlines but preserve the formatted structure
+							const finalFormatted = formatted.replace(/\n+$/, '');
 
 							codeBlockReplacements.push({
 								end: endPos,
-								formatted: formattedCode,
+								formatted: finalFormatted,
 								start: tagPos,
 							});
 						} catch (error) {
@@ -740,10 +799,7 @@ const createWrappedPrinter = (
 									replacement.formatted.trim();
 								const formattedWithPrefix =
 									replacement.formatted.includes('\n')
-										? formatMultilineCodeBlock(
-												replacement.formatted,
-												commentPrefix,
-											)
+										? `{@code\n${replacement.formatted}\n}`
 										: trimmedFormatted.length === ZERO
 											? '{@code}'
 											: trimmedFormatted.endsWith(';') || trimmedFormatted.startsWith(FORMAT_FAILED_PREFIX)
