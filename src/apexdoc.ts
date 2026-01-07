@@ -7,7 +7,6 @@
 import type { ParserOptions } from 'prettier';
 import { formatCodeBlockContent, processCodeBlockLines } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
-import { tokenizeCommentIntoParagraphs } from './comments.js';
 import { getCurrentPluginInstance, processCodeBlocksWithApexParser } from './printer.js';
 import {
 	createIndent,
@@ -400,7 +399,7 @@ export function processApexDocCommentLines(
 
 	if (embedFormattedComment) {
 		// Use tokenization for embed-formatted comments
-		const paragraphTokens = tokenizeCommentIntoParagraphs(normalizedComment);
+		const paragraphTokens = parseCommentToTokens(normalizedComment);
 
 		// Process each paragraph token
 		const processedLines: string[] = [];

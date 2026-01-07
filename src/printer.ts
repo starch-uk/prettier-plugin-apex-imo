@@ -181,69 +181,9 @@ const isCommentNode = (
 };
 
 const createWrappedPrinter = (
-	originalPrinter: Readonly<{
-		readonly [key: string]: unknown;
-		readonly print: (
-			path: Readonly<AstPath<ApexNode>>,
-			options: Readonly<ParserOptions>,
-			print: (path: Readonly<AstPath<ApexNode>>) => Doc,
-		) => Doc;
-		readonly embed?: (
-			path: AstPath,
-			options: ParserOptions,
-		) =>
-			| Doc
-			// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
-			| ((
-					textToDoc: (
-						text: string,
-						options: ParserOptions,
-					) => Promise<Doc>,
-					print: (
-						selector?:
-							| (number | string)[]
-							| AstPath
-							| number
-							| string,
-					) => Doc,
-					path: AstPath,
-					options: ParserOptions,
-			  ) => Doc | Promise<Doc | undefined> | undefined)
-			| null
-			| undefined;
-	}>,
-): {
-	readonly [key: string]: unknown;
-	readonly print: (
-		path: Readonly<AstPath<ApexNode>>,
-		options: Readonly<ParserOptions>,
-		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
-	) => Doc;
-	readonly embed?: (
-		path: Readonly<AstPath<ApexNode>>,
-		options: Readonly<ParserOptions>,
-	) =>
-		| Doc
-		// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
-		| ((
-				textToDoc: (
-					text: string,
-					options: Readonly<ParserOptions>,
-				) => Promise<Doc>,
-				print: (
-					selector?:
-						| (number | string)[]
-						| Readonly<AstPath<ApexNode>>
-						| number
-						| string,
-				) => Doc,
-				path: Readonly<AstPath<ApexNode>>,
-				options: Readonly<ParserOptions>,
-		  ) => Doc | Promise<Doc | undefined> | undefined)
-		| null
-		| undefined;
-} => {
-	const result: Required<Printer<ApexNode>> = { ...originalPrinter };
+	originalPrinter: any
+): any => {
+	const result = { ...originalPrinter };
 
 	const customPrint = (
 		path: Readonly<AstPath<ApexNode>>,
@@ -602,7 +542,8 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
-
+	return result;
+};
 /**
  * Parse Apex code for embed processing.
  * @param code - Code to parse
@@ -745,10 +686,6 @@ const formatApexCodeWithParser = (code: string, options: ParserOptions): string 
 	}
 };
 
-
-	// @ts-expect-error TS2375 -- exactOptionalPropertyTypes causes type mismatch with Prettier's embed API
-	return result;
-};
 
 export {
 	clearFormattedCodeBlocks,
