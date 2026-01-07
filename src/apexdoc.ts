@@ -29,6 +29,7 @@ import {
 } from './refs/apexdoc-annotations.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
+import { APEXDOC_GROUP_NAMES } from './refs/apexdoc-annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
 const EMPTY_CODE_TAG = '{@code}';
@@ -534,7 +535,13 @@ const normalizeAnnotationTokens = (
 		if (token.type === 'annotation') {
 			const lowerName = token.name.toLowerCase();
 			if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
-				return { ...token, name: lowerName } satisfies AnnotationToken;
+				let normalizedContent = token.content;
+				// Special handling for @group annotations - normalize the group name
+				if (lowerName === 'group' && token.content) {
+					const lowerContent = token.content.toLowerCase().trim();
+					normalizedContent = APEXDOC_GROUP_NAMES[lowerContent as keyof typeof APEXDOC_GROUP_NAMES] ?? token.content;
+				}
+				return { ...token, name: lowerName, content: normalizedContent } satisfies AnnotationToken;
 			}
 		}
 		return token;
