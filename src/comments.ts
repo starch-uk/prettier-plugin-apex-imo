@@ -614,7 +614,7 @@ const wrapParagraphTokens = (
  * @param getFormattedCodeBlock - Function to get cached embed-formatted comments.
  * @returns The formatted comment as a Prettier Doc.
  */
-const customPrintComment = async (
+const customPrintComment = (
 	path: Readonly<AstPath<ApexNode>>,
 	_options: Readonly<ParserOptions>,
 	_print: (path: Readonly<AstPath<ApexNode>>) => Doc,
@@ -627,7 +627,7 @@ const customPrintComment = async (
 	getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires parameters
-): Promise<Doc> => {
+): Doc => {
 	const node = path.getNode();
 
 	/**
@@ -686,26 +686,11 @@ const customPrintComment = async (
 		const commentValue = commentNode.value;
 		if (commentValue === '') return '';
 
-		// Check if there's a formatted version from embed processing
+		// Comments are already normalized during preprocessing, so just format them
 		const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
-		const key = `${commentValue.length}-${normalizedComment.indexOf('{@code')}`;
-		const formatted = getFormattedCodeBlock(key);
-		if (formatted) {
-			const lines = formatted.split('\n');
-			const { join, hardline } = prettier.doc.builders;
-			return [join(hardline, lines)];
-		}
 
-		// Process the ApexDoc comment using the centralized logic
-		const processedComment = await processApexDocComment(
-			commentValue,
-			options,
-			getCurrentOriginalText,
-			getFormattedCodeBlock,
-		);
-
-		// Return the processed comment as Prettier documents
-		const lines = processedComment.split('\n');
+		// Return the normalized comment as Prettier documents
+		const lines = normalizedComment.split('\n');
 		const { join, hardline } = prettier.doc.builders;
 		return [join(hardline, lines)];
 	}

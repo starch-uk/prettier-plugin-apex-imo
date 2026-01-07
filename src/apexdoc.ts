@@ -52,7 +52,7 @@ const DEFAULT_BRACE_COUNT = 1;
 const ZERO_BRACE_COUNT = 0;
 
 /**
- * Asynchronously normalize {@code} blocks in text by applying annotation and type normalization.
+ * Asynchronously normalize {@code} blocks in text by applying annotation and AST-based type normalization.
  * @param text - The text that may contain {@code} blocks.
  * @returns The text with {@code} blocks normalized.
  */

@@ -18,6 +18,7 @@ import {
 	INDEX_ONE,
 } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
+import { normalizeTypeNamesInCode } from './casing.js';
 import {
 	getCurrentPrintOptions,
 	getCurrentOriginalText,
@@ -26,6 +27,97 @@ import {
 } from './printer.js';
 
 const APEX_PARSERS = ['apex', 'apex-anonymous'] as const;
+
+/**
+ * Normalizes code snippets in ApexDoc comments using AST-based parsing.
+ * This extracts {@code} blocks from comments, parses them with the Apex AST parser,
+ * normalizes type names, and replaces them back in the source text.
+ */
+async function normalizeCodeSnippetsInComments(
+	text: string,
+	options: ParserOptions<ApexNode>,
+): Promise<string> {
+	console.log('Preprocess: Starting normalization of code snippets in comments');
+	console.log('Preprocess: Input text length:', text.length);
+	const codeTag = '{@code';
+	const codeTagEnd = '}';
+	const codeTagLength = codeTag.length;
+
+	let result = text;
+	let startIndex = 0;
+
+	// Find all {@code} blocks in the text
+	const replacements: Array<{ start: number; end: number; normalized: string }> = [];
+
+	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
+		if (endIndex === -1) break;
+
+		// Extract the code content
+		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
+
+		// Skip empty code blocks
+		if (!codeContent) {
+			startIndex = endIndex + 1;
+			continue;
+		}
+
+		try {
+			// Clean comment markers from the code content
+			let cleanedCode = codeContent.split('\n').map(line => {
+				const trimmed = line.trim();
+				// Remove leading " * " or "*" from comment lines
+				if (trimmed.startsWith('* ')) {
+					return trimmed.substring(2);
+				} else if (trimmed.startsWith('*')) {
+					return trimmed.substring(1);
+				}
+				return trimmed;
+			}).join('\n').trim();
+
+			console.log('Preprocess: Found code snippet:', cleanedCode);
+
+			// Normalize using AST-based approach
+			const normalizedCode = await normalizeTypeNamesInCode(cleanedCode);
+
+			console.log('Preprocess: Normalized to:', normalizedCode);
+
+			// Format the normalized code back with proper comment markers
+			const normalizedLines = normalizedCode.split('\n');
+			const formattedCode = normalizedLines.map((line, index) => {
+				if (index === 0) {
+					return line; // First line doesn't need leading space
+				} else {
+					return ` * ${line}`; // Add comment marker for subsequent lines
+				}
+			}).join('\n');
+
+			// Store replacement info
+			replacements.push({
+				start: startIndex + codeTagLength,
+				end: endIndex,
+				normalized: `\n${formattedCode}\n`
+			});
+
+		} catch (error) {
+			// If normalization fails, keep original
+			console.warn('Failed to normalize code snippet in comment:', error);
+		}
+
+		startIndex = endIndex + 1;
+	}
+
+	// Apply replacements in reverse order to maintain indices
+	replacements.reverse();
+	for (const replacement of replacements) {
+		result = result.substring(0, replacement.start) + replacement.normalized + result.substring(replacement.end);
+	}
+
+	console.log('Preprocess: Applied', replacements.length, 'replacements');
+	console.log('Preprocess: Final result length:', result.length);
+
+	return result;
+}
 const APEX_PRINTER_ERROR_MESSAGE =
 	'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. The apex printer was not found.';
 
@@ -64,7 +156,7 @@ const originalApexPrinter = getApexPrinter();
  * const doc = customPrintComment(path);
  * ```
  */
-const customPrintComment = async (
+const customPrintComment = (
 	path: Readonly<AstPath<ApexNode>>,
 	options: Readonly<ParserOptions>,
 	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
@@ -74,7 +166,7 @@ const customPrintComment = async (
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	) => Doc,
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires 4 parameters
-): Promise<Doc> => {
+): Doc => {
 	// Get stored options from printer
 	const storedOptions = getCurrentPrintOptions();
 	if (!storedOptions) {
@@ -93,7 +185,7 @@ const customPrintComment = async (
 	}
 
 	// Use the centralized comment processing logic
-	return await customPrintCommentFn(
+	return customPrintCommentFn(
 		path,
 		options,
 		print,
@@ -159,12 +251,18 @@ const wrapParsers = (
 				text: Readonly<string>,
 				options: Readonly<ParserOptions<ApexNode>>,
 			): Promise<string> => {
-				// Empty code blocks are now handled in the embed function, not in the preprocessor
-				// Only normalize Apex annotations (which should skip ApexDoc comments)
+				// First apply original preprocessing
 				const preprocessedText = originalPreprocess
 					? await originalPreprocess(text, options)
 					: text;
-				return normalizeAnnotationNamesInText(preprocessedText);
+
+				// Normalize Apex annotations (which should skip ApexDoc comments)
+				const annotationNormalizedText = normalizeAnnotationNamesInText(preprocessedText);
+
+				// Perform AST-based normalization of code snippets in ApexDoc comments
+				const astNormalizedText = await normalizeCodeSnippetsInComments(annotationNormalizedText, options);
+
+				return astNormalizedText;
 			},
 		};
 	}

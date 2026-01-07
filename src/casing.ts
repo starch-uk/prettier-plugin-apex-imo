@@ -398,17 +398,11 @@ const findIdentifiersToNormalize = (node: any, positions: Array<{ start: number;
 		const normalized = normalizeTypeName(identifier);
 
 		if (normalized !== identifier && node.loc && typeof node.loc === 'object') {
-			// Try different location field names
-			let startIndex = node.loc.startIndex || node.loc.start || (node.loc.position && node.loc.position.start);
-			let endIndex = node.loc.endIndex || node.loc.end || (node.loc.position && node.loc.position.end);
+			// Direct access to location properties
+			const startIndex = node.loc.startIndex;
+			const endIndex = node.loc.endIndex;
 
-			// Also try direct properties on the location object
-			if (typeof startIndex !== 'number') {
-				startIndex = (node.loc as any).startIndex || (node.loc as any).start;
-			}
-			if (typeof endIndex !== 'number') {
-				endIndex = (node.loc as any).endIndex || (node.loc as any).end;
-			}
+			console.log(`Processing identifier "${identifier}": startIndex=${startIndex}, endIndex=${endIndex}, loc=`, node.loc);
 
 			if (typeof startIndex === 'number' && typeof endIndex === 'number') {
 				positions.push({
