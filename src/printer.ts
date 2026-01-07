@@ -745,7 +745,9 @@ const createWrappedPrinter = (
 											)
 										: trimmedFormatted.length === ZERO
 											? '{@code}'
-											: `{@code ${trimmedFormatted}}`;
+											: trimmedFormatted.endsWith(';')
+												? `{@code ${trimmedFormatted} }`
+												: `{@code ${trimmedFormatted}}`;
 								finalComment =
 									before + formattedWithPrefix + after;
 							}
