@@ -602,6 +602,17 @@ const createWrappedPrinter = (
 
 	result.print = customPrint;
 
+	// Custom embed function to handle {@code} blocks asynchronously
+	result.embed = async (
+		path: AstPath,
+		options: ParserOptions
+	): Promise<Doc | null> => {
+		// For {@code} block processing, we don't use embed for comments
+		// since comments are handled by printComment
+		// This embed function is for other embedded content if needed
+		return null;
+	};
+
 
 /**
  * Parse Apex code for embed processing.
