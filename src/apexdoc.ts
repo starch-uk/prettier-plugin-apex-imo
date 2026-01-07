@@ -77,65 +77,11 @@ const normalizeSingleApexDocComment = (
 	const { printWidth, tabWidth } = options;
 	const tabWidthValue = tabWidth;
 
-	// Check if this comment contains {@code} blocks using token-based detection
-	const commentTokens = parseCommentToTokens(commentValue);
-	const hasCodeBlocks = commentTokens.some(token =>
-		token.type === 'paragraph' && containsApexDocContent(token.content)
-	);
-
-
-	// Token-based implementation
-	// First normalize basic structure
+	// Basic structure normalization - {@code} blocks are handled by the embed system
 	let normalizedComment = normalizeBlockComment(commentValue, commentIndent, {
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
 	});
-
-	// NORMALIZE CODE BLOCK INDENTATION: After normalizeBlockComment standardizes indentation,
-	// identify code block lines and apply consistent indentation for continuation lines.
-	const normalizedLines = normalizedComment.split('\n');
-
-	// Process lines to normalize code block indentation
-	let inCodeBlock = false;
-	let firstCodeLineIndex = -1;
-	const processedLines = normalizedLines.map((line, index) => {
-		if (index === 0 || index === normalizedLines.length - 1) return line; // Skip first and last lines
-
-		// Detect {@code block start
-		if (line.includes('{@code')) {
-			inCodeBlock = true;
-			firstCodeLineIndex = -1;
-			return line;
-		}
-
-		// Detect {@code block end
-		if (inCodeBlock && line.includes('}')) {
-			inCodeBlock = false;
-			return line;
-		}
-
-		if (inCodeBlock) {
-			const match = line.match(/^(\s*)\*(\s*)(.+)$/);
-			if (match) {
-				const [, baseIndent, asteriskSpace, content] = match;
-				const trimmedContent = content.trimStart();
-
-				if (firstCodeLineIndex === -1 && trimmedContent) {
-					// This is the first non-empty code line - preserve its indentation
-					firstCodeLineIndex = index;
-					return baseIndent + '*' + asteriskSpace + trimmedContent;
-				} else if (trimmedContent) {
-					// This is a continuation line - add 2 more spaces than the first line
-					const result = baseIndent + '*' + ' '.repeat(asteriskSpace.length + 2) + trimmedContent;
-					return result;
-				}
-			}
-		}
-
-		return line;
-	});
-
-	normalizedComment = processedLines.join('\n');
 
 	// Parse to tokens and get effective width
 	const { tokens: initialTokens, effectiveWidth } = parseApexDocTokens(
@@ -152,9 +98,9 @@ const normalizeSingleApexDocComment = (
 	// or let them be processed by ApexDoc detection functions
 	let tokens = processParagraphTokensForApexDoc(initialTokens, normalizedComment);
 
-	// Detect annotations and code blocks in tokens that contain ApexDoc content
+	// Detect annotations in tokens that contain ApexDoc content
+	// Code blocks are handled by the embed system
 	tokens = detectAnnotationsInTokens(tokens);
-	tokens = detectCodeBlockTokens(tokens, normalizedComment);
 
 	// Normalize annotations
 	tokens = normalizeAnnotationTokens(tokens);

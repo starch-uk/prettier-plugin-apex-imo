@@ -679,13 +679,32 @@ const processApexDocComment = (
 	getCurrentOriginalText: () => string | undefined,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): string => {
-	// Don't add base indentation, let Prettier handle it
-	const commentIndent = 0;
+		// Don't add base indentation, let Prettier handle it
+	let commentIndent = 0;
 
 	// Detect malformed comments BEFORE any processing
 	const isMalformedComment = isMalformedApexDocComment(commentValue);
 
 	if (isMalformedComment) {
+		// #region agent log
+		fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				location: 'comments.ts:processApexDocComment',
+				message: 'Processing malformed comment',
+				data: { commentValue: commentValue.substring(0, 200) + '...' },
+				timestamp: Date.now(),
+				sessionId: 'debug-malformed',
+				runId: 'malformed-processing',
+				hypothesisId: 'nested-comment-issue'
+			})
+		}).catch(() => {});
+		// #endregion
+
+		// For malformed comments, use zero indentation to rebuild cleanly
+		commentIndent = 0;
+
 		// For malformed comments, extract clean content and use normal processing
 		const lines = commentValue.split('\n');
 		const contentLines: string[] = [];
@@ -733,10 +752,23 @@ const processApexDocComment = (
 
 		const normalizedComment = rebuiltLines.join('\n');
 
-		// Process code block lines to handle {@code} blocks
-		const processedLines = processCodeBlockLines(normalizedComment.split('\n'));
-		return processedLines.join('\n');
+		// #region agent log
+		fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				location: 'comments.ts:processApexDocComment',
+				message: 'Rebuilt malformed comment',
+				data: { normalizedComment: normalizedComment.substring(0, 200) + '...', hasCodeBlocks },
+				timestamp: Date.now(),
+				sessionId: 'debug-malformed',
+				runId: 'malformed-processing',
+				hypothesisId: 'nested-comment-issue'
+			})
+		}).catch(() => {});
+		// #endregion
 
+		// Return the cleaned comment - embed will handle {@code} blocks
 		return normalizedComment;
 
 		// Rebuild a clean comment
