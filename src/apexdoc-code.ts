@@ -59,14 +59,14 @@ const extractCodeFromBlock = (
 		? rawCode
 				.split('\n')
 				.map((line) => {
-					// Check if this is an empty line (only asterisk(s) and whitespace)
-					// After removing comment asterisks, if the line is empty, preserve it
-					const afterAsterisk = line.replace(COMMENT_ASTERISK_REGEX, '').trimStart();
-					if (afterAsterisk === '') {
+					// Remove comment asterisk prefix, preserving content indentation
+					const afterAsterisk = line.replace(COMMENT_ASTERISK_REGEX, '');
+					// Check if this is an empty line (only whitespace)
+					if (afterAsterisk.trim() === '') {
 						// This is an empty line - preserve it as empty string
 						return '';
 					}
-					// Remove comment asterisk and leading whitespace, but preserve content
+					// Preserve content with its original indentation
 					return afterAsterisk;
 				})
 				.join('\n')

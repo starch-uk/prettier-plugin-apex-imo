@@ -391,7 +391,11 @@ const parseCommentToTokens = (
 			const isAnnotationLine = trimmedLine.startsWith('@');
 
 			// If current line is an annotation, finish current paragraph first
-			if (isAnnotationLine && currentParagraph.length > EMPTY) {
+			// But don't split if we're inside a {@code} block (contains {@code without matching })
+			const currentContent = currentParagraph.join(' ');
+			const hasUnclosedCodeBlock = (currentContent.match(/{@code/g) || []).length > (currentContent.match(/}/g) || []).length;
+
+			if (isAnnotationLine && currentParagraph.length > EMPTY && !hasUnclosedCodeBlock) {
 				tokens.push({
 					type: 'paragraph',
 					content: currentParagraph.join(' '),

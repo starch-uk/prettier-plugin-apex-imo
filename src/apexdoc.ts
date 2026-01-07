@@ -28,6 +28,7 @@ import {
 	APEXDOC_GROUP_NAMES,
 } from './refs/apexdoc-annotations.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
+import { normalizeAnnotationNamesInText } from './annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
 const EMPTY_CODE_TAG = '{@code}';
@@ -193,8 +194,15 @@ const tokensToApexDocString = (
 				lines,
 			} satisfies TextToken);
 		} else if (token.type === 'code') {
+			console.log('DEBUG: Rendering code token, rawCode:', JSON.stringify(token.rawCode));
 			// Render CodeBlockTokens as text tokens with {@code ...} format
-			const codeToUse = token.formattedCode ?? token.rawCode;
+			let codeToUse = token.formattedCode ?? token.rawCode;
+			console.log('DEBUG: codeToUse before normalization:', JSON.stringify(codeToUse));
+			// In sync version, normalize annotations in the code
+			if (!token.formattedCode) {
+				codeToUse = normalizeAnnotationNamesInText(codeToUse);
+			}
+			console.log('DEBUG: codeToUse after normalization:', JSON.stringify(codeToUse));
 			if (codeToUse.length > EMPTY) {
 				const lines: string[] = [];
 				const codeLines = codeToUse.split('\n');
@@ -214,19 +222,14 @@ const tokensToApexDocString = (
 					lines.push(`${commentPrefix}{@code`);
 
 					// Add formatted code lines with comment prefix
-					// Adjust indentation for code blocks in comments to use consistent indentation
-					for (let i = 0; i < codeLines.length; i++) {
-						const codeLine = codeLines[i] ?? '';
+					// Preserve the relative indentation from the embed formatter
+					for (const codeLine of codeLines) {
 						if (codeLine.trim().length === EMPTY) {
 							// Empty line - just comment prefix
 							lines.push(commentPrefix.trimEnd());
 						} else {
-							// For code in comments, normalize indentation to be consistent
-							// First line: no extra indent
-							// Continuation lines: 2 spaces indent (standard Apex continuation)
-							const trimmedLine = codeLine.trimStart();
-							const indentStr = i === 0 ? '' : '  ';
-							lines.push(`${commentPrefix}${indentStr}${trimmedLine}`);
+							// Preserve the indentation that the embed formatter already applied
+							lines.push(`${commentPrefix}${codeLine}`);
 						}
 					}
 
@@ -316,10 +319,16 @@ const processParagraphTokensForApexDoc = (
 				processedTokens.push(token);
 			} else {
 				// Pass through as regular comment - convert to text token
+				// For paragraphs without ApexDoc content, create lines that match the content structure
+				const words = token.content.split(' ');
+				const lines = words.map(word =>
+					word.length > EMPTY ? ` * ${word}` : ' *'
+				);
+
 				processedTokens.push({
 					type: 'text',
 					content: token.content,
-					lines: token.lines,
+					lines,
 				} satisfies TextToken);
 			}
 		} else {
@@ -363,7 +372,7 @@ const detectAnnotationsInTokens = (
 	const newTokens: CommentToken[] = [];
 	// Annotation pattern: @ followed by identifier, possibly with content
 	const annotationPattern =
-		/(\s*\*\s*|\s+(?!\{)|\s*\*\s*\.\s*\*\s*)@([a-zA-Z_][a-zA-Z0-9_]*)(\s+[^\n@]*?)(?=\s*@|\s*\*|\s*$)/g;
+		/(\s*\*\s*|\s+(?!\{)|\s*\*\s*\.\s*\*\s*)@([a-zA-Z_][a-zA-Z0-9_]*)(\s*[^\n@]*?)(?=\s*@|\s*\*|\s*$)/g;
 
 	for (const token of tokens) {
 		if (token.type === 'text' || token.type === 'paragraph') {
