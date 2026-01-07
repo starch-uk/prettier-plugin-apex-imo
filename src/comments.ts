@@ -5,6 +5,7 @@
 import type { ParserOptions, ApexNode } from './types.js';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
+import { normalizeSingleApexDocComment } from './apexdoc.js';
 
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -778,6 +779,16 @@ const customPrintComment = (
 		const commentNode = node as unknown as { value: string };
 		const commentValue = commentNode.value;
 		if (commentValue === '') return '';
+
+		// Check if there's a formatted version from embed processing
+		const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
+		const key = `${commentValue.length}-${normalizedComment.indexOf('{@code')}`;
+		const formatted = getFormattedCodeBlock(key);
+		if (formatted) {
+			const lines = formatted.split('\n');
+			const { join, hardline } = prettier.doc.builders;
+			return [join(hardline, lines)];
+		}
 
 		// Process the ApexDoc comment using the centralized logic
 		const processedComment = processApexDocComment(

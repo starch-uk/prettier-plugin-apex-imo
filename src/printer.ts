@@ -624,190 +624,83 @@ const createWrappedPrinter = (
 					_embedOptions: ParserOptions,
 					// eslint-disable-next-line @typescript-eslint/max-params -- Prettier embed API requires 4 parameters
 				): Promise<Doc | undefined> => {
-					// Create a key based on the original comment for {@code} block processing
-					const codeTagPos = commentValue.indexOf('{@code');
-					const commentKey = codeTagPos !== -1 ? `${String(commentValue.length)}-${String(codeTagPos)}` : null;
+					// Extract and format {@code} blocks in the comment
+					if (!commentValue.includes(CODE_TAG)) {
+						return undefined;
+					}
 
-					// CRITICAL: Use textToDoc instead of prettier.format
-					// textToDoc uses the same printer context (our wrapped printer with type normalization)
-					// This ensures type normalization is applied when formatting code blocks
-					// Extract and format all code blocks in the comment
 					let processedComment = commentValue;
-					let searchPos = ZERO;
-					const codeBlockReplacements: {
-						end: number;
-						formatted: string;
-						start: number;
-					}[] = [];
-
-					// Calculate comment prefix length BEFORE formatting to adjust printWidth
-					// Find the {@code line to get its indentation (this is the correct base indentation)
-					const codeBlockLineMatch = new RegExp(
-						`^(\\s*)\\*\\s*\\{@code`,
-						'm',
-					).exec(commentValue);
-					// Extract base indentation from the {@code line (spaces before asterisk)
-					const FIRST_MATCH_GROUP = 1;
-					const baseIndent =
-						codeBlockLineMatch?.[FIRST_MATCH_GROUP] ?? '';
-					// Comment prefix: baseIndent + '* ' (for printing: baseIndent + '* ' + embedded line)
-					const commentPrefix = `${baseIndent}* `;
-					const commentPrefixLength = commentPrefix.length;
-					
-					// Adjust printWidth to account for comment prefix
-					// Each line will have commentPrefix added, so we need to reduce printWidth
-					const originalPrintWidth = _embedOptions.printWidth ?? 80;
-					const adjustedPrintWidth = Math.max(
-						40, // Minimum reasonable width
-						originalPrintWidth - commentPrefixLength,
-					);
-					
-					// Create adjusted embed options with reduced printWidth
-					const adjustedEmbedOptions = {
-						..._embedOptions,
-						printWidth: adjustedPrintWidth,
-					};
+					let searchPos = 0;
+					const replacements: Array<{start: number; end: number; replacement: string}> = [];
 
 					while (searchPos < processedComment.length) {
-						const tagPos = processedComment.indexOf(
-							CODE_TAG,
-							searchPos,
-						);
-						if (tagPos === NOT_FOUND_INDEX) break;
+						const tagPos = processedComment.indexOf(CODE_TAG, searchPos);
+						if (tagPos === -1) break;
 
-						const extraction = extractCodeFromBlock(
-							processedComment,
-							tagPos,
-						);
+						const extraction = extractCodeFromBlock(processedComment, tagPos);
 						if (!extraction) {
-							searchPos = tagPos + CODE_TAG_LENGTH;
+							searchPos = tagPos + 6;
 							continue;
 						}
 
 						const { code, endPos } = extraction;
 
-						// Format the cleanly extracted code directly (no wrapper if possible)
-						// This preserves the code's natural structure and indentation
-						// Use adjusted embed options with reduced printWidth
-						try {
-							// Normalize annotations in the code before formatting
-							// This ensures annotations like @auraenabled become @AuraEnabled
-							const normalizedCode = normalizeAnnotationNamesInText(code);
+						// Normalize annotations
+						const normalizedCode = normalizeAnnotationNamesInText(code);
+						const trimmedCode = normalizedCode.trim();
 
-							// Handle empty code blocks
-							if (normalizedCode.trim().length === 0) {
-								codeBlockReplacements.push({
-									end: endPos,
-									formatted: '',
-									start: tagPos,
-								});
-								searchPos = endPos;
-								continue;
-							}
-
-							// For single-line code blocks that are just bare annotations (without values),
-							// normalize annotation names but don't try to format (they're not valid Apex code by themselves)
-							const trimmedNormalized = normalizedCode.trim();
-							const isBareAnnotation = /^@\w+\s*$/.test(trimmedNormalized) && normalizedCode.split('\n').length === 1;
-							if (isBareAnnotation && trimmedNormalized.length < 100) {
-								// For bare annotations, just use the normalized code
-								codeBlockReplacements.push({
-									end: endPos,
-									formatted: normalizedCode,
-									start: tagPos,
-								});
-								searchPos = endPos;
-								continue;
-							}
-
-							// Format using prettier with our plugin
-							const pluginToUse = currentPluginInstance?.default ?? (await import('./index.js')).default;
-							const optionsWithPlugin = {
-								...adjustedEmbedOptions,
-								plugins: [pluginToUse as prettier.Plugin],
-							};
-
-							let formatted;
-							try {
-								// Try apex-anonymous parser first (designed for code snippets)
-								formatted = await prettier.format(normalizedCode, {
-									...optionsWithPlugin,
-									parser: 'apex-anonymous',
-								});
-							} catch {
+						if (trimmedCode.length === 0) {
+							replacements.push({ start: tagPos, end: endPos, replacement: '{@code}' });
+						} else {
+							// For bare annotations
+							const isBareAnnotation = /^@\w+\s*$/.test(trimmedCode) && normalizedCode.split('\n').length === 1;
+							if (isBareAnnotation && trimmedCode.length < 100) {
+								replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${normalizedCode}}` });
+							} else {
+								// Format using prettier.format with our plugin to use custom printer
 								try {
-									// If apex-anonymous fails, try the regular apex parser
-									formatted = await prettier.format(normalizedCode, {
-										...optionsWithPlugin,
-										parser: 'apex',
+									const pluginToUse = currentPluginInstance?.default ?? (await import('./index.js')).default;
+									const formatted = await prettier.format(normalizedCode, {
+										..._embedOptions,
+										parser: 'apex-anonymous',
+										plugins: [pluginToUse],
+										printWidth: _embedOptions.printWidth ? Math.max(40, _embedOptions.printWidth - 4) : 80,
 									});
+									const cleanFormatted = formatted.replace(/\n+$/, '');
+									replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${cleanFormatted}}` });
 								} catch {
-									// If both parsers fail, use the normalized code with FORMAT_FAILED prefix
-									formatted = `[FORMAT_FAILED]${normalizedCode}`;
+									try {
+										const pluginToUse = currentPluginInstance?.default ?? (await import('./index.js')).default;
+										const formatted = await prettier.format(normalizedCode, {
+											..._embedOptions,
+											parser: 'apex',
+											plugins: [pluginToUse],
+											printWidth: _embedOptions.printWidth ? Math.max(40, _embedOptions.printWidth - 4) : 80,
+										});
+										const cleanFormatted = formatted.replace(/\n+$/, '');
+										replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${cleanFormatted}}` });
+									} catch {
+										replacements.push({ start: tagPos, end: endPos, replacement: `{@code ${normalizedCode}}` });
+									}
 								}
 							}
-
-							// Remove trailing newlines but preserve the formatted structure
-							const finalFormatted = formatted.replace(/\n+$/, '');
-
-							codeBlockReplacements.push({
-								end: endPos,
-								formatted: finalFormatted,
-								start: tagPos,
-							});
-						} catch (error) {
-							// If formatting fails, skip this code block
 						}
 
 						searchPos = endPos;
 					}
 
-					// Store formatted code blocks for use in printComment
-					// Apply replacements in reverse order to maintain positions
-					if (codeBlockReplacements.length > ZERO) {
-						let finalComment = commentValue;
-						// Comment prefix was already calculated above for printWidth adjustment
-						// Reuse it here for consistency
-						for (
-							let i = codeBlockReplacements.length - ONE;
-							i >= ZERO;
-							i--
-						) {
-							const replacement = codeBlockReplacements[i];
-							if (replacement) {
-								const SUBSTRING_START = ZERO;
-								const before = finalComment.substring(
-									SUBSTRING_START,
-									replacement.start,
-								);
-								const after = finalComment.substring(
-									replacement.end,
-								);
-								// Insert formatted code with newlines to preserve multiline structure
-								// Add the comment prefix (` * `) to each line of the formatted code
-								// Remove leading whitespace from each line (from Prettier's indentation)
-								// and add the comment prefix instead
-								// Use formatMultilineCodeBlock for multiline code blocks
-								const trimmedFormatted =
-									replacement.formatted.trim();
-								const formattedWithPrefix =
-									replacement.formatted.includes('\n')
-										? `{@code\n${replacement.formatted}\n}`
-										: trimmedFormatted.length === ZERO
-											? '{@code}'
-											: trimmedFormatted.endsWith(';') || trimmedFormatted.startsWith(FORMAT_FAILED_PREFIX)
-												? `{@code ${trimmedFormatted} }`
-												: `{@code ${trimmedFormatted}}`;
-								finalComment =
-									before + formattedWithPrefix + after;
-							}
+					// Store formatted comment for use in printComment
+					if (replacements.length > 0) {
+						let finalComment = processedComment;
+						for (const replacement of replacements.reverse()) {
+							finalComment = finalComment.slice(0, replacement.start) + replacement.replacement + finalComment.slice(replacement.end);
 						}
+						const commentKey = `${commentValue.length}-${commentValue.indexOf(CODE_TAG)}`;
 						formattedCodeBlocks.set(commentKey, finalComment);
 					}
 
 					// Return undefined to let Prettier handle the comment normally
-					// printComment will retrieve the formatted version
-					return undefined;
+					return undefined;;
 				};
 			}
 		}
