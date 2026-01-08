@@ -5,15 +5,12 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { ParserOptions } from 'prettier';
-import { formatCodeBlockContent, processCodeBlockLines } from './apexdoc-code.js';
-import { normalizeTypeNamesInCode } from './casing.js';
-import { getCurrentPluginInstance, processCodeBlocksWithApexParser } from './printer.js';
+import { processCodeBlockLines } from './apexdoc-code.js';
 import {
 	createIndent,
 	normalizeBlockComment,
 	parseCommentToTokens,
 	tokensToCommentString,
-	wrapParagraphTokens,
 	ARRAY_START_INDEX,
 	INDEX_ONE,
 	INDEX_TWO,
@@ -25,6 +22,7 @@ import type {
 	TextToken,
 	AnnotationToken,
 	CodeBlockToken,
+	ParagraphToken,
 } from './comments.js';
 import {
 	APEXDOC_ANNOTATIONS,
@@ -32,8 +30,6 @@ import {
 } from './refs/apexdoc-annotations.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
-import { normalizeTypeNamesInCode } from './casing.js';
-import { APEXDOC_GROUP_NAMES } from './refs/apexdoc-annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
 const EMPTY_CODE_TAG = '{@code}';
@@ -51,185 +47,8 @@ const SLICE_END_OFFSET = -1;
 const DEFAULT_BRACE_COUNT = 1;
 const ZERO_BRACE_COUNT = 0;
 
-/**
- * Asynchronously normalize {@code} blocks in text by applying annotation and AST-based type normalization.
- * @param text - The text that may contain {@code} blocks.
- * @returns The text with {@code} blocks normalized.
- */
-const normalizeCodeBlocksInText = async (text: string): Promise<string> => {
-	const codeTag = '{@code';
-	const codeTagEnd = '}';
-	const codeTagLength = codeTag.length;
 
-	let result = text;
-	let startIndex = 0;
 
-	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
-		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
-		if (endIndex === -1) break;
-
-		// Extract the code content
-		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
-		// Normalize annotations and type names in the code content
-		const normalizedCode = await normalizeTypeNamesInCode(normalizeAnnotationNamesInText(codeContent));
-		// Replace the code block with normalized version
-		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
-		// Move past this code block
-		startIndex = endIndex + 1;
-	}
-
-	return result;
-};
-
-/**
- * Asynchronously normalize {@code} blocks in text by parsing and applying proper AST-based normalization.
- * @param text - The text that may contain {@code} blocks.
- * @param options - Parser options for async parsing.
- * @returns Promise resolving to text with {@code} blocks normalized.
- */
-const normalizeCodeBlocksInTextAsync = async (text: string, options: ParserOptions): Promise<string> => {
-	const codeTag = '{@code';
-	const codeTagEnd = '}';
-	const codeTagLength = codeTag.length;
-
-	let result = text;
-	let startIndex = 0;
-
-	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
-		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
-		if (endIndex === -1) break;
-
-		// Extract the code content
-		const codeContent = result.substring(startIndex + codeTagLength, endIndex);
-
-		// Parse and normalize the code content asynchronously
-		const normalizedCode = await normalizeCodeContentAsync(codeContent, options);
-
-		// Replace the code block with normalized version
-		result = result.substring(0, startIndex + codeTagLength) + normalizedCode + result.substring(endIndex);
-		// Move past this code block
-		startIndex = endIndex + 1;
-	}
-
-	return result;
-};
-
-/**
- * Asynchronously parse and normalize code content using AST analysis.
- * @param codeContent - The raw code content from {@code} block.
- * @param options - Parser options.
- * @returns Promise resolving to normalized code.
- */
-const normalizeCodeContentAsync = async (codeContent: string, options: ParserOptions): Promise<string> => {
-	try {
-		// First apply annotation normalization (this is safe with regex)
-		let normalizedCode = normalizeAnnotationNamesInText(codeContent);
-
-		// Try to parse the code and apply AST-based normalization
-		try {
-			const ast = await parseApexCodeAsync(normalizedCode, options);
-			normalizedCode = normalizeCodeFromAST(ast, normalizedCode);
-		} catch (parseError) {
-			// If parsing fails, fall back to basic regex normalization
-			console.warn('Failed to parse {@code} block for AST normalization, using regex fallback:', parseError);
-			normalizedCode = await normalizeTypeNamesInCode(normalizedCode);
-		}
-
-		return normalizedCode;
-	} catch (error) {
-		console.warn('Failed to normalize {@code} block:', error);
-		return codeContent;
-	}
-};
-
-/**
- * Parse Apex code asynchronously.
- * @param code - The code to parse.
- * @param options - Parser options.
- * @returns Promise resolving to parsed AST.
- */
-const parseApexCodeAsync = async (code: string, options: ParserOptions): Promise<ApexNode> => {
-	// Use the existing Apex parser through the plugin system
-	const apexPlugin = (globalThis as any).apexPlugin;
-	if (!apexPlugin?.parsers?.apex?.parse) {
-		throw new Error('Apex parser not available');
-	}
-
-	return apexPlugin.parsers.apex.parse(code, {
-		...options,
-		// Ensure we use the apex parser
-		parser: 'apex',
-	});
-};
-
-/**
- * Normalize code based on AST analysis to properly identify type names vs variable names.
- * @param ast - The parsed AST.
- * @param originalCode - The original code string.
- * @returns Normalized code with proper type name normalization.
- */
-const normalizeCodeFromAST = (ast: ApexNode, originalCode: string): string => {
-	let result = originalCode;
-
-	// Find all type references in the AST and normalize them
-	const typeReferences = findTypeReferencesInAST(ast);
-
-	for (const typeRef of typeReferences) {
-		// Normalize the type name
-		const normalizedType = normalizeTypeName(typeRef.name);
-		if (normalizedType !== typeRef.name) {
-			// Replace in the code, but only within the specific range to avoid conflicts
-			result = result.substring(0, typeRef.start) + normalizedType + result.substring(typeRef.end);
-		}
-	}
-
-	return result;
-};
-
-/**
- * Find all type references in the AST.
- * @param node - The AST node to traverse.
- * @param references - Accumulator for found references.
- * @returns Array of type references with position info.
- */
-const findTypeReferencesInAST = (node: ApexNode, references: Array<{name: string, start: number, end: number}> = []): Array<{name: string, start: number, end: number}> => {
-	// This is a simplified AST traversal - in a real implementation you'd need to
-	// handle all the different AST node types that can contain type references
-
-	if (!node || typeof node !== 'object') return references;
-
-	// Check if this node represents a type reference
-	if ('@class' in node && (node as any)['@class'] === 'apex.jorje.data.ast.TypeRef') {
-		const typeRef = node as any;
-		if (typeRef.names && Array.isArray(typeRef.names)) {
-			// Handle qualified type names like List<Account>
-			for (const nameNode of typeRef.names) {
-				if (nameNode.value && typeof nameNode.value === 'string') {
-					references.push({
-						name: nameNode.value,
-						start: nameNode.startIndex || 0,
-						end: nameNode.endIndex || 0,
-					});
-				}
-			}
-		}
-	}
-
-	// Recursively traverse child nodes
-	for (const [key, value] of Object.entries(node)) {
-		if (key === '@class' || key === 'location') continue;
-
-		if (Array.isArray(value)) {
-			for (const item of value) {
-				findTypeReferencesInAST(item, references);
-			}
-		} else if (value && typeof value === 'object') {
-			findTypeReferencesInAST(value, references);
-		}
-	}
-
-	return references;
-};
 
 const isCommentStart = (text: string, pos: number): boolean =>
 	text.substring(pos, pos + COMMENT_START_LENGTH) === COMMENT_START_MARKER;
@@ -388,12 +207,9 @@ export async function processApexDocCommentLines(
 	options: ParserOptions,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): Promise<string[]> {
-	// First, normalize {@code} blocks in the entire comment
-	const codeBlockNormalizedComment = await normalizeCodeBlocksInText(commentValue);
-
-	// Normalize the comment structure
+	// Normalize the comment structure (no preprocessing of {@code} blocks)
 	const normalizedComment = normalizeSingleApexDocComment(
-		codeBlockNormalizedComment,
+		commentValue,
 		0, // Use 0 for consistency with embed function
 		options,
 	);
@@ -401,17 +217,24 @@ export async function processApexDocCommentLines(
 	// Check if embed has already formatted code blocks
 	const codeTagPos = normalizedComment.indexOf('{@code');
 	const commentKey = codeTagPos !== -1 ? `${String(normalizedComment.length)}-${String(codeTagPos)}` : null;
-	const embedFormattedComment = getFormattedCodeBlock(commentKey);
+	const embedFormattedComment = commentKey ? getFormattedCodeBlock(commentKey) : null;
 
 	if (embedFormattedComment) {
 		// Use tokenization for embed-formatted comments
-		const paragraphTokens = parseCommentToTokens(normalizedComment);
+		const paragraphTokens = parseCommentToTokens(embedFormattedComment);
 
 		// Process each paragraph token
 		const processedLines: string[] = [];
 
 		for (const token of paragraphTokens) {
-			const tokenLines = processParagraphToken(token, options, getFormattedCodeBlock, commentKey);
+			// Only process paragraph tokens
+			if (token.type !== 'paragraph') {
+				if (token.type === 'text') {
+					processedLines.push(...token.lines);
+				}
+				continue;
+			}
+			const tokenLines = processParagraphToken(token, options, getFormattedCodeBlock, commentKey, options);
 			// Add lines with relative indentation (* )
 			for (const line of tokenLines) {
 				if (line.trim() === '') {
@@ -425,6 +248,7 @@ export async function processApexDocCommentLines(
 		return processedLines;
 	} else {
 		// Use normalized comment with code block processing
+		// Code blocks will be processed through token system and embed
 		const lines = normalizedComment.split('\n');
 		const processedLines = processCodeBlockLines(lines);
 
@@ -518,9 +342,11 @@ const tokensToApexDocString = (
 					finalCodeLines = codeLines;
 					if (finalCodeLines.length === 1) {
 						const line = finalCodeLines[0];
-						// For single-line {@code} blocks ending with ;}, add space before }
-						if (line.includes(';') && line.endsWith('}')) {
-							finalCodeLines[0] = line.slice(0, -1) + ' }';
+						if (line) {
+							// For single-line {@code} blocks ending with ;}, add space before }
+							if (line.includes(';') && line.endsWith('}')) {
+								finalCodeLines[0] = line.slice(0, -1) + ' }';
+							}
 						}
 					}
 				} else {
@@ -528,7 +354,8 @@ const tokensToApexDocString = (
 					const isSingleLine = codeLines.length === 1;
 					const singleLineContent = codeLines[0]?.trim() ?? '';
 					const singleLineWithBraces = `{@code ${singleLineContent} }`;
-					const fitsOnOneLine = singleLineWithBraces.length <= options.printWidth - commentPrefix.length;
+					const printWidth = options.printWidth ?? 80;
+					const fitsOnOneLine = singleLineWithBraces.length <= printWidth - commentPrefix.length;
 
 					if (isSingleLine && fitsOnOneLine) {
 						// Single line format: {@code content }
@@ -643,6 +470,10 @@ const mergeCodeBlockTokens = (tokens: readonly CommentToken[]): readonly Comment
 
 	while (i < tokens.length) {
 		const token = tokens[i];
+		if (!token) {
+			i++;
+			continue;
+		}
 
 		if (token.type === 'paragraph') {
 			const content = token.content;
@@ -674,6 +505,10 @@ const mergeCodeBlockTokens = (tokens: readonly CommentToken[]): readonly Comment
 
 					while (j < tokens.length && !hasCompleteBlock) {
 						const nextToken = tokens[j];
+						if (!nextToken) {
+							j++;
+							continue;
+						}
 						if (nextToken.type === 'paragraph') {
 							const nextContent = nextToken.content;
 							mergedContent += nextContent;
@@ -702,8 +537,8 @@ const mergeCodeBlockTokens = (tokens: readonly CommentToken[]): readonly Comment
 									type: 'paragraph',
 									content: mergedContent,
 									lines: mergedLines,
-									isApexDoc: token.isApexDoc, // Preserve the flag from original token
-								});
+									isContinuation: token.isContinuation, // Preserve the flag from original token
+								} satisfies ParagraphToken);
 								i = j; // Skip the merged tokens
 							}
 						} else {
@@ -896,7 +731,7 @@ const detectCodeBlockTokens = (
 			// For paragraphs, work with the lines array to preserve line breaks
 			// For text tokens, reconstruct content from lines
 			const content = token.type === 'paragraph'
-				? token.lines.map(line => line.replace(/^\s*\*\s*/, '')).join('\n')
+				? token.lines.map((line: string) => line.replace(/^\s*\*\s*/, '')).join('\n')
 				: token.content;
 			let currentPos = ARRAY_START_INDEX;
 			let lastMatchEnd = ARRAY_START_INDEX;
@@ -921,12 +756,12 @@ const detectCodeBlockTokens = (
 				if (codeTagStart > lastMatchEnd) {
 					const textBeforeCode = content.substring(lastMatchEnd, codeTagStart);
 					if (textBeforeCode.length > EMPTY) {
-						const lines = textBeforeCode.split('\n').filter(line => line.trim().length > 0);
+						const lines = textBeforeCode.split('\n').filter((line: string) => line.trim().length > 0);
 						if (lines.length > 0) {
 							newTokens.push({
 								type: 'text',
 								content: textBeforeCode,
-								lines: lines.map(line => ` * ${line}`),
+								lines: lines.map((line: string) => ` * ${line}`),
 							} satisfies TextToken);
 						}
 					}
@@ -956,6 +791,8 @@ const detectCodeBlockTokens = (
 
 /**
  * Normalizes annotation names in tokens (e.g., @Param -> @param).
+ * Processes AnnotationToken, TextToken, and ParagraphToken types.
+ * Skips normalization within {@code} blocks.
  * @param tokens - Array of comment tokens.
  * @returns Array of tokens with normalized annotation names.
  */
@@ -973,6 +810,86 @@ const normalizeAnnotationTokens = (
 					normalizedContent = APEXDOC_GROUP_NAMES[lowerContent as keyof typeof APEXDOC_GROUP_NAMES] ?? token.content;
 				}
 				return { ...token, name: lowerName, content: normalizedContent } satisfies AnnotationToken;
+			}
+		} else if (token.type === 'text' || token.type === 'paragraph') {
+			// Normalize annotations in text/paragraph tokens, but skip {@code} blocks
+			const content = token.content;
+			
+			// Check if content contains {@code} blocks - if so, normalize around them
+			if (content.includes('{@code')) {
+				// Split content by {@code} blocks and normalize each segment
+				const parts: string[] = [];
+				let lastIndex = 0;
+				let startIndex = 0;
+				
+				while ((startIndex = content.indexOf('{@code', lastIndex)) !== -1) {
+					// Normalize text before {@code} block
+					const beforeCode = content.substring(lastIndex, startIndex);
+					if (beforeCode.length > EMPTY) {
+						parts.push(normalizeAnnotationNamesInText(beforeCode));
+					}
+					
+					// Find the end of {@code} block
+					const codeTagLength = '{@code'.length;
+					let endIndex = content.indexOf('}', startIndex + codeTagLength);
+					if (endIndex === -1) {
+						// Malformed {@code} block, include rest as-is
+						parts.push(content.substring(startIndex));
+						lastIndex = content.length;
+						break;
+					}
+					
+					// Include {@code} block unchanged (skip normalization)
+					parts.push(content.substring(startIndex, endIndex + 1));
+					lastIndex = endIndex + 1;
+				}
+				
+				// Normalize remaining text after last {@code} block
+				if (lastIndex < content.length) {
+					const afterCode = content.substring(lastIndex);
+					if (afterCode.length > EMPTY) {
+						parts.push(normalizeAnnotationNamesInText(afterCode));
+					}
+				}
+				
+				const normalizedContent = parts.join('');
+				
+				// Update lines if content changed
+				if (normalizedContent !== content) {
+					const normalizedLines = normalizedContent.split('\n');
+					if (token.type === 'text') {
+						return {
+							...token,
+							content: normalizedContent,
+							lines: normalizedLines,
+						} satisfies TextToken;
+					} else if (token.type === 'paragraph') {
+						return {
+							...token,
+							content: normalizedContent,
+							lines: normalizedLines,
+						} satisfies ParagraphToken;
+					}
+				}
+			} else {
+				// No {@code} blocks, normalize entire content
+				const normalizedContent = normalizeAnnotationNamesInText(content);
+				if (normalizedContent !== content) {
+					const normalizedLines = normalizedContent.split('\n');
+					if (token.type === 'text') {
+						return {
+							...token,
+							content: normalizedContent,
+							lines: normalizedLines,
+						} satisfies TextToken;
+					} else if (token.type === 'paragraph') {
+						return {
+							...token,
+							content: normalizedContent,
+							lines: normalizedLines,
+						} satisfies ParagraphToken;
+					}
+				}
 			}
 		}
 		return token;
@@ -1086,6 +1003,7 @@ const normalizeSingleApexDocCommentWithTokens = async (
 
 	// Format code blocks (async)
 	const { formatCodeBlockToken } = await import('./apexdoc-code.js');
+	const { getCurrentPluginInstance } = await import('./printer.js');
 	const formattedTokens: CommentToken[] = [];
 	for (const token of tokens) {
 		if (token.type === 'code' && token.rawCode.length > EMPTY) {
@@ -1093,7 +1011,7 @@ const normalizeSingleApexDocCommentWithTokens = async (
 				token,
 				effectiveWidth,
 				embedOptions: options,
-				currentPluginInstance: undefined,
+				currentPluginInstance: getCurrentPluginInstance(),
 			});
 			formattedTokens.push(formattedToken);
 		} else {
@@ -1141,7 +1059,6 @@ export {
 	findApexDocComments,
 	FORMAT_FAILED_PREFIX,
 	EMPTY_CODE_TAG,
-	normalizeCodeBlocksInText,
 	normalizeSingleApexDocComment,
 	parseApexDocTokens,
 	detectAnnotationsInTokens,
@@ -1161,11 +1078,8 @@ export function processParagraphToken(
 	commentKey: string | null,
 	embedOptions: ParserOptions,
 ): string[] {
-	if (token.isApexDoc) {
-		return processApexDocParagraph(token, options, getFormattedCodeBlock, commentKey, embedOptions);
-	} else {
-		return processRegularParagraph(token);
-	}
+	// Since this is called from processApexDocCommentLines, all tokens are ApexDoc
+	return processApexDocParagraph(token, options, getFormattedCodeBlock, commentKey, embedOptions);
 }
 
 /**
@@ -1212,19 +1126,21 @@ function processApexDocParagraph(
  */
 function processCodeBlock(
 	codeBlock: string,
-	options: ParserOptions,
+	_options: ParserOptions,
 	getFormattedCodeBlock: (key: string) => string | undefined,
 	commentKey: string | null,
-	embedOptions: ParserOptions,
+	_embedOptions: ParserOptions,
 ): string[] {
 	// Extract content between {@code and }
 	const match = codeBlock.match(/^\{@code\s*([\s\S]*?)\s*\}$/);
-	if (!match) return [codeBlock];
+	if (!match || !match[1]) return [codeBlock];
 
 	const codeContent = match[1];
-	const lines = codeContent.split('\n');
+	if (!codeContent) return [codeBlock];
+	
+	const codeLines = codeContent.split('\n');
 
-	if (lines.length === 1) {
+	if (codeLines.length === 1) {
 		// Single line - add space before closing } if content ends with ;
 		const separator = codeContent.trim().endsWith(';') ? ' ' : '';
 		return [`{@code ${codeContent}${separator}}`];
@@ -1238,46 +1154,31 @@ function processCodeBlock(
 
 			// Extract base indentation from the first code line (spaces before *)
 			const embedLines = embedContent.split('\n');
-			let baseIndent = '';
-			for (const line of embedLines) {
-				const match = line.match(/^(\s*)\*/);
-				if (match) {
-					baseIndent = match[1] ?? '';
-					break;
-				}
-			}
-
-			const lines = embedLines.map(line => {
+			const processedLines = embedLines.map((line: string) => {
 				// Remove the standard comment prefix but preserve relative indentation
-				const match = line.match(/^(\s*\*\s?)(.*)$/);
-				if (match) {
-					return match[2]; // Keep only the content after the comment prefix
+				const lineMatch = line.match(/^(\s*\*\s?)(.*)$/);
+				if (lineMatch) {
+					return lineMatch[2]; // Keep only the content after the comment prefix
 				}
 				return line;
 			});
 
 			// Find the {@code block
-			const codeStart = lines.findIndex(line => line.startsWith('{@code'));
-			const codeEnd = lines.findIndex((line, i) => i > codeStart && line === '}');
+			const codeStart = processedLines.findIndex((line: string | undefined) => line?.startsWith('{@code'));
+			const codeEnd = processedLines.findIndex((line: string | undefined, i: number) => i > codeStart && line === '}');
 
 			if (codeStart >= 0 && codeEnd > codeStart) {
-				const codeLines = lines.slice(codeStart + 1, codeEnd);
-				// Apply normalization to ensure correct casing
-				const normalizedCode = codeLines.join('\n');
-				const fullyNormalizedCode = normalizeTypeNamesInCode(normalizedCode);
-				let normalizedLines = fullyNormalizedCode.split('\n');
-
+				const extractedCodeLines = processedLines.slice(codeStart + 1, codeEnd).filter((line): line is string => typeof line === 'string');
 				// For embed results, the formatted code is stored without comment prefixes
 				// comments.ts will handle adding the proper indentation
-
-				return [`{@code`, ...normalizedLines, `}`];
+				return [`{@code`, ...extractedCodeLines, `}`];
 			}
 
 			// Fallback
-			return [`{@code`, ...lines.slice(2), `}`]; // Skip "Example usage:" and "{@code"
+			return [`{@code`, ...processedLines.slice(2).filter((line): line is string => line !== undefined), `}`];
 		} else {
 			// Fallback to original format
-			return [`{@code`, ...lines, `}`];
+			return [`{@code`, ...codeLines, `}`];
 		}
 	}
 }
@@ -1305,53 +1206,17 @@ export async function processApexDocComment(
 	// Check if there's a pre-formatted version from embed processing
 	const codeTagPos = commentValue.indexOf('{@code');
 	const commentKey = codeTagPos !== -1 ? `${commentValue.length}-${codeTagPos}` : null;
-	console.log('processApexDocComment called with comment length:', commentValue.length, 'codeTagPos:', codeTagPos, 'key:', commentKey);
 	const embedFormattedComment = commentKey ? getFormattedCodeBlock(commentKey) : null;
 
 	if (embedFormattedComment) {
-		console.log('Using embed formatted comment, key:', commentKey);
 		return embedFormattedComment;
 	}
 
-	// Process {@code} blocks using Apex parser and printer (AST-based)
-	const normalizedComment = await processCodeBlocksWithApexParser(commentValue, options);
+	// Process comment through token system (no preprocessing of {@code} blocks)
+	const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
 
-	// Extract ParagraphTokens and clean up malformed indentation
-	const tokens = parseCommentToTokens(normalizedComment);
-
-	// Clean up indentation in token lines
-	const cleanedTokens = tokens.map(token => {
-		if (token.type === 'paragraph') {
-			const cleanedLines = token.lines.map(line => {
-				// Remove malformed indentation and normalize
-				const match = line.match(/^(\s*)\*?\s*(.*)$/);
-				if (match) {
-					const [, indent, content] = match;
-					// For well-formed comments, preserve existing indentation
-					// Only normalize if there's no asterisk or malformed spacing
-					if (indent.includes('*')) {
-						// Already has asterisk, preserve as-is
-						return line;
-					} else {
-						// No asterisk, add standard formatting
-						return ` * ${content}`;
-					}
-				}
-				return line;
-			});
-			return {
-				...token,
-				lines: cleanedLines,
-			};
-		}
-		return token;
-	});
-
-	// Convert back to normalized comment text
-	return tokensToCommentString(cleanedTokens, 0, {
-		tabWidth: options.tabWidth,
-		useTabs: options.useTabs,
-	});
+	// Return normalized comment (token processing already done in normalizeSingleApexDocComment)
+	return normalizedComment;
 }
 
 export type { CodeBlock, ReadonlyCodeBlock };

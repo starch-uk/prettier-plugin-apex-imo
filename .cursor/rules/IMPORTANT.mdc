@@ -22,6 +22,16 @@ The file `.cursor/plans/OPTIMISE.md` contains comprehensive guidelines, strategi
 - "make code more efficient"
 - Any request to improve, streamline, or optimize the codebase
 
+# Processing Architecture Requirements
+
+**CRITICAL - ARCHITECTURAL CONSTRAINT**: All code in this project MUST follow asynchronous processing patterns. You MUST **NEVER** introduce:
+
+- **Preprocessing** - No preprocessing steps or transformations before main processing
+- **Postprocessing** - No postprocessing steps or transformations after main processing
+- **Synchronous processing** - All processing MUST be asynchronous with no exceptions
+
+This ensures the codebase maintains its asynchronous-first architecture and prevents the introduction of blocking operations that could impact performance and scalability.
+
 # Documentation Update Requirement
 
 **CRITICAL**: When making any changes to the project (including but not limited to):

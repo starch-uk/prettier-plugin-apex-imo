@@ -2,10 +2,11 @@
  * @file Utility functions for finding and processing ApexDoc comments and their indentation.
  */
 
-import type { ParserOptions, ApexNode } from './types.js';
+import type { ApexNode } from './types.js';
+import type { ParserOptions } from 'prettier';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
-import { normalizeSingleApexDocComment, processApexDocComment } from './apexdoc.js';
+import { normalizeSingleApexDocComment, processApexDocComment, normalizeAnnotationTokens } from './apexdoc.js';
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -624,8 +625,8 @@ const customPrintComment = (
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	) => Doc,
 	options: ParserOptions,
-	getCurrentOriginalText: () => string | undefined,
-	getFormattedCodeBlock: (key: string) => string | undefined,
+	_getCurrentOriginalText: () => string | undefined,
+	_getFormattedCodeBlock: (key: string) => string | undefined,
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires parameters
 ): Doc => {
 	const node = path.getNode();
@@ -678,7 +679,6 @@ const customPrintComment = (
 
 	if (
 		node !== null &&
-		isApexDoc(node) &&
 		'value' in node &&
 		typeof node['value'] === 'string'
 	) {
@@ -686,13 +686,29 @@ const customPrintComment = (
 		const commentValue = commentNode.value;
 		if (commentValue === '') return '';
 
-		// Comments are already normalized during preprocessing, so just format them
-		const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
+		if (isApexDoc(node)) {
+			// ApexDoc comments: normalize through token processing
+			const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
 
-		// Return the normalized comment as Prettier documents
-		const lines = normalizedComment.split('\n');
-		const { join, hardline } = prettier.doc.builders;
-		return [join(hardline, lines)];
+			// Return the normalized comment as Prettier documents
+			const lines = normalizedComment.split('\n');
+			const { join, hardline } = prettier.doc.builders;
+			return [join(hardline, lines)];
+		} else {
+			// Non-ApexDoc comments: normalize annotations in text
+			// Parse to tokens, normalize annotations, then convert back
+			const tokens = parseCommentToTokens(commentValue);
+			const normalizedTokens = normalizeAnnotationTokens(tokens);
+			const normalizedComment = tokensToCommentString(normalizedTokens, 0, {
+				tabWidth: options.tabWidth,
+				useTabs: options.useTabs,
+			});
+
+			// Return the normalized comment as Prettier documents
+			const lines = normalizedComment.split('\n');
+			const { join, hardline } = prettier.doc.builders;
+			return [join(hardline, lines)];
+		}
 	}
 
 	return '';
@@ -720,4 +736,6 @@ export type {
 	TextToken,
 	CodeBlockToken,
 	AnnotationToken,
+	ParagraphToken,
+	CommentToken,
 };

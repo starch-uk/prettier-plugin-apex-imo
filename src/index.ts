@@ -6,19 +6,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { Plugin, ParserOptions, AstPath, Doc } from 'prettier';
 import * as apexPlugin from 'prettier-plugin-apex';
-import * as prettier from 'prettier';
 import { createWrappedPrinter } from './printer.js';
 import type { ApexNode } from './types.js';
-import { normalizeSingleApexDocComment } from './apexdoc.js';
-import { processCodeBlockLines } from './apexdoc-code.js';
 import {
 	customPrintComment as customPrintCommentFn,
-	ARRAY_START_INDEX,
-	DEFAULT_TAB_WIDTH,
-	INDEX_ONE,
 } from './comments.js';
-import { normalizeAnnotationNamesInText } from './annotations.js';
-import { normalizeTypeNamesInCode } from './casing.js';
 import {
 	getCurrentPrintOptions,
 	getCurrentOriginalText,
@@ -28,126 +20,6 @@ import {
 
 const APEX_PARSERS = ['apex', 'apex-anonymous'] as const;
 
-/**
- * Normalizes code snippets in ApexDoc comments using AST-based parsing.
- * This extracts {@code} blocks from comments, parses them with the Apex AST parser,
- * normalizes type names, and replaces them back in the source text.
- */
-async function normalizeCodeSnippetsInComments(
-	text: string,
-	options: ParserOptions<ApexNode>,
-): Promise<string> {
-	const codeTag = '{@code';
-	const codeTagEnd = '}';
-	const codeTagLength = codeTag.length;
-
-	let result = text;
-	let startIndex = 0;
-
-	// Find all {@code} blocks in the text
-	const replacements: Array<{ start: number; end: number; normalized: string }> = [];
-
-	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
-		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
-		if (endIndex === -1) break;
-
-
-		// Extract the code content
-		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
-
-		// Skip empty code blocks
-		if (!codeContent) {
-			startIndex = endIndex + 1;
-			continue;
-		}
-
-		// Calculate comment indentation - assume 1 level of tabWidth indentation
-		// This accounts for the base indentation of the containing structure
-		const commentIndent = options.tabWidth || 2;
-
-		try {
-				// Clean comment markers from the code content
-			let cleanedCode = codeContent.split('\n').map(line => {
-				const trimmed = line.trim();
-				// Remove leading " * " or "*" from comment lines
-				if (trimmed.startsWith('* ')) {
-					return trimmed.substring(2);
-				} else if (trimmed.startsWith('*')) {
-					return trimmed.substring(1);
-				}
-				return trimmed;
-			}).join('\n').trim();
-
-			// Format the code block using prettier with our plugin and reduced printWidth
-			// Calculate effective width: account for comment indentation dynamically
-			const baseIndent = ' '.repeat(commentIndent); // Use spaces for indentation calculation
-			const commentPrefixLength = baseIndent.length + ' * '.length;
-			const effectiveWidth = (options.printWidth || 80) - commentPrefixLength;
-
-
-			let normalizedCode;
-			try {
-				// Import the plugin dynamically to avoid circular dependency
-				const { default: currentPlugin } = await import('./index.js');
-				normalizedCode = await prettier.format(cleanedCode, {
-					...options,
-					printWidth: effectiveWidth,
-					parser: 'apex-anonymous',
-					plugins: [currentPlugin],
-				});
-				normalizedCode = normalizedCode.trim();
-
-			} catch {
-				// Fallback to type normalization only if full formatting fails
-				normalizedCode = await normalizeTypeNamesInCode(cleanedCode);
-			}
-
-			// Format the normalized code back with proper comment markers
-			const normalizedLines = normalizedCode.split('\n');
-			const indentPrefix = ' '.repeat(commentIndent);
-			const formattedCode = normalizedLines.map((line) => {
-				return `${indentPrefix} * ${line}`; // All lines get the comment prefix
-			}).join('\n');
-
-			// Store replacement info
-			const replacementContent = `\n${formattedCode}\n`;
-			replacements.push({
-				start: startIndex + codeTagLength,
-				end: endIndex,
-				normalized: replacementContent
-			});
-
-		} catch (error) {
-			// If normalization fails, normalize annotations at least
-			console.warn('Failed to normalize code snippet in comment:', error);
-			const { normalizeAnnotationNamesInText } = await import('./annotations.js');
-			const annotationNormalized = normalizeAnnotationNamesInText(codeContent);
-			replacements.push({
-				start: startIndex + codeTagLength,
-				end: endIndex,
-				normalized: annotationNormalized
-			});
-		}
-
-		startIndex = endIndex + 1;
-	}
-
-	// Apply replacements from first to last, updating indices as we go
-	replacements.sort((a, b) => a.start - b.start);
-	let offset = 0;
-	for (let i = 0; i < replacements.length; i++) {
-		const replacement = replacements[i];
-		const adjustedStart = replacement.start + offset;
-		const adjustedEnd = replacement.end + offset;
-		const before = result.substring(0, adjustedStart);
-		const after = result.substring(adjustedEnd);
-		const originalSegment = result.substring(adjustedStart, adjustedEnd);
-		result = before + replacement.normalized + after;
-		offset += replacement.normalized.length - (replacement.end - replacement.start);
-	}
-
-	return result;
-}
 const APEX_PRINTER_ERROR_MESSAGE =
 	'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. The apex printer was not found.';
 
@@ -273,27 +145,18 @@ const wrapParsers = (
 				text: Readonly<string>,
 				options: Readonly<ParserOptions<ApexNode>>,
 			): Promise<ApexNode> =>
-				originalParser.parse(
-					normalizeAnnotationNamesInText(text),
-					options,
-				),
-			preprocess: async (
-				text: Readonly<string>,
-				options: Readonly<ParserOptions<ApexNode>>,
-			): Promise<string> => {
-				// First apply original preprocessing
-				const preprocessedText = originalPreprocess
-					? await originalPreprocess(text, options)
-					: text;
-
-				// Normalize Apex annotations (which should skip ApexDoc comments)
-				const annotationNormalizedText = normalizeAnnotationNamesInText(preprocessedText);
-
-				// Perform AST-based normalization of code snippets in ApexDoc comments
-				const astNormalizedText = await normalizeCodeSnippetsInComments(annotationNormalizedText, options);
-
-				return astNormalizedText;
-			},
+				// Parse raw text - annotation normalization happens in token processing
+				originalParser.parse(text, options),
+			preprocess: originalPreprocess
+				? async (
+						text: Readonly<string>,
+						options: Readonly<ParserOptions<ApexNode>>,
+					): Promise<string> => {
+						// Apply original preprocessing if it exists
+						// All normalization (annotations and {@code} blocks) happens in token processing
+						return await originalPreprocess(text, options);
+					}
+				: undefined,
 		};
 	}
 	return wrappedParsers as Plugin<ApexNode>['parsers'];
@@ -302,7 +165,6 @@ const wrapParsers = (
 const apexPluginTyped = apexPlugin as unknown as Plugin<ApexNode>;
 const plugin: Plugin<ApexNode> = {
 	...apexPluginTyped,
-	// @ts-expect-error -- Prettier's embed types are complex and don't match our implementation
 	printers: { apex: wrappedPrinter },
 };
 plugin.parsers = wrapParsers(apexPluginTyped.parsers, plugin);

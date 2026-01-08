@@ -5,6 +5,7 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { doc } from 'prettier';
+import * as prettier from 'prettier';
 import type { AstPath, Doc, ParserOptions } from 'prettier';
 import type {
 	ApexNode,
@@ -13,20 +14,19 @@ import type {
 	ApexAnnotationNode,
 } from './types.js';
 
-const { group, indent, softline, ifBreak, line, join, hardline } = doc.builders;
+const { group, indent, softline, ifBreak, line } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
-	normalizeTypeName,
 	createTypeNormalizingPrint,
 	isIdentifier,
 	isInTypeContext,
+	normalizeTypeName,
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
-import { ARRAY_START_INDEX, isMalformedCommentBlock } from './comments.js';
-import { normalizeSingleApexDocComment } from './apexdoc.js';
-import { normalizeTypeNamesInCode, normalizeTypeName } from './casing.js';
-import { normalizeAnnotationNamesInText } from './annotations.js';
+import { ARRAY_START_INDEX } from './comments.js';
+import { extractCodeFromBlock } from './apexdoc-code.js';
+import { normalizeTypeNamesInCode } from './casing.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -76,10 +76,10 @@ const makeTypeDocBreakable = (typeDoc: Doc, _options: Readonly<ParserOptions>): 
 					if (param === ', ' && !firstCommaFound) {
 						// First comma in type parameters - make it breakable
 						// Structure: [param1, ', ', group([indent([softline, param2, ...])])]
-						processedParams.push(', ');
+							processedParams.push(', ');
 						// Wrap remaining params in a group with indent and softline
 						if (j + ARRAY_OFFSET < params.length) {
-							const remainingParams = params.slice(j + ARRAY_OFFSET);
+							const remainingParams = params.slice(j + ARRAY_OFFSET) as Doc[];
 							// Wrap remaining params in a group with indent and softline
 							processedParams.push(group(indent([softline, ...remainingParams])));
 							break; // Done processing
@@ -148,6 +148,10 @@ const getCurrentPluginInstance = (): { default: unknown } | undefined =>
 const getFormattedCodeBlock = (key: string): string | undefined =>
 	formattedCodeBlocks.get(key);
 
+const setFormattedCodeBlock = (key: string, value: string): void => {
+	formattedCodeBlocks.set(key, value);
+};
+
 
 
 
@@ -185,6 +189,85 @@ const createWrappedPrinter = (
 ): any => {
 	const result = { ...originalPrinter };
 
+	// Implement embed function for {@code} blocks in comments
+	if (!originalPrinter.embed) {
+		result.embed = (
+			path: Readonly<AstPath<ApexNode>>,
+			options: Readonly<ParserOptions>,
+		) => {
+			// Check if this is a comment node with {@code} blocks
+			if (!isCommentNode(path.node)) {
+				return null;
+			}
+
+			const commentNode = path.node as { value?: string };
+			const commentText = commentNode.value;
+
+			if (!commentText || !commentText.includes('{@code')) {
+				return null;
+			}
+
+			// Return async function that processes {@code} blocks using textToDoc
+			return async (
+				textToDoc: (text: string, options: ParserOptions) => Promise<Doc>,
+			): Promise<Doc | undefined> => {
+				const codeTag = '{@code';
+				let result = commentText;
+				let startIndex = 0;
+				let hasChanges = false;
+
+				while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
+					// Use extractCodeFromBlock for proper brace-counting extraction
+					const extraction = extractCodeFromBlock(result, startIndex);
+					if (!extraction) {
+						startIndex += codeTag.length;
+						continue;
+					}
+
+					const codeContent = extraction.code;
+
+					try {
+						// Format code using textToDoc with our plugin
+						const formattedCode = await textToDoc(codeContent, {
+							...options,
+							parser: 'apex-anonymous',
+						});
+
+						// Replace the code block with formatted version
+						const beforeCode = result.substring(0, startIndex + codeTag.length);
+						const afterCode = result.substring(extraction.endPos);
+						const newCodeBlock = `\n${formattedCode}\n`;
+						result = beforeCode + newCodeBlock + afterCode;
+						hasChanges = true;
+
+						// Move past this code block
+						startIndex = beforeCode.length + newCodeBlock.length;
+					} catch (error) {
+						// If formatting fails, skip this block
+						console.warn('Embed: Failed to format code block:', error);
+						startIndex = extraction.endPos;
+					}
+				}
+
+				if (!hasChanges) {
+					return undefined;
+				}
+
+				// Store formatted comment in cache for retrieval by processApexDocCommentLines
+				const codeTagPos = commentText.indexOf('{@code');
+				if (codeTagPos !== -1) {
+					const commentKey = `${String(commentText.length)}-${String(codeTagPos)}`;
+					setFormattedCodeBlock(commentKey, result);
+				}
+
+				// Return formatted comment as Doc (split into lines)
+				const lines = result.split('\n');
+				const { join, hardline } = doc.builders;
+				return join(hardline, lines) as Doc;
+			};
+		};
+	}
+
 	const customPrint = (
 		path: Readonly<AstPath<ApexNode>>,
 		options: Readonly<ParserOptions>,
@@ -208,7 +291,6 @@ const createWrappedPrinter = (
 				path as Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
 				typeNormalizingPrint,
 				fallback,
-				options,
 			);
 		if (isTypeRef(node) && 'names' in node) {
 			const namesField = (node as { names?: unknown }).names;
@@ -544,57 +626,6 @@ const createWrappedPrinter = (
 
 	return result;
 };
-/**
- * Parse Apex code for embed processing.
- * @param code - Code to parse
- * @param options - Parser options
- * @returns Promise resolving to parsed AST
- */
-const parseApexForEmbed = async (code: string, options: ParserOptions): Promise<ApexNode> => {
-	// Use the existing parser infrastructure - access through the stored plugin instance
-	if (!currentPluginInstance?.parsers?.apex?.parse) {
-		throw new Error('Apex parser not available for embed processing');
-	}
-
-	return currentPluginInstance.parsers.apex.parse(code, {
-		...options,
-		parser: 'apex',
-	});
-};
-
-/**
- * Format an AST using the current printer.
- * @param ast - The AST to format
- * @param options - Parser options
- * @returns Formatted string
- */
-const formatAstWithPrinter = (ast: ApexNode, options: ParserOptions): string => {
-	// Create a path for the AST
-	const path = {
-		getValue: () => ast,
-		getParentNode: () => null,
-		getName: () => null,
-		getNode: () => ast,
-		getRoot: () => ast,
-		call: () => {},
-		callParent: () => {},
-		stack: [ast],
-	} as AstPath;
-
-	// Use the current printer to format the AST
-	const doc = options.printer.print(path, options);
-
-	// Convert Doc to string - this is a simplified approach
-	// In a real implementation, you'd need to use Prettier's doc printer
-	return doc.toString();
-};
-
-/**
- * Parse Apex code for embed processing.
- * @param code - Code to parse
- * @returns Promise resolving to parsed AST
- */
-let cachedParser: any = null;
 
 /**
  * Process {@code} blocks in a comment asynchronously using Apex parser and printer.
