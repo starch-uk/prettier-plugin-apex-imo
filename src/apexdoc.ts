@@ -334,8 +334,14 @@ const normalizeSingleApexDocComment = (
 	// or let them be processed by ApexDoc detection functions
 	let tokens = processParagraphTokensForApexDoc(initialTokens, normalizedComment);
 
+	// Merge paragraph tokens that contain split {@code} blocks
+	tokens = mergeCodeBlockTokens(tokens);
+
+	// Detect code blocks first to separate {@code} content from regular text
+	tokens = detectCodeBlockTokens(tokens, normalizedComment);
+
 	// Detect annotations in tokens that contain ApexDoc content
-	// Code blocks are handled by the embed system
+	// Code blocks are now handled as separate tokens
 	tokens = detectAnnotationsInTokens(tokens);
 
 	// Normalize annotations
@@ -624,6 +630,110 @@ const processParagraphTokensForApexDoc = (
 	}
 
 	return processedTokens;
+};
+
+/**
+ * Merges paragraph tokens that contain split {@code} blocks to ensure complete blocks are in single tokens.
+ * @param tokens - Array of comment tokens.
+ * @returns Array of tokens with merged {@code} blocks.
+ */
+const mergeCodeBlockTokens = (tokens: readonly CommentToken[]): readonly CommentToken[] => {
+	const mergedTokens: CommentToken[] = [];
+	let i = 0;
+
+	while (i < tokens.length) {
+		const token = tokens[i];
+
+		if (token.type === 'paragraph') {
+			const content = token.content;
+			const codeTagIndex = content.indexOf('{@code');
+
+			if (codeTagIndex !== -1) {
+				// Check if this token contains a complete {@code} block
+				let braceCount = 0;
+				let hasCompleteBlock = false;
+				let searchPos = codeTagIndex;
+
+				while (searchPos < content.length && !hasCompleteBlock) {
+					if (content[searchPos] === '{') {
+						braceCount++;
+					} else if (content[searchPos] === '}') {
+						braceCount--;
+						if (braceCount === 0) {
+							hasCompleteBlock = true;
+						}
+					}
+					searchPos++;
+				}
+
+				if (!hasCompleteBlock) {
+					// Need to merge with subsequent tokens
+					let mergedContent = content;
+					let mergedLines = [...token.lines];
+					let j = i + 1;
+
+					while (j < tokens.length && !hasCompleteBlock) {
+						const nextToken = tokens[j];
+						if (nextToken.type === 'paragraph') {
+							const nextContent = nextToken.content;
+							mergedContent += nextContent;
+							mergedLines.push(...nextToken.lines);
+
+							// Check if the merged content now has a complete block
+							braceCount = 0;
+							searchPos = codeTagIndex;
+							hasCompleteBlock = false;
+
+							while (searchPos < mergedContent.length && !hasCompleteBlock) {
+								if (mergedContent[searchPos] === '{') {
+									braceCount++;
+								} else if (mergedContent[searchPos] === '}') {
+									braceCount--;
+									if (braceCount === 0) {
+										hasCompleteBlock = true;
+									}
+								}
+								searchPos++;
+							}
+
+							if (hasCompleteBlock) {
+								// Found complete block, create merged token
+								mergedTokens.push({
+									type: 'paragraph',
+									content: mergedContent,
+									lines: mergedLines,
+									isApexDoc: token.isApexDoc, // Preserve the flag from original token
+								});
+								i = j; // Skip the merged tokens
+							}
+						} else {
+							// Non-paragraph token, stop merging
+							break;
+						}
+						j++;
+					}
+
+					if (!hasCompleteBlock) {
+						// Couldn't find complete block, add original token
+						mergedTokens.push(token);
+					}
+				} else {
+					// Complete block in single token
+					mergedTokens.push(token);
+				}
+			} else {
+				// No {@code} tag, add as-is
+				mergedTokens.push(token);
+			}
+		} else {
+			// Non-paragraph token, add as-is
+			mergedTokens.push(token);
+		}
+
+		i++;
+	}
+
+	return mergedTokens;
 };
 
 /**
@@ -962,11 +1072,14 @@ const normalizeSingleApexDocCommentWithTokens = async (
 		},
 	);
 
-	// Detect annotations
-	let tokens = detectAnnotationsInTokens(initialTokens);
+	// Merge paragraph tokens that contain split {@code} blocks
+	let tokens = mergeCodeBlockTokens(initialTokens);
 
-	// Detect code blocks
+	// Detect code blocks first to separate {@code} content from regular text
 	tokens = detectCodeBlockTokens(tokens, normalizedComment);
+
+	// Detect annotations (will skip 'code' tokens)
+	tokens = detectAnnotationsInTokens(tokens);
 
 	// Normalize annotations
 	tokens = normalizeAnnotationTokens(tokens);
