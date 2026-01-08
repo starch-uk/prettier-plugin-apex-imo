@@ -216,6 +216,17 @@ function normalizeSingleIdentifier(
 	if (nodeValue.length === EMPTY_STRING_LENGTH) return originalPrint(subPath);
 	const normalizedValue = normalizeTypeName(nodeValue);
 	if (normalizedValue === nodeValue) return originalPrint(subPath);
+	// Check if we're processing an identifier in a TypeRef names array
+	// When key === 'names', we're processing identifiers in a names array (likely from a TypeRef)
+	// The Doc returned is composite and evaluated lazily, so we shouldn't restore values
+	const isInNamesArray = subPath.key === 'names';
+	if (isInNamesArray) {
+		// Don't restore values - the Doc is composite and evaluated lazily
+		// The AST is already being mutated, so we keep the normalized values
+		(node as { value: string }).value = normalizedValue;
+		return originalPrint(subPath);
+	}
+	// For simple identifiers (not in names arrays), restore values after printing
 	try {
 		(node as { value: string }).value = normalizedValue;
 		return originalPrint(subPath);
@@ -245,6 +256,7 @@ function normalizeNamesArray(
 ): Doc {
 	const namesArray = node.names;
 	if (!Array.isArray(namesArray)) return originalPrint(subPath);
+	// Normalize each identifier in the names array
 	let hasChanges = false;
 	for (let i = 0; i < namesArray.length; i++) {
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- namesArray is typed as readonly ApexIdentifier[]
@@ -292,46 +304,34 @@ const createTypeNormalizingPrint =
 		});
 		if (!node) return originalPrint(subPath);
 		const isIdent = isIdentifier(node);
-		const nodeClass = getNodeClassOptional(node);
-		const hasNames = node && typeof node === 'object' && 'names' in node;
-		const isTypeRefNode =
-			nodeClass !== undefined &&
-			(nodeClass.includes('TypeRef') ||
-				nodeClass === 'apex.jorje.data.ast.TypeRef') &&
-			hasNames;
-
-		// Handle TypeRef nodes in type contexts
-		if (shouldNormalize && isTypeRefNode) {
-			const namesArray = (node as {
-				names?: readonly ApexIdentifier[];
-			}).names;
-			if (Array.isArray(namesArray) && namesArray.length > 0) {
-				return normalizeNamesArray(
-					node as ApexNode & { names?: readonly ApexIdentifier[] },
-					originalPrint,
-					subPath,
-				);
-			}
-		}
+		// Note: TypeRef nodes are handled in customPrint (printer.ts) using the interception pattern.
+		// When customPrint processes a TypeRef node, it creates namesNormalizingPrint and passes it
+		// to originalPrinter.print. The custom print function intercepts when subPath.key === 'names'
+		// and uses namesNormalizingPrint. When namesNormalizingPrint processes identifiers in the
+		// names array, it will normalize them here (in createTypeNormalizingPrint) because
+		// parentKey === 'names' and shouldNormalize will be true.
+		// So we don't need to handle TypeRef nodes here - just let the normal flow handle identifiers.
 
 		// Only pass path - originalPrint will receive extra args from Prettier if needed
-		if (!shouldNormalize || !isIdent) return originalPrint(subPath);
-		const valueField = (node as { value?: unknown }).value;
-		if (typeof valueField === 'string') {
-			return normalizeSingleIdentifier(
-				node as ApexIdentifier,
-				originalPrint,
-				subPath,
-			);
+		if (!shouldNormalize || !isIdent) {
+			return originalPrint(subPath);
 		}
-		if ('names' in node) {
-			return normalizeNamesArray(
-				node as ApexNode & { names?: readonly ApexIdentifier[] },
-				originalPrint,
-				subPath,
-			);
-		}
-		return originalPrint(subPath);
+	const valueField = (node as { value?: unknown }).value;
+	if (typeof valueField === 'string') {
+		return normalizeSingleIdentifier(
+			node as ApexIdentifier,
+			originalPrint,
+			subPath,
+		);
+	}
+	if ('names' in node) {
+		return normalizeNamesArray(
+			node as ApexNode & { names?: readonly ApexIdentifier[] },
+			originalPrint,
+			subPath,
+		);
+	}
+		return originalPrint(subPath, ..._extraArgs);
 	};
 
 /**

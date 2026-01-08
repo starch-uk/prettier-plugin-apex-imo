@@ -207,9 +207,9 @@ const createWrappedPrinter = (
 				return null;
 			}
 
-			// Return async function that processes {@code} blocks using textToDoc
+			// Return async function that processes {@code} blocks using prettier.format
 			return async (
-				textToDoc: (text: string, options: ParserOptions) => Promise<Doc>,
+				_textToDoc: (text: string, options: ParserOptions) => Promise<Doc>,
 			): Promise<Doc | undefined> => {
 				const codeTag = '{@code';
 				let result = commentText;
@@ -227,22 +227,30 @@ const createWrappedPrinter = (
 					const codeContent = extraction.code;
 
 					try {
-						// Format code using textToDoc with our plugin
+						// Format code using prettier.format to get a formatted string
 						// Ensure our plugin is first in the plugins array so our wrapped printer is used
 						const pluginInstance = getCurrentPluginInstance();
 						const plugins = pluginInstance
 							? [pluginInstance.default, ...(options.plugins || [])]
 							: options.plugins;
-						const formattedCode = await textToDoc(codeContent, {
+						const formattedCode = await prettier.format(codeContent, {
 							...options,
 							parser: 'apex-anonymous',
 							plugins,
 						});
 
 						// Replace the code block with formatted version
+						// Add comment prefix (* ) to each code line to preserve comment structure
 						const beforeCode = result.substring(0, startIndex + codeTag.length);
 						const afterCode = result.substring(extraction.endPos);
-						const newCodeBlock = `\n${formattedCode}\n`;
+						// Add * prefix to each formatted code line
+						// Prettier normalizes comment indentation to a single space before *
+						const formattedCodeLines = formattedCode.trim().split('\n');
+						const prefixedCodeLines = formattedCodeLines.map((line) =>
+							line ? ` * ${line}` : ' *',
+						);
+						// Add closing } tag with * prefix to match comment structure
+						const newCodeBlock = '\n' + prefixedCodeLines.join('\n') + '\n * }\n';
 						result = beforeCode + newCodeBlock + afterCode;
 						hasChanges = true;
 

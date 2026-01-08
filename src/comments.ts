@@ -687,11 +687,19 @@ const customPrintComment = (
 		if (commentValue === '') return '';
 
 		if (isApexDoc(node)) {
-			// ApexDoc comments: normalize through token processing
-			const normalizedComment = normalizeSingleApexDocComment(commentValue, 0, options);
+			// Check if there's a pre-formatted version from embed processing
+			// Use the same cache key calculation as embed function
+			const codeTagPos = commentValue.indexOf('{@code');
+			const commentKey = codeTagPos !== -1 ? `${String(commentValue.length)}-${String(codeTagPos)}` : null;
+			const embedFormattedComment = commentKey ? _getFormattedCodeBlock(commentKey) : null;
+			// Use embed-formatted comment if available, otherwise normalize the original comment
+			// Normalize the embed-formatted comment to match Prettier's indentation (single space before *)
+			const commentToUse = embedFormattedComment
+				? normalizeSingleApexDocComment(embedFormattedComment, 0, options)
+				: normalizeSingleApexDocComment(commentValue, 0, options);
 
-			// Return the normalized comment as Prettier documents
-			const lines = normalizedComment.split('\n');
+			// Return the comment as Prettier documents
+			const lines = commentToUse.split('\n');
 			const { join, hardline } = prettier.doc.builders;
 			return [join(hardline, lines)];
 		} else {

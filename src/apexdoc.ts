@@ -1106,7 +1106,7 @@ function processApexDocParagraph(
 	// Split content into parts, handling {@code} blocks
 	const parts = content.split(/(\{@code[^}]*\})/);
 
-	for (const part of parts) {
+		for (const part of parts) {
 		if (part.startsWith('{@code')) {
 			// This is a {@code} block
 			const codeLines = processCodeBlock(part, options, getFormattedCodeBlock, commentKey, embedOptions);
