@@ -283,6 +283,17 @@ const tokensToApexDocString = (
 		options.useTabs,
 	);
 	const commentPrefix = `${baseIndent} * `;
+	// Calculate the actual prefix that will be rendered by tokensToCommentString
+	// tokensToCommentString uses the same commentIndent, so it will create the same baseIndent
+	// But Prettier adds class/body indentation when rendering (typically 2 spaces for class body)
+	// We need to account for this in effectiveWidth calculation
+	// The actual rendered prefix will be: baseIndent (from commentIndent) + bodyIndent (2 for class) + " * "
+	// When commentIndent is 0, bodyIndent is 2 (class body indentation)
+	// When commentIndent > 0, bodyIndent is already included in commentIndent
+	const bodyIndent = commentIndent === 0 ? 2 : 0;
+	const actualPrefixLength = commentPrefix.length + bodyIndent;
+	const printWidth = options.printWidth ?? 80;
+	const effectiveWidth = printWidth - actualPrefixLength;
 
 	const apexDocTokens: CommentToken[] = [];
 
@@ -377,6 +388,30 @@ const tokensToApexDocString = (
 					lines,
 				} satisfies TextToken);
 			}
+		} else if (token.type === 'text') {
+			// Wrap text tokens based on effective width
+			const wrappedLines = wrapTextContent(
+				token.content,
+				token.lines,
+				effectiveWidth,
+			);
+			apexDocTokens.push({
+				...token,
+				content: wrappedLines.join('\n'),
+				lines: wrappedLines,
+			} satisfies TextToken);
+		} else if (token.type === 'paragraph') {
+			// Wrap paragraph tokens based on effective width
+			const wrappedLines = wrapTextContent(
+				token.content,
+				token.lines,
+				effectiveWidth,
+			);
+			apexDocTokens.push({
+				...token,
+				content: wrappedLines.join('\n'),
+				lines: wrappedLines,
+			} satisfies ParagraphToken);
 		} else {
 			apexDocTokens.push(token);
 		}
@@ -386,6 +421,53 @@ const tokensToApexDocString = (
 		tabWidth: options.tabWidth,
 		useTabs: options.useTabs,
 	});
+};
+
+/**
+ * Wraps text content to fit within effective width.
+ * @param content - The text content to wrap.
+ * @param originalLines - The original lines array (for reference).
+ * @param effectiveWidth - The effective width available for content.
+ * @returns Array of wrapped lines (without comment prefix).
+ */
+const wrapTextContent = (
+	content: string,
+	originalLines: readonly string[],
+	effectiveWidth: number,
+): string[] => {
+	// Extract content from lines (remove comment prefixes)
+	const textContent = content || originalLines
+		.map((line) => line.replace(/^\s*\*\s*/, '').trim())
+		.filter((line) => line.length > EMPTY)
+		.join(' ');
+	
+	if (textContent.length <= effectiveWidth) {
+		// Content fits, return as single line
+		return [textContent];
+	}
+
+	// Wrap content by words
+	const words = textContent.split(/\s+/);
+	const wrappedLines: string[] = [];
+	let currentLine = '';
+
+	for (const word of words) {
+		const testLine = currentLine === '' ? word : `${currentLine} ${word}`;
+		// Allow lines up to effectiveWidth (inclusive) to fit within printWidth
+		if (testLine.length <= effectiveWidth) {
+			currentLine = testLine;
+		} else {
+			if (currentLine !== '') {
+				wrappedLines.push(currentLine);
+			}
+			currentLine = word;
+		}
+	}
+	if (currentLine !== '') {
+		wrappedLines.push(currentLine);
+	}
+
+	return wrappedLines;
 };
 
 /**
