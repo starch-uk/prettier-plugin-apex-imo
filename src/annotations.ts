@@ -232,4 +232,50 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 	return result;
 };
 
-export { isAnnotation, normalizeAnnotationNamesInText, printAnnotation };
+/**
+ * Normalizes annotation names in text, excluding ApexDoc annotations.
+ * ApexDoc annotations (like @deprecated, @param) are preserved as-is.
+ * Only Apex code annotations are normalized.
+ * @param text - The source text containing annotations to normalize.
+ * @returns The text with normalized annotation names (excluding ApexDoc annotations).
+ */
+const normalizeAnnotationNamesInTextExcludingApexDoc = (text: string): string => {
+	// Import APEXDOC_ANNOTATIONS dynamically to avoid circular dependency
+	const APEXDOC_ANNOTATIONS = [
+		'param',
+		'return',
+		'throws',
+		'see',
+		'since',
+		'author',
+		'version',
+		'deprecated',
+		'group',
+		'example',
+	] as const;
+	
+	const apexDocAnnotationsSet = new Set(APEXDOC_ANNOTATIONS);
+	const replacer = createAnnotationReplacer();
+	
+	// Create a replacer that normalizes ApexDoc annotations to lowercase, not PascalCase
+	const excludingApexDocReplacer = (
+		match: string,
+		name: string,
+		params?: string,
+	): string => {
+		const lowerName = name.toLowerCase();
+		// If it's an ApexDoc annotation, normalize to lowercase (not PascalCase)
+		if (apexDocAnnotationsSet.has(lowerName as (typeof APEXDOC_ANNOTATIONS)[number])) {
+			if (params === undefined || params.length === ZERO_LENGTH) {
+				return `@${lowerName}`;
+			}
+			return `@${lowerName}${params}`;
+		}
+		// Otherwise, normalize it to PascalCase (Apex code annotations)
+		return replacer(match, name, params);
+	};
+	
+	return text.replace(ANNOTATION_REGEX, excludingApexDocReplacer);
+};
+
+export { isAnnotation, normalizeAnnotationNamesInText, normalizeAnnotationNamesInTextExcludingApexDoc, printAnnotation };

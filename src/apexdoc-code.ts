@@ -23,6 +23,7 @@ const LAST_INDEX_OFFSET = 1;
 const ZERO_LENGTH = 0;
 const SINGLE_LINE_LENGTH = 1;
 const SIMPLE_ANNOTATION_MAX_LENGTH = 100;
+const NOT_FOUND_INDEX = -1;
 
 /**
  * Extracts code from a code block by counting braces.
@@ -44,16 +45,26 @@ const extractCodeFromBlock = (
 	) as number;
 	let braceCount = INITIAL_BRACE_COUNT;
 	let pos = codeStart;
+	let lastClosingBracePos = NOT_FOUND_INDEX;
 	while (pos < text.length && braceCount > ARRAY_START_INDEX) {
 		if (text[pos] === '{') {
 			braceCount++;
 		} else if (text[pos] === '}') {
 			braceCount--;
+			lastClosingBracePos = pos;
 		}
 		pos++;
 	}
+	// If braces don't match but we found a closing brace, use it as the end position
+	// This preserves invalid code blocks with unmatched brackets
 	if (braceCount !== ARRAY_START_INDEX) {
-		return null;
+		if (lastClosingBracePos !== NOT_FOUND_INDEX) {
+			// Use the last closing brace position as the end, preserving the invalid code
+			pos = lastClosingBracePos + STRING_OFFSET;
+		} else {
+			// No closing brace found, return null
+			return null;
+		}
 	}
 	const rawCode = text.substring(codeStart, pos - STRING_OFFSET);
 	const code = rawCode.includes('*')
