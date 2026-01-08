@@ -165,7 +165,10 @@ const wrapParsers = (
 const apexPluginTyped = apexPlugin as unknown as Plugin<ApexNode>;
 const plugin: Plugin<ApexNode> = {
 	...apexPluginTyped,
-	printers: { apex: wrappedPrinter },
+	printers: {
+		apex: wrappedPrinter,
+		'apex-anonymous': wrappedPrinter,
+	},
 };
 plugin.parsers = wrapParsers(apexPluginTyped.parsers, plugin);
 

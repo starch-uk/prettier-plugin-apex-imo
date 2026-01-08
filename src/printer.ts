@@ -228,9 +228,15 @@ const createWrappedPrinter = (
 
 					try {
 						// Format code using textToDoc with our plugin
+						// Ensure our plugin is first in the plugins array so our wrapped printer is used
+						const pluginInstance = getCurrentPluginInstance();
+						const plugins = pluginInstance
+							? [pluginInstance.default, ...(options.plugins || [])]
+							: options.plugins;
 						const formattedCode = await textToDoc(codeContent, {
 							...options,
 							parser: 'apex-anonymous',
+							plugins,
 						});
 
 						// Replace the code block with formatted version
