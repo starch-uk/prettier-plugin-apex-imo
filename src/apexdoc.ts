@@ -730,8 +730,10 @@ const detectCodeBlockTokens = (
 		if (token.type === 'text' || token.type === 'paragraph') {
 			// For paragraphs, work with the lines array to preserve line breaks
 			// For text tokens, reconstruct content from lines
+			// Off-by-one fix: only remove " *" or " * " (asterisk + optional single space), preserve extra indentation spaces
+			// Match /^\s*\*\s?/ to remove asterisk and at most one space, preserving code block indentation
 			const content = token.type === 'paragraph'
-				? token.lines.map((line: string) => line.replace(/^\s*\*\s*/, '')).join('\n')
+				? token.lines.map((line: string) => line.replace(/^\s*\*\s?/, '')).join('\n')
 				: token.content;
 			let currentPos = ARRAY_START_INDEX;
 			let lastMatchEnd = ARRAY_START_INDEX;

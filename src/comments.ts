@@ -117,10 +117,18 @@ const normalizeBlockCommentBasic = (
 			// asteriskMatch groups: [0]=full match, [1]=leading whitespace, [2]=asterisks, [3]=whitespace after asterisks, [4]=rest of line
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array index 4 for regex match group
 			let restOfLine = asteriskMatch[4] ?? '';
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array index 3 for regex match group
+			const spaceAfterAsterisk = asteriskMatch[3] ?? '';
 			// Remove any leading asterisks (handle cases like "*   * @param" or "*** {@code")
 			restOfLine = restOfLine.replace(/^\s*\*+\s*/, '');
-			// Normal line - use consistent ' * ' spacing
-			normalizedLines.push(`${baseIndent} * ${restOfLine.trimStart()}`);
+			// Off-by-one fix: indentation is in spaceAfterAsterisk, not restOfLine
+			// If spaceAfterAsterisk has more than one space, preserve the extra spaces as code block indentation
+			// For code blocks: spaceAfterAsterisk = "   " (3 spaces), restOfLine = "@AuraEnabled" (no spaces)
+			// We preserve spaces beyond the first one (single space after *) as indentation
+			const codeBlockIndent = spaceAfterAsterisk.length > 1 ? spaceAfterAsterisk.substring(1) : '';
+			const normalizedRest = codeBlockIndent + restOfLine;
+			// Normal line - use consistent ' * ' spacing (preserve code block indentation)
+			normalizedLines.push(`${baseIndent} * ${normalizedRest}`);
 		} else {
 			// Line has no asterisk - add one with proper indentation
 			// But check if line starts with asterisk but no leading whitespace (like "* @return")
