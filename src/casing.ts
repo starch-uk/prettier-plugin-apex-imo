@@ -245,42 +245,26 @@ function normalizeNamesArray(
 ): Doc {
 	const namesArray = node.names;
 	if (!Array.isArray(namesArray)) return originalPrint(subPath);
-	const originalValues: string[] = [];
 	let hasChanges = false;
-	try {
-		for (let i = 0; i < namesArray.length; i++) {
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- namesArray is typed as readonly ApexIdentifier[]
-			const nameNode = namesArray[i];
-			if (typeof nameNode !== 'object' || !('value' in nameNode))
-				continue;
+	for (let i = 0; i < namesArray.length; i++) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- namesArray is typed as readonly ApexIdentifier[]
+		const nameNode = namesArray[i];
+		if (typeof nameNode !== 'object' || !('value' in nameNode))
+			continue;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+		const nameValue = (nameNode as { value?: unknown }).value;
+		if (typeof nameValue !== 'string' || !nameValue) continue;
+		const normalizedValue = normalizeTypeName(nameValue);
+		if (normalizedValue !== nameValue) {
+			hasChanges = true;
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-			const nameValue = (nameNode as { value?: unknown }).value;
-			if (typeof nameValue !== 'string' || !nameValue) continue;
-			originalValues[i] = nameValue;
-			const normalizedValue = normalizeTypeName(nameValue);
-			if (normalizedValue !== nameValue) {
-				hasChanges = true;
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-				(nameNode as { value: string }).value = normalizedValue;
-			}
+			(nameNode as { value: string }).value = normalizedValue;
 		}
-		if (hasChanges) return originalPrint(subPath);
-	} finally {
-		for (
-			let i = 0;
-			i < originalValues.length && i < namesArray.length;
-			i++
-		) {
-			const originalValue = originalValues[i];
-			// originalValues array may not have values at all indices
-			if (originalValue === undefined) continue;
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- namesArray is typed as readonly ApexIdentifier[]
-			const nameNode = namesArray[i];
-			if (typeof nameNode === 'object' && 'value' in nameNode) {
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-				(nameNode as { value: string }).value = originalValue;
-			}
-		}
+	}
+	if (hasChanges) {
+		// Don't restore values - the Doc may be evaluated lazily and needs the normalized values
+		// The AST is already being mutated, so we keep the normalized values
+		return originalPrint(subPath);
 	}
 	return originalPrint(subPath);
 }
@@ -306,7 +290,30 @@ const createTypeNormalizingPrint =
 			parentKey,
 			path: subPath,
 		});
+		if (!node) return originalPrint(subPath);
 		const isIdent = isIdentifier(node);
+		const nodeClass = getNodeClassOptional(node);
+		const hasNames = node && typeof node === 'object' && 'names' in node;
+		const isTypeRefNode =
+			nodeClass !== undefined &&
+			(nodeClass.includes('TypeRef') ||
+				nodeClass === 'apex.jorje.data.ast.TypeRef') &&
+			hasNames;
+
+		// Handle TypeRef nodes in type contexts
+		if (shouldNormalize && isTypeRefNode) {
+			const namesArray = (node as {
+				names?: readonly ApexIdentifier[];
+			}).names;
+			if (Array.isArray(namesArray) && namesArray.length > 0) {
+				return normalizeNamesArray(
+					node as ApexNode & { names?: readonly ApexIdentifier[] },
+					originalPrint,
+					subPath,
+				);
+			}
+		}
+
 		// Only pass path - originalPrint will receive extra args from Prettier if needed
 		if (!shouldNormalize || !isIdent) return originalPrint(subPath);
 		const valueField = (node as { value?: unknown }).value;
