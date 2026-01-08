@@ -161,17 +161,31 @@ const normalizeSingleApexDocComment = (
 
 	// Detect annotations in tokens that contain ApexDoc content
 	// Code blocks are now handled as separate tokens
-	tokens = detectAnnotationsInTokens(tokens);
+	tokens = detectAnnotationsInTokens(tokens, normalizedComment);
 
 	// Normalize annotations
 	tokens = normalizeAnnotationTokens(tokens);
 
 	// Wrap annotations if printWidth is available
+	// Calculate effectiveWidth accounting for body indentation (same as tokensToApexDocString)
 	if (printWidth) {
+		const baseIndent = createIndent(
+			commentIndent,
+			tabWidthValue,
+			options.useTabs,
+		);
+		const commentPrefix = `${baseIndent} * `;
+		// Account for body indentation when commentIndent is 0
+		const bodyIndent = commentIndent === 0 ? 2 : 0;
+		const actualPrefixLength = commentPrefix.length + bodyIndent;
+		const annotationEffectiveWidth = printWidth - actualPrefixLength;
+		
+		// Pass the actual prefix length to wrapAnnotationTokens so it can calculate first line width correctly
 		tokens = wrapAnnotationTokens(
 			tokens,
-			effectiveWidth,
+			annotationEffectiveWidth,
 			commentIndent,
+			actualPrefixLength,
 			{
 				tabWidth: tabWidthValue,
 				useTabs: options.useTabs,
@@ -721,6 +735,7 @@ const normalizeAnnotationsOutsideCodeBlocks = (commentValue: string): string => 
  */
 const detectAnnotationsInTokens = (
 	tokens: readonly CommentToken[],
+	normalizedComment?: string,
 ): readonly CommentToken[] => {
 	const newTokens: CommentToken[] = [];
 	// Annotation pattern: @ followed by identifier, possibly with content
@@ -731,12 +746,16 @@ const detectAnnotationsInTokens = (
 
 	for (const token of tokens) {
 		if (token.type === 'text' || token.type === 'paragraph') {
-			// Check each line for annotations
-			const tokenLines = token.lines;
+			// For paragraph tokens, use content (which has all lines joined) and split by original line structure
+			// For text tokens, use lines array directly
+			const tokenLines = token.type === 'paragraph' && token.content.includes('\n')
+				? token.content.split('\n')
+				: token.lines;
 			let processedLines: string[] = [];
 			let hasAnnotations = false;
 
-			for (const line of tokenLines) {
+			for (let lineIndex = 0; lineIndex < tokenLines.length; lineIndex++) {
+				const line = tokenLines[lineIndex] ?? '';
 				const matches = [...line.matchAll(annotationPattern)];
 				//#region agent log
 				if (line.includes('@group') || line.includes('@Group')) {
@@ -766,18 +785,56 @@ const detectAnnotationsInTokens = (
 							.replace(/^\s*\*\s*/, '')
 							.trim();
 
+						// Collect continuation lines for this annotation
+						// If token has only 1 line but content suggests multi-line, use normalizedComment to find continuation
+						let annotationContent = content;
+						let continuationIndex = lineIndex + 1;
+						
+						if (tokenLines.length === 1 && normalizedComment) {
+							// Find the annotation in the normalized comment and collect continuation lines
+							const annotationMatch = normalizedComment.match(new RegExp(`@${annotationName}\\s+([^@]*?)(?=@|\\*/|$)`, 's'));
+							if (annotationMatch && annotationMatch[INDEX_ONE]) {
+								// Extract full annotation content including continuation lines
+								const fullContent = annotationMatch[INDEX_ONE]
+									.split('\n')
+									.map((l) => l.replace(/^\s*\*\s*/, '').trim())
+									.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'))
+									.join(' ');
+								if (fullContent.length > content.length) {
+									annotationContent = fullContent;
+									// When using normalizedComment, we can't skip lines, so just continue
+									continuationIndex = lineIndex + 1;
+								}
+							}
+						} else {
+							// Use tokenLines to collect continuation lines
+							// Look ahead for continuation lines (lines that don't start with @ and aren't empty)
+							while (continuationIndex < tokenLines.length) {
+								const continuationLine = tokenLines[continuationIndex] ?? '';
+								const trimmedLine = continuationLine.replace(/^\s*\*\s*/, '').trim();
+								// Stop if we hit another annotation, empty line, or code block
+								if (trimmedLine.length === EMPTY || trimmedLine.startsWith('@') || trimmedLine.startsWith('{@code')) {
+									break;
+								}
+								// Add continuation line content to annotation
+								annotationContent += ' ' + trimmedLine;
+								continuationIndex++;
+							}
+							// Skip the continuation lines we just processed
+							lineIndex = continuationIndex - 1;
+						}
 						if (beforeText.length > EMPTY) {
 							newTokens.push({
 								type: 'annotation',
 								name: lowerName,
-								content,
+								content: annotationContent,
 								followingText: beforeText,
 							} satisfies AnnotationToken);
 						} else {
 							newTokens.push({
 								type: 'annotation',
 								name: lowerName,
-								content,
+								content: annotationContent,
 							} satisfies AnnotationToken);
 						}
 					}
@@ -1037,20 +1094,28 @@ const wrapAnnotationTokens = (
 	tokens: readonly CommentToken[],
 	effectiveWidth: number,
 	commentIndent: number,
+	actualPrefixLength: number,
 	options: Readonly<{
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
 ): readonly CommentToken[] => {
 	const newTokens: CommentToken[] = [];
+	const printWidth = effectiveWidth + actualPrefixLength;
 
 	for (const token of tokens) {
 		if (token.type === 'annotation') {
 			const annotationContent = token.content;
 			const annotationPrefixLength = `@${token.name} `.length;
-			const availableWidth = effectiveWidth - annotationPrefixLength;
+			// First line includes @annotation name after comment prefix
+			// First line prefix = actualPrefixLength + annotationPrefixLength
+			// First line available = printWidth - firstLinePrefix
+			const firstLinePrefix = actualPrefixLength + annotationPrefixLength;
+			const firstLineAvailableWidth = printWidth - firstLinePrefix;
+			// Continuation lines only have comment prefix, so they have full effectiveWidth
+			const continuationLineAvailableWidth = effectiveWidth;
 
-			if (availableWidth <= EMPTY) {
+			if (firstLineAvailableWidth <= EMPTY) {
 				newTokens.push(token);
 				continue;
 			}
@@ -1058,15 +1123,19 @@ const wrapAnnotationTokens = (
 			const words = annotationContent.split(/\s+/);
 			let currentLine = '';
 			const wrappedLines: string[] = [];
+			let isFirstLine = true;
 
 			for (const word of words) {
 				const testLine =
 					currentLine === '' ? word : `${currentLine} ${word}`;
+				// Use firstLineAvailableWidth for first line, continuationLineAvailableWidth for subsequent lines
+				const availableWidth = isFirstLine ? firstLineAvailableWidth : continuationLineAvailableWidth;
 				if (testLine.length <= availableWidth) {
 					currentLine = testLine;
 				} else {
 					if (currentLine !== '') {
 						wrappedLines.push(currentLine);
+						isFirstLine = false;
 					}
 					currentLine = word;
 				}
@@ -1125,7 +1194,8 @@ const normalizeSingleApexDocCommentWithTokens = async (
 	tokens = detectCodeBlockTokens(tokens, normalizedComment);
 
 	// Detect annotations (will skip 'code' tokens)
-	tokens = detectAnnotationsInTokens(tokens);
+	// normalizedComment is not available in async version, pass undefined
+	tokens = detectAnnotationsInTokens(tokens, undefined);
 
 	// Normalize annotations
 	tokens = normalizeAnnotationTokens(tokens);
@@ -1149,10 +1219,21 @@ const normalizeSingleApexDocCommentWithTokens = async (
 	}
 
 	// Wrap annotations
+	// Calculate actual prefix length for annotation wrapping
+	const baseIndent = createIndent(
+		commentIndent,
+		tabWidthValue,
+		options.useTabs,
+	);
+	const commentPrefix = `${baseIndent} * `;
+	const bodyIndent = commentIndent === 0 ? 2 : 0;
+	const actualPrefixLength = commentPrefix.length + bodyIndent;
+	
 	tokens = wrapAnnotationTokens(
 		formattedTokens,
 		effectiveWidth,
 		commentIndent,
+		actualPrefixLength,
 		{
 			tabWidth: tabWidthValue,
 			useTabs: options.useTabs,
