@@ -792,10 +792,19 @@ const detectAnnotationsInTokens = (
 						
 						if (tokenLines.length === 1 && normalizedComment) {
 							// Find the annotation in the normalized comment and collect continuation lines
-							const annotationMatch = normalizedComment.match(new RegExp(`@${annotationName}\\s+([^@]*?)(?=@|\\*/|$)`, 's'));
+							// Stop at @, */, end of string, or {@code
+							const annotationMatch = normalizedComment.match(new RegExp(`@${annotationName}\\s+([^@{]*?)(?=@|\\*/|\\{@code|$)`, 's'));
 							if (annotationMatch && annotationMatch[INDEX_ONE]) {
 								// Extract full annotation content including continuation lines
-								const fullContent = annotationMatch[INDEX_ONE]
+								// Remove trailing comment prefixes that might be captured before {@code
+								let rawContent = annotationMatch[INDEX_ONE];
+								// Trim trailing whitespace and comment prefixes (like " * " that appear before {@code)
+								rawContent = rawContent.replace(/\s*\*\s*$/, '').trim();
+								// Also remove any { characters that might have been included
+								if (rawContent.includes('{')) {
+									rawContent = rawContent.substring(0, rawContent.indexOf('{')).trim();
+								}
+								const fullContent = rawContent
 									.split('\n')
 									.map((l) => l.replace(/^\s*\*\s*/, '').trim())
 									.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'))
