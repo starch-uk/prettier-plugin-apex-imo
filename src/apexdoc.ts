@@ -28,24 +28,16 @@ import {
 	APEXDOC_ANNOTATIONS,
 	APEXDOC_GROUP_NAMES,
 } from './refs/apexdoc-annotations.js';
-import { extractCodeFromBlock } from './apexdoc-code.js';
+import { extractCodeFromBlock, EMPTY_CODE_TAG, CODE_TAG } from './apexdoc-code.js';
 import { normalizeAnnotationNamesInText, normalizeAnnotationNamesInTextExcludingApexDoc } from './annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
-const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
 const NOT_FOUND_INDEX = -1;
-const INDEX_THREE = 3;
-const INDEX_FOUR = 4;
-const MAX_ANNOTATION_LINE_LENGTH = 20;
-const PARSE_INT_RADIX = 10;
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
 const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
 const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
-const SLICE_END_OFFSET = -1;
-const DEFAULT_BRACE_COUNT = 1;
-const ZERO_BRACE_COUNT = 0;
 
 
 
@@ -156,15 +148,8 @@ const normalizeSingleApexDocComment = (
 	// Merge paragraph tokens that contain split {@code} blocks
 	tokens = mergeCodeBlockTokens(tokens);
 
-	// Detect code blocks first to separate {@code} content from regular text
-	tokens = detectCodeBlockTokens(tokens, normalizedComment);
-
-	// Detect annotations in tokens that contain ApexDoc content
-	// Code blocks are now handled as separate tokens
-	tokens = detectAnnotationsInTokens(tokens, normalizedComment);
-
-	// Normalize annotations
-	tokens = normalizeAnnotationTokens(tokens);
+	// Apply common token processing pipeline
+	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
 
 	// Wrap annotations if printWidth is available
 	// Calculate effectiveWidth accounting for body indentation (same as tokensToApexDocString)
@@ -762,44 +747,114 @@ const containsApexDocContent = (content: string): boolean => {
 };
 
 
+
 /**
- * Normalizes comment annotations to lowercase (JSDoc format).
- * @param text - The text to normalize.
- * @returns The text with annotations lowercased.
+ * Applies the common token processing pipeline: code block detection, annotation detection, and normalization.
+ * @param tokens - Array of comment tokens.
+ * @param normalizedComment - The normalized comment text (may be undefined in async contexts).
+ * @returns Array of processed tokens.
  */
-const normalizeCommentAnnotations = (text: string): string => {
-	// Simple regex to find @AnnotationName and convert to @annotationname
-	return text.replace(/(@\w+)/g, (match) => match.toLowerCase());
+const applyTokenProcessingPipeline = (
+	tokens: readonly CommentToken[],
+	normalizedComment?: string,
+): readonly CommentToken[] => {
+	// Detect code blocks first to separate {@code} content from regular text
+	let processedTokens = detectCodeBlockTokens(tokens, normalizedComment);
+
+	// Detect annotations in tokens that contain ApexDoc content
+	// Code blocks are now handled as separate tokens
+	processedTokens = detectAnnotationsInTokens(processedTokens, normalizedComment);
+
+	// Normalize annotations
+	processedTokens = normalizeAnnotationTokens(processedTokens);
+
+	return processedTokens;
 };
 
 /**
- * Normalizes annotations outside {@code} blocks while preserving {@code} block content.
- * @param commentValue - The comment value to normalize.
- * @returns The comment with annotations normalized outside {@code} blocks.
+ * Extracts text before an annotation, filtering out annotation patterns.
+ * @param line - The line containing the annotation.
+ * @param matchIndex - The index where the annotation starts.
+ * @returns The cleaned beforeText, or empty string if it contains annotations.
  */
-const normalizeAnnotationsOutsideCodeBlocks = (commentValue: string): string => {
-	let result = '';
-	let lastIndex = 0;
-
-	// Find all {@code} blocks
-	const codeRegex = /\{@code[\s\S]*?\}/g;
-	let match;
-
-	while ((match = codeRegex.exec(commentValue)) !== null) {
-		// Process text before this {@code} block
-		const beforeCode = commentValue.substring(lastIndex, match.index);
-		const normalizedBefore = normalizeCommentAnnotations(beforeCode);
-
-		// Add normalized text + the {@code} block unchanged
-		result += normalizedBefore + match[0];
-		lastIndex = match.index + match[0].length;
+const extractBeforeText = (line: string, matchIndex: number): string => {
+	const beforeAnnotation = line.substring(ARRAY_START_INDEX, matchIndex);
+	let beforeText = beforeAnnotation.replace(/^\s*\*\s*/, '').trim();
+	// Filter out annotation patterns from beforeText to prevent duplication
+	if (beforeText.length > EMPTY && /@[a-zA-Z_][a-zA-Z0-9_]*/.test(beforeText)) {
+		return '';
 	}
+	return beforeText;
+};
 
-	// Process remaining text after the last {@code} block
-	const afterCode = commentValue.substring(lastIndex);
-	result += normalizeCommentAnnotations(afterCode);
+/**
+ * Collects continuation lines for an annotation from normalizedComment.
+ * @param annotationName - The annotation name.
+ * @param content - The initial annotation content.
+ * @param line - The current line text.
+ * @param normalizedComment - The normalized comment text.
+ * @param consumedContent - Set to track consumed content.
+ * @returns The full annotation content with continuation lines.
+ */
+const collectContinuationFromComment = (
+	annotationName: string,
+	content: string,
+	line: string,
+	normalizedComment: string,
+	consumedContent: Set<string>,
+): string => {
+	const currentLineText = line.replace(/^\s*\*\s*/, '').trim();
+	const escapedAnnotationName = annotationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const escapedContent = content.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const specificAnnotationRegex = new RegExp(
+		`@${escapedAnnotationName}\\s+${escapedContent}([^@{]*?)(?=\\n\\s*\\*\\s*@|\\*/|\\{@code|$)`,
+		's',
+	);
+	const continuationMatch = normalizedComment.match(specificAnnotationRegex);
+	if (!continuationMatch || !continuationMatch[INDEX_ONE]) return content;
+	
+	let continuationContent = continuationMatch[INDEX_ONE];
+	continuationContent = continuationContent.replace(/\s*\*\s*$/, '').trim();
+	if (continuationContent.includes('{')) {
+		continuationContent = continuationContent.substring(0, continuationContent.indexOf('{')).trim();
+	}
+	const continuationLines = continuationContent
+		.split('\n')
+		.map((l) => l.replace(/^\s*\*\s*/, '').trim())
+		.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'));
+	if (continuationLines.length > 0) {
+		for (const continuationLine of continuationLines) {
+			consumedContent.add(continuationLine.trim());
+		}
+		return `${content} ${continuationLines.join(' ')}`;
+	}
+	return content;
+};
 
-	return result;
+/**
+ * Collects continuation lines for an annotation from tokenLines.
+ * @param content - The initial annotation content.
+ * @param tokenLines - The token lines array.
+ * @param startIndex - The index to start looking from.
+ * @returns Object with annotationContent and the next line index.
+ */
+const collectContinuationFromTokenLines = (
+	content: string,
+	tokenLines: readonly string[],
+	startIndex: number,
+): { annotationContent: string; nextIndex: number } => {
+	let annotationContent = content;
+	let continuationIndex = startIndex;
+	while (continuationIndex < tokenLines.length) {
+		const continuationLine = tokenLines[continuationIndex] ?? '';
+		const trimmedLine = continuationLine.replace(/^\s*\*\s*/, '').trim();
+		if (trimmedLine.length === EMPTY || trimmedLine.startsWith('@') || trimmedLine.startsWith('{@code')) {
+			break;
+		}
+		annotationContent += ' ' + trimmedLine;
+		continuationIndex++;
+	}
+	return { annotationContent, nextIndex: continuationIndex - 1 };
 };
 
 /**
@@ -838,105 +893,37 @@ const detectAnnotationsInTokens = (
 					hasAnnotations = true;
 					// Process each annotation match
 					for (const match of matches) {
-						// After fixing the regex, group 1 is the name (since prefix is non-capturing)
 						const annotationName = match[INDEX_ONE] ?? '';
 						const content = (match[INDEX_TWO] ?? '').trim();
 						const lowerName = annotationName.toLowerCase();
-
-						// Extract text before annotation if any
-						const beforeAnnotation = line.substring(
-							ARRAY_START_INDEX,
-							match.index ?? ARRAY_START_INDEX,
-						);
-						let beforeText = beforeAnnotation
-							.replace(/^\s*\*\s*/, '')
-							.trim();
-
-						// Filter out annotation patterns from beforeText to prevent duplication
-						// When multiple annotations are on the same line, beforeText may contain
-						// other annotations (e.g., "@Author John" before "@Since 1.0")
-						// Only use beforeText as followingText if it doesn't contain annotation patterns
-						if (beforeText.length > EMPTY && /@[a-zA-Z_][a-zA-Z0-9_]*/.test(beforeText)) {
-							beforeText = '';
-						}
+						const beforeText = extractBeforeText(line, match.index ?? ARRAY_START_INDEX);
 
 						// Collect continuation lines for this annotation
-						// Start with the content already extracted from the current line
 						let annotationContent = content;
-						let continuationIndex = lineIndex + 1;
-						let extractedContinuationLines: string[] = [];
-						
 						if (tokenLines.length === 1 && normalizedComment) {
-							// Find continuation lines for this annotation in the normalized comment
-							// Use the content we already extracted from the line, not re-extract from normalizedComment
-							// This prevents issues when multiple @group annotations exist - each gets its own content
-							// Find the position of this specific annotation in the normalized comment
-							// by matching the line that contains this annotation
-							const currentLineText = line.replace(/^\s*\*\s*/, '').trim();
-							// Escape special regex characters in the annotation name and content
-							const escapedAnnotationName = annotationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-							const escapedContent = content.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-							// Find this specific annotation by matching the line with both name and content
-							const specificAnnotationRegex = new RegExp(
-								`@${escapedAnnotationName}\\s+${escapedContent}([^@{]*?)(?=\\n\\s*\\*\\s*@|\\*/|\\{@code|$)`,
-								's',
+							annotationContent = collectContinuationFromComment(
+								annotationName,
+								content,
+								line,
+								normalizedComment,
+								consumedContent,
 							);
-							const continuationMatch = normalizedComment.match(specificAnnotationRegex);
-							if (continuationMatch && continuationMatch[INDEX_ONE]) {
-								// Extract continuation lines (content after the initial content on the same line)
-								let continuationContent = continuationMatch[INDEX_ONE];
-								// Trim trailing whitespace and comment prefixes
-								continuationContent = continuationContent.replace(/\s*\*\s*$/, '').trim();
-								// Remove any { characters that might have been included
-								if (continuationContent.includes('{')) {
-									continuationContent = continuationContent.substring(0, continuationContent.indexOf('{')).trim();
-								}
-								const continuationLines = continuationContent
-									.split('\n')
-									.map((l) => l.replace(/^\s*\*\s*/, '').trim())
-									.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'));
-								if (continuationLines.length > 0) {
-									extractedContinuationLines = continuationLines;
-									// Mark continuation lines as consumed
-									for (const continuationLine of extractedContinuationLines) {
-										consumedContent.add(continuationLine.trim());
-									}
-									annotationContent = `${content} ${continuationLines.join(' ')}`;
-								}
-								// When using normalizedComment, we can't skip lines in current token, so just continue
-								continuationIndex = lineIndex + 1;
-							}
 						} else {
-							// Use tokenLines to collect continuation lines (only from current token)
-							// Look ahead for continuation lines (lines that don't start with @ and aren't empty)
-							while (continuationIndex < tokenLines.length) {
-								const continuationLine = tokenLines[continuationIndex] ?? '';
-								const trimmedLine = continuationLine.replace(/^\s*\*\s*/, '').trim();
-								// Stop if we hit another annotation, empty line, or code block
-								if (trimmedLine.length === EMPTY || trimmedLine.startsWith('@') || trimmedLine.startsWith('{@code')) {
-									break;
-								}
-								// Add continuation line content to annotation
-								annotationContent += ' ' + trimmedLine;
-								continuationIndex++;
-							}
-							// Skip the continuation lines we just processed
-							lineIndex = continuationIndex - 1;
+							const continuation = collectContinuationFromTokenLines(
+								content,
+								tokenLines,
+								lineIndex + 1,
+							);
+							annotationContent = continuation.annotationContent;
+							lineIndex = continuation.nextIndex;
 						}
-						if (beforeText.length > EMPTY) {
-							newTokens.push({
-								type: 'annotation',
-								name: lowerName,
-								content: annotationContent,
-								followingText: beforeText,
-							} satisfies AnnotationToken);
-						} else {
-							newTokens.push({
-								type: 'annotation',
-								name: lowerName,
-								content: annotationContent,
-							} satisfies AnnotationToken);
-						}
+
+						newTokens.push({
+							type: 'annotation',
+							name: lowerName,
+							content: annotationContent,
+							...(beforeText.length > EMPTY ? { followingText: beforeText } : {}),
+						} satisfies AnnotationToken);
 					}
 				} else {
 					processedLines.push(line);
@@ -987,7 +974,6 @@ const detectCodeBlockTokens = (
 	originalComment: Readonly<string>,
 ): readonly CommentToken[] => {
 	const newTokens: CommentToken[] = [];
-	const CODE_TAG = '{@code';
 
 	for (const token of tokens) {
 		if (token.type === 'text' || token.type === 'paragraph') {
@@ -1374,15 +1360,8 @@ const normalizeSingleApexDocCommentWithTokens = async (
 	// Merge paragraph tokens that contain split {@code} blocks
 	let tokens = mergeCodeBlockTokens(initialTokens);
 
-	// Detect code blocks first to separate {@code} content from regular text
-	tokens = detectCodeBlockTokens(tokens, normalizedComment);
-
-	// Detect annotations (will skip 'code' tokens)
-	// normalizedComment is not available in async version, pass undefined
-	tokens = detectAnnotationsInTokens(tokens, undefined);
-
-	// Normalize annotations
-	tokens = normalizeAnnotationTokens(tokens);
+	// Apply common token processing pipeline (normalizedComment may be undefined in async version)
+	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
 
 	// Format code blocks (async)
 	const { formatCodeBlockToken } = await import('./apexdoc-code.js');

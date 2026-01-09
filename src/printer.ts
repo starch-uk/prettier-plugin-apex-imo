@@ -25,7 +25,7 @@ import {
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional } from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
-import { extractCodeFromBlock } from './apexdoc-code.js';
+import { extractCodeFromBlock, CODE_TAG, CODE_TAG_LENGTH } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
 import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
@@ -165,8 +165,6 @@ const clearFormattedCodeBlocks = (): void => {
 };
 
 const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
-const CODE_TAG = '{@code';
-const CODE_TAG_LENGTH = 6;
 const NOT_FOUND_INDEX = -1;
 const ZERO = 0;
 const ONE = 1;

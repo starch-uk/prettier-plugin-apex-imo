@@ -6,7 +6,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import * as prettier from 'prettier';
 import type { ParserOptions } from 'prettier';
-import { normalizeTypeNamesInCode } from './casing.js';
 import {
 	ARRAY_START_INDEX,
 	STRING_OFFSET,
@@ -21,8 +20,6 @@ const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
 const LAST_INDEX_OFFSET = 1;
 const ZERO_LENGTH = 0;
-const SINGLE_LINE_LENGTH = 1;
-const SIMPLE_ANNOTATION_MAX_LENGTH = 100;
 const NOT_FOUND_INDEX = -1;
 
 /**
@@ -155,6 +152,78 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 };
 
 /**
+ * Shared logic for formatting code blocks with prettier.
+ * @param normalizedCode - The normalized code to format.
+ * @param optionsWithPlugin - Parser options with plugin configured.
+ * @returns The formatted code string.
+ */
+const formatCodeWithPrettier = async (
+	normalizedCode: string,
+	optionsWithPlugin: ParserOptions & { plugins: unknown[] },
+): Promise<string> => {
+	try {
+		return await prettier.format(normalizedCode, {
+			...optionsWithPlugin,
+			parser: 'apex-anonymous',
+		});
+	} catch {
+		try {
+			return await prettier.format(normalizedCode, {
+				...optionsWithPlugin,
+				parser: 'apex',
+			});
+		} catch {
+			// Only add FORMAT_FAILED_PREFIX for completely unparseable text
+			// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
+			// should be preserved as-is without the prefix
+			// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
+			// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
+			const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(normalizedCode.trim());
+			const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(normalizedCode);
+			if (isSimpleAnnotation || (hasApexLikePatterns && !normalizedCode.trim().startsWith('@'))) {
+				// Preserve simple annotations or Apex-like code with syntax errors as-is
+				return normalizedCode;
+			}
+			// Add prefix for complex annotations or completely unparseable text
+			return `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
+		}
+	}
+};
+
+/**
+ * Preserves blank lines after closing braces when followed by annotations or access modifiers.
+ * @param formatted - The formatted code string.
+ * @returns The formatted code with blank lines preserved.
+ */
+const preserveBlankLinesAfterBraces = (formatted: string): string => {
+	if (formatted.startsWith(FORMAT_FAILED_PREFIX)) return formatted;
+	
+	const formattedLines = formatted.trim().split('\n');
+	const resultLines: string[] = [];
+
+	for (let i = 0; i < formattedLines.length; i++) {
+		const formattedLine = formattedLines[i] ?? '';
+		const trimmedLine = formattedLine.trim();
+		resultLines.push(formattedLine);
+
+		// Insert blank line after } when followed by annotations or access modifiers
+		if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
+			const nextLine = formattedLines[i + 1]?.trim() ?? '';
+			if (
+				nextLine.length > 0 &&
+				(nextLine.startsWith('@') ||
+					/^(public|private|protected|static|final)\s/.test(nextLine))
+			) {
+				// Insert blank line to preserve structure from original
+				resultLines.push('');
+			}
+		}
+	}
+
+	return resultLines.join('\n');
+};
+
+/**
  * Formats a CodeBlockToken using prettier with our plugin and effective page width.
  * @param token - The code block token to format.
  * @param effectiveWidth - The effective page width (reduced from printWidth).
@@ -173,77 +242,19 @@ const formatCodeBlockToken = async ({
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<CodeBlockToken> => {
-	// Normalize annotations first
 	const normalizedCode = normalizeAnnotationNamesInText(token.rawCode);
-
-	// Use effective width for formatting
 	const optionsWithPlugin = {
 		...embedOptions,
 		printWidth: effectiveWidth,
 		plugins: [currentPluginInstance?.default ?? (await import('./index.js')).default],
 	};
-
-	let formatted;
-	try {
-		formatted = await prettier.format(normalizedCode, {
-			...optionsWithPlugin,
-			parser: 'apex-anonymous',
-		});
-	} catch {
-		try {
-			formatted = await prettier.format(normalizedCode, {
-				...optionsWithPlugin,
-				parser: 'apex',
-			});
-		} catch {
-			// Only add FORMAT_FAILED_PREFIX for completely unparseable text
-			// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
-			// should be preserved as-is without the prefix
-			// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
-			// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
-			const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(normalizedCode.trim());
-			const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(normalizedCode);
-			if (isSimpleAnnotation || (hasApexLikePatterns && !normalizedCode.trim().startsWith('@'))) {
-				// Preserve simple annotations or Apex-like code with syntax errors as-is
-				formatted = normalizedCode;
-			} else {
-				// Add prefix for complex annotations or completely unparseable text
-				formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
-			}
-		}
-	}
-
-	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
-	// This preserves the structure from original code (blank lines after } before annotations/methods)
-	if (!formatted.startsWith(FORMAT_FAILED_PREFIX)) {
-		const formattedLines = formatted.trim().split('\n');
-		const resultLines: string[] = [];
-
-		for (let i = 0; i < formattedLines.length; i++) {
-			const formattedLine = formattedLines[i] ?? '';
-			const trimmedLine = formattedLine.trim();
-			resultLines.push(formattedLine);
-
-			// Insert blank line after } when followed by annotations or access modifiers
-			if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
-				const nextLine = formattedLines[i + 1]?.trim() ?? '';
-				if (
-					nextLine.length > 0 &&
-					(nextLine.startsWith('@') ||
-						/^(public|private|protected|static|final)\s/.test(nextLine))
-				) {
-					// Insert blank line to preserve structure from original
-					resultLines.push('');
-				}
-			}
-		}
-
-		formatted = resultLines.join('\n');
-	}
+	
+	const formatted = await formatCodeWithPrettier(normalizedCode, optionsWithPlugin);
+	const formattedWithBlankLines = preserveBlankLinesAfterBraces(formatted);
 
 	return {
 		...token,
-		formattedCode: formatted.replace(/\n+$/, ''),
+		formattedCode: formattedWithBlankLines.replace(/\n+$/, ''),
 	};
 };
 
@@ -264,46 +275,13 @@ const formatCodeBlockForComment = async ({
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<readonly string[]> => {
-	// Normalize annotations first
 	const normalizedCode = normalizeAnnotationNamesInText(codeContent);
-
-	// Format using prettier
 	const optionsWithPlugin = {
 		...embedOptions,
 		plugins: [currentPluginInstance?.default ?? (await import('./index.js')).default],
 	};
-
-	let formatted;
-	try {
-		formatted = await prettier.format(normalizedCode, {
-			...optionsWithPlugin,
-			parser: 'apex-anonymous',
-		});
-	} catch {
-		try {
-			formatted = await prettier.format(normalizedCode, {
-				...optionsWithPlugin,
-				parser: 'apex',
-			});
-		} catch {
-			// Only add FORMAT_FAILED_PREFIX for completely unparseable text
-			// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
-			// should be preserved as-is without the prefix
-			// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
-			// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
-			const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(normalizedCode.trim());
-			const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(normalizedCode);
-			if (isSimpleAnnotation || (hasApexLikePatterns && !normalizedCode.trim().startsWith('@'))) {
-				// Preserve simple annotations or Apex-like code with syntax errors as-is
-				formatted = normalizedCode;
-			} else {
-				// Add prefix for complex annotations or completely unparseable text
-				formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
-			}
-		}
-	}
-
-	// Split into lines and return as array
+	
+	const formatted = await formatCodeWithPrettier(normalizedCode, optionsWithPlugin);
 	return formatted.replace(/\n+$/, '').split('\n');
 };
 
@@ -313,6 +291,5 @@ export {
 	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
 	formatCodeBlockToken,
-	formatCodeBlockForComment,
 	processCodeBlockLines,
 };
