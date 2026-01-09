@@ -764,7 +764,15 @@ const customPrintComment = (
 			const { join, hardline } = prettier.doc.builders;
 			return [join(hardline, lines)];
 		} else {
-			// Non-ApexDoc comments: normalize annotations in text
+			// Check if this is an inline comment (starts with //)
+			// Inline comments should be passed through unchanged, like the reference implementation
+			const isInlineComment = commentValue.trim().startsWith('//');
+			if (isInlineComment) {
+				// Return inline comment as-is (no normalization needed)
+				return commentValue;
+			}
+
+			// Non-ApexDoc block comments: normalize annotations in text
 			// Parse to tokens, normalize annotations, then convert back
 			const tokens = parseCommentToTokens(commentValue);
 			const normalizedTokens = normalizeAnnotationTokens(tokens);
