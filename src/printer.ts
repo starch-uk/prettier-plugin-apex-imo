@@ -233,8 +233,18 @@ const createWrappedPrinter = (
 						const plugins = pluginInstance
 							? [pluginInstance.default, ...(options.plugins || [])]
 							: options.plugins;
+						
+						// Calculate effective width: account for comment prefix
+						// In class context, comments are typically indented by tabWidth (usually 2 spaces)
+						// So the full prefix is "  * " (tabWidth + 3 for " * ")
+						// For safety, we use a conservative estimate: tabWidth + 3
+						const tabWidthValue = options.tabWidth || 2;
+						const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
+						const effectiveWidth = (options.printWidth || 80) - commentPrefixLength;
+						
 						let formattedCode = await prettier.format(codeContent, {
 							...options,
+							printWidth: effectiveWidth,
 							parser: 'apex-anonymous',
 							plugins,
 						});
