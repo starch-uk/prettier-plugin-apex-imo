@@ -233,11 +233,40 @@ const createWrappedPrinter = (
 						const plugins = pluginInstance
 							? [pluginInstance.default, ...(options.plugins || [])]
 							: options.plugins;
-						const formattedCode = await prettier.format(codeContent, {
+						let formattedCode = await prettier.format(codeContent, {
 							...options,
 							parser: 'apex-anonymous',
 							plugins,
 						});
+
+						// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
+						// This preserves the structure from original code (blank lines after } before annotations/methods)
+						const formattedLines = formattedCode.trim().split('\n');
+						const resultLines: string[] = [];
+
+						for (let i = 0; i < formattedLines.length; i++) {
+							const formattedLine = formattedLines[i] ?? '';
+							const trimmedLine = formattedLine.trim();
+							resultLines.push(formattedLine);
+
+							// Insert blank line after } when followed by annotations or access modifiers
+							// This preserves the structure from original code
+							if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
+								const nextLineRaw = formattedLines[i + 1] ?? '';
+								const nextLine = nextLineRaw.trim();
+								// Check if next line starts with annotation or access modifier
+								if (
+									nextLine.length > 0 &&
+									(nextLine.startsWith('@') ||
+										/^(public|private|protected|static|final)\s/.test(nextLine))
+								) {
+									// Insert blank line - it will become ' *' when mapped with comment prefix
+									resultLines.push('');
+								}
+							}
+						}
+
+						formattedCode = resultLines.join('\n');
 
 						// Replace the code block with formatted version
 						// Add comment prefix (* ) to each code line to preserve comment structure

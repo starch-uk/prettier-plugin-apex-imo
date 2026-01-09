@@ -83,7 +83,19 @@ const extractCodeFromBlock = (
 				})
 				.join('\n')
 		: rawCode;
-	const trimmedCode = code.trim();
+	// Preserve blank lines: remove only leading/trailing blank lines, keep middle ones
+	// Split into lines to process leading/trailing separately
+	const codeLines = code.split('\n');
+	// Remove leading blank lines
+	while (codeLines.length > 0 && (codeLines[0]?.trim().length === 0)) {
+		codeLines.shift();
+	}
+	// Remove trailing blank lines
+	while (codeLines.length > 0 && (codeLines[codeLines.length - 1]?.trim().length === 0)) {
+		codeLines.pop();
+	}
+	// Join back - middle blank lines are preserved
+	const trimmedCode = codeLines.join('\n');
 	return { code: trimmedCode, endPos: pos };
 };
 
