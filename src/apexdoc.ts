@@ -853,38 +853,47 @@ const detectAnnotationsInTokens = (
 							.trim();
 
 						// Collect continuation lines for this annotation
+						// Start with the content already extracted from the current line
 						let annotationContent = content;
 						let continuationIndex = lineIndex + 1;
 						let extractedContinuationLines: string[] = [];
 						
 						if (tokenLines.length === 1 && normalizedComment) {
-							// Find the annotation in the normalized comment and collect continuation lines
-							// Stop at @, */, end of string, or {@code
-							const annotationMatch = normalizedComment.match(new RegExp(`@${annotationName}\\s+([^@{]*?)(?=@|\\*/|\\{@code|$)`, 's'));
-							if (annotationMatch && annotationMatch[INDEX_ONE]) {
-								// Extract full annotation content including continuation lines
-								// Remove trailing comment prefixes that might be captured before {@code
-								let rawContent = annotationMatch[INDEX_ONE];
-								// Trim trailing whitespace and comment prefixes (like " * " that appear before {@code)
-								rawContent = rawContent.replace(/\s*\*\s*$/, '').trim();
-								// Also remove any { characters that might have been included
-								if (rawContent.includes('{')) {
-									rawContent = rawContent.substring(0, rawContent.indexOf('{')).trim();
+							// Find continuation lines for this annotation in the normalized comment
+							// Use the content we already extracted from the line, not re-extract from normalizedComment
+							// This prevents issues when multiple @group annotations exist - each gets its own content
+							// Find the position of this specific annotation in the normalized comment
+							// by matching the line that contains this annotation
+							const currentLineText = line.replace(/^\s*\*\s*/, '').trim();
+							// Escape special regex characters in the annotation name and content
+							const escapedAnnotationName = annotationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+							const escapedContent = content.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+							// Find this specific annotation by matching the line with both name and content
+							const specificAnnotationRegex = new RegExp(
+								`@${escapedAnnotationName}\\s+${escapedContent}([^@{]*?)(?=\\n\\s*\\*\\s*@|\\*/|\\{@code|$)`,
+								's',
+							);
+							const continuationMatch = normalizedComment.match(specificAnnotationRegex);
+							if (continuationMatch && continuationMatch[INDEX_ONE]) {
+								// Extract continuation lines (content after the initial content on the same line)
+								let continuationContent = continuationMatch[INDEX_ONE];
+								// Trim trailing whitespace and comment prefixes
+								continuationContent = continuationContent.replace(/\s*\*\s*$/, '').trim();
+								// Remove any { characters that might have been included
+								if (continuationContent.includes('{')) {
+									continuationContent = continuationContent.substring(0, continuationContent.indexOf('{')).trim();
 								}
-								const fullContentLines = rawContent
+								const continuationLines = continuationContent
 									.split('\n')
 									.map((l) => l.replace(/^\s*\*\s*/, '').trim())
 									.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'));
-								// Extract continuation lines (everything after the first line)
-								if (fullContentLines.length > 1) {
-									extractedContinuationLines = fullContentLines.slice(1);
-									// Mark continuation lines as consumed to prevent them from being added as text tokens
+								if (continuationLines.length > 0) {
+									extractedContinuationLines = continuationLines;
+									// Mark continuation lines as consumed
 									for (const continuationLine of extractedContinuationLines) {
 										consumedContent.add(continuationLine.trim());
 									}
-									annotationContent = fullContentLines.join(' ');
-								} else if (fullContentLines.length === 1) {
-									annotationContent = fullContentLines[0] ?? content;
+									annotationContent = `${content} ${continuationLines.join(' ')}`;
 								}
 								// When using normalizedComment, we can't skip lines in current token, so just continue
 								continuationIndex = lineIndex + 1;
@@ -1130,9 +1139,29 @@ const normalizeAnnotationTokens = (
 				let normalizedContent = token.content;
 				// Special handling for @group annotations - normalize the group name
 				if (lowerName === 'group' && token.content) {
-					const lowerContent = token.content.toLowerCase().trim();
-					const mappedValue = APEXDOC_GROUP_NAMES[lowerContent as keyof typeof APEXDOC_GROUP_NAMES];
-					normalizedContent = mappedValue ?? token.content;
+					// Extract the first word (group name) and any remaining content (description)
+					const contentTrimmed = token.content.trim();
+					const firstSpaceIndex = contentTrimmed.indexOf(' ');
+					const groupName = firstSpaceIndex > 0 
+						? contentTrimmed.substring(0, firstSpaceIndex)
+						: contentTrimmed;
+					const description = firstSpaceIndex > 0 
+						? contentTrimmed.substring(firstSpaceIndex + 1)
+						: '';
+					
+					// Normalize only the group name (first word)
+					const lowerGroupName = groupName.toLowerCase();
+					const mappedValue = APEXDOC_GROUP_NAMES[lowerGroupName as keyof typeof APEXDOC_GROUP_NAMES];
+					
+					// Reconstruct content with normalized group name and original description
+					if (mappedValue) {
+						normalizedContent = description.length > 0 
+							? `${mappedValue} ${description}`
+							: mappedValue;
+					} else {
+						// Group name not in mapping, keep original
+						normalizedContent = token.content;
+					}
 				}
 				return { ...token, name: lowerName, content: normalizedContent } satisfies AnnotationToken;
 			}
