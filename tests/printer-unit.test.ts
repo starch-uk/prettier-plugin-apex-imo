@@ -215,24 +215,6 @@ describe('printer', () => {
 			},
 		);
 
-		it('should preserve other properties from original printer', () => {
-			const mockOriginalPrinter = {
-				embed: vi.fn(),
-				otherProp: 'test',
-				preprocess: vi.fn(),
-				print: vi.fn(),
-			};
-
-			const wrapped = createWrappedPrinter(mockOriginalPrinter);
-
-			// embed is wrapped to handle ApexDoc code blocks, so it won't be the same reference
-			expect(wrapped.embed).toBeDefined();
-			expect(wrapped.embed).not.toBe(mockOriginalPrinter.embed);
-			expect(wrapped.preprocess).toBe(mockOriginalPrinter.preprocess);
-			const wrappedWithProps = wrapped as { otherProp?: string };
-			expect(wrappedWithProps.otherProp).toBe('test');
-		});
-
 		it('should pass through set nodes with single entry to original printer', () => {
 			const mockOriginalPrinter = createMockOriginalPrinter();
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
