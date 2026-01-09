@@ -23,7 +23,7 @@ import {
 	normalizeTypeName,
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
-import { getNodeClassOptional } from './utils.js';
+import { getNodeClassOptional, createNodeClassGuard } from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
 import { extractCodeFromBlock, CODE_TAG, CODE_TAG_LENGTH } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
@@ -31,14 +31,9 @@ import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
-const isTypeRef = (node: Readonly<ApexNode> | null | undefined): boolean => {
-	if (!node || typeof node !== 'object') return false;
-	const nodeClass = getNodeClassOptional(node);
-	return (
-		nodeClass !== undefined &&
-		(nodeClass === TYPEREF_CLASS || nodeClass.includes('TypeRef'))
-	);
-};
+const isTypeRef = createNodeClassGuard<ApexNode>(
+	(cls) => cls !== undefined && (cls === TYPEREF_CLASS || cls.includes('TypeRef')),
+);
 
 /**
  * Make a typeDoc breakable by adding break points at the first comma in generic types.

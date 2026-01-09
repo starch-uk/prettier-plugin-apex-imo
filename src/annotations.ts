@@ -15,7 +15,7 @@ import {
 	APEX_ANNOTATIONS,
 	APEX_ANNOTATION_OPTION_NAMES,
 } from './refs/annotations.js';
-import { getNodeClass } from './utils.js';
+import { getNodeClass, createNodeClassGuard } from './utils.js';
 import { findApexDocComments } from './apexdoc.js';
 
 // Regex is used here for preprocessing text before parsing (annotation normalization).
@@ -40,10 +40,7 @@ const MIN_PARAM_LENGTH_FOR_MULTILINE = 40;
 const MIN_PARAMS_FOR_MULTILINE = 1;
 const EMPTY_PARAMETERS_LENGTH = 0;
 
-const isAnnotation = (
-	node: Readonly<ApexNode>,
-): node is Readonly<ApexAnnotationNode> =>
-	getNodeClass(node) === ANNOTATION_CLASS;
+const isAnnotation = createNodeClassGuard<ApexAnnotationNode>(ANNOTATION_CLASS);
 
 const normalizeAnnotationName = (name: string): string =>
 	APEX_ANNOTATIONS[name.toLowerCase()] ?? name;

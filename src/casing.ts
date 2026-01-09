@@ -6,7 +6,7 @@
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { APEX_OBJECT_SUFFIXES } from './refs/object-suffixes.js';
-import { getNodeClassOptional } from './utils.js';
+import { getNodeClassOptional, createNodeClassGuard } from './utils.js';
 import { getCurrentPluginInstance } from './printer.js';
 
 /**
@@ -78,8 +78,9 @@ const isIdentifier = (
 	if (
 		nodeClass === IDENTIFIER_CLASS ||
 		(nodeClass?.includes('Identifier') ?? false)
-	)
+	) {
 		return true;
+	}
 	return 'value' in node && typeof node['value'] === 'string';
 };
 
