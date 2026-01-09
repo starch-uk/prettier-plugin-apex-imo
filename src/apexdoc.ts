@@ -342,10 +342,17 @@ const tokensToApexDocString = (
 				}
 			}
 
+			// Remove trailing empty lines from annotation tokens to avoid extra blank lines
+			// when followed by code blocks in tokensToCommentString
+			const cleanedLines = [...lines];
+			while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
+				cleanedLines.pop();
+			}
+			
 			apexDocTokens.push({
 				type: 'text',
-				content: lines.join('\n'),
-				lines,
+				content: cleanedLines.join('\n'),
+				lines: cleanedLines,
 			} satisfies TextToken);
 		} else if (token.type === 'code') {
 			// Render CodeBlockTokens as text tokens with {@code ...} format
@@ -417,10 +424,15 @@ const tokensToApexDocString = (
 				token.lines,
 				effectiveWidth,
 			);
+			// Remove trailing empty lines to avoid extra blank lines before code blocks
+			const cleanedLines = [...wrappedLines];
+			while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
+				cleanedLines.pop();
+			}
 			apexDocTokens.push({
 				...token,
-				content: wrappedLines.join('\n'),
-				lines: wrappedLines,
+				content: cleanedLines.join('\n'),
+				lines: cleanedLines,
 			} satisfies TextToken);
 		} else if (token.type === 'paragraph') {
 			// Wrap paragraph tokens based on effective width
@@ -429,10 +441,15 @@ const tokensToApexDocString = (
 				token.lines,
 				effectiveWidth,
 			);
+			// Remove trailing empty lines to avoid extra blank lines before code blocks
+			const cleanedLines = [...wrappedLines];
+			while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
+				cleanedLines.pop();
+			}
 			apexDocTokens.push({
 				...token,
-				content: wrappedLines.join('\n'),
-				lines: wrappedLines,
+				content: cleanedLines.join('\n'),
+				lines: cleanedLines,
 			} satisfies ParagraphToken);
 		} else {
 			apexDocTokens.push(token);
@@ -904,11 +921,19 @@ const detectCodeBlockTokens = (
 					if (currentPos < content.length) {
 						const remainingText = content.substring(currentPos);
 						if (remainingText.length > EMPTY) {
-							newTokens.push({
-								type: 'text',
-								content: remainingText,
-								lines: remainingText.split('\n'),
-							} satisfies TextToken);
+							// Split into lines and filter out empty trailing lines
+							const splitLines = remainingText.split('\n');
+							const cleanedLines = [...splitLines];
+							while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
+								cleanedLines.pop();
+							}
+							if (cleanedLines.length > 0) {
+								newTokens.push({
+									type: 'text',
+									content: remainingText,
+									lines: cleanedLines,
+								} satisfies TextToken);
+							}
 						}
 					}
 					break;
@@ -917,13 +942,17 @@ const detectCodeBlockTokens = (
 				if (codeTagStart > lastMatchEnd) {
 					const textBeforeCode = content.substring(lastMatchEnd, codeTagStart);
 					if (textBeforeCode.length > EMPTY) {
-						const lines = textBeforeCode.split('\n').filter((line: string) => line.trim().length > 0);
-						if (lines.length > 0) {
-							newTokens.push({
-								type: 'text',
-								content: textBeforeCode,
-								lines: lines.map((line: string) => ` * ${line}`),
-							} satisfies TextToken);
+						// Remove trailing newlines from textBeforeCode before splitting to avoid empty trailing lines
+						const cleanedText = textBeforeCode.replace(/\n+$/, '');
+						if (cleanedText.length > EMPTY) {
+							const lines = cleanedText.split('\n').filter((line: string) => line.trim().length > 0);
+							if (lines.length > 0) {
+								newTokens.push({
+									type: 'text',
+									content: cleanedText,
+									lines: lines.map((line: string) => ` * ${line}`),
+								} satisfies TextToken);
+							}
 						}
 					}
 				}

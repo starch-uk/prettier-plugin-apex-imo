@@ -486,9 +486,37 @@ const tokensToCommentString = (
 	const commentPrefix = `${baseIndent} * `;
 	const lines: string[] = [`${baseIndent}/**`];
 
-	for (const token of tokens) {
+	for (let i = 0; i < tokens.length; i++) {
+		const token = tokens[i];
+		const nextToken = i + 1 < tokens.length ? tokens[i + 1] : null;
+		const isFollowedByCodeBlock = nextToken?.type === 'code';
+		
 		if (token.type === 'text') {
-			for (const line of token.lines) {
+			// Filter out empty trailing lines if followed by a code block
+			const linesToProcess = isFollowedByCodeBlock
+				? (() => {
+					const filtered = [...token.lines];
+					// Remove trailing empty lines
+					while (filtered.length > 0 && filtered[filtered.length - 1]?.trim().length === 0) {
+						filtered.pop();
+					}
+					// Remove trailing newlines from the last line
+					if (filtered.length > 0) {
+						const lastIndex = filtered.length - 1;
+						let lastLine = filtered[lastIndex];
+						if (lastLine && lastLine.endsWith('\n')) {
+							filtered[lastIndex] = lastLine.slice(0, -1);
+						}
+					}
+					return filtered;
+				})()
+				: token.lines;
+			
+			for (const line of linesToProcess) {
+				// Skip empty lines that would create a blank line before the code block
+				if (isFollowedByCodeBlock && line.trim().length === 0) {
+					continue;
+				}
 				// Preserve existing structure if line already has prefix
 				if (line.trimStart().startsWith('*')) {
 					lines.push(line);
@@ -498,7 +526,14 @@ const tokensToCommentString = (
 			}
 		} else if (token.type === 'paragraph') {
 			// Use wrapped lines if available, otherwise use original lines
-			for (const line of token.lines) {
+			for (let j = 0; j < token.lines.length; j++) {
+				let line = token.lines[j];
+				const isLastLine = j === token.lines.length - 1;
+				// Remove trailing newline from the last line of a paragraph token if it's followed by a code block
+				// to avoid an extra blank line before the code block
+				if (isLastLine && isFollowedByCodeBlock && line.endsWith('\n')) {
+					line = line.slice(0, -1);
+				}
 				if (line.trimStart().startsWith('*')) {
 					lines.push(line);
 				} else {
@@ -506,6 +541,19 @@ const tokensToCommentString = (
 				}
 			}
 		} else if (token.type === 'code') {
+			// Remove any trailing empty lines before adding the code block
+			// to avoid an extra blank line before the code block
+			// Keep at least one line (the opening /**)
+			// Check up to the last 2 lines (in case there are multiple empty lines)
+			for (let checkIndex = lines.length - 1; checkIndex > 0 && lines.length > 1; checkIndex--) {
+				const lineToCheck = lines[checkIndex];
+				if (lineToCheck && lineToCheck.trim().length === 0) {
+					lines.splice(checkIndex, 1);
+				} else {
+					break; // Stop when we find a non-empty line
+				}
+			}
+			
 			// Use formatted code if available, otherwise use raw code
 			const codeToUse = token.formattedCode ?? token.rawCode;
 			// Handle empty code blocks - render {@code} even if content is empty
