@@ -179,7 +179,7 @@ const normalizeSingleApexDocComment = (
 		const bodyIndent = commentIndent === 0 ? 2 : 0;
 		const actualPrefixLength = commentPrefix.length + bodyIndent;
 		const annotationEffectiveWidth = printWidth - actualPrefixLength;
-		
+
 		// Pass the actual prefix length to wrapAnnotationTokens so it can calculate first line width correctly
 		tokens = wrapAnnotationTokens(
 			tokens,
@@ -781,6 +781,8 @@ const detectAnnotationsInTokens = (
 	normalizedComment?: string,
 ): readonly CommentToken[] => {
 	const newTokens: CommentToken[] = [];
+	// Track content that has been extracted as annotation continuation to avoid duplicating it as text tokens
+	const consumedContent = new Set<string>();
 	// Annotation pattern: @ followed by identifier, possibly with content
 	// After detectCodeBlockTokens, lines have their " * " prefix stripped, so we need to match lines with or without prefix
 	// Pattern matches: (optional prefix) @ (name) (content)
@@ -819,9 +821,9 @@ const detectAnnotationsInTokens = (
 							.trim();
 
 						// Collect continuation lines for this annotation
-						// If token has only 1 line but content suggests multi-line, use normalizedComment to find continuation
 						let annotationContent = content;
 						let continuationIndex = lineIndex + 1;
+						let extractedContinuationLines: string[] = [];
 						
 						if (tokenLines.length === 1 && normalizedComment) {
 							// Find the annotation in the normalized comment and collect continuation lines
@@ -837,19 +839,26 @@ const detectAnnotationsInTokens = (
 								if (rawContent.includes('{')) {
 									rawContent = rawContent.substring(0, rawContent.indexOf('{')).trim();
 								}
-								const fullContent = rawContent
+								const fullContentLines = rawContent
 									.split('\n')
 									.map((l) => l.replace(/^\s*\*\s*/, '').trim())
-									.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'))
-									.join(' ');
-								if (fullContent.length > content.length) {
-									annotationContent = fullContent;
-									// When using normalizedComment, we can't skip lines, so just continue
-									continuationIndex = lineIndex + 1;
+									.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'));
+								// Extract continuation lines (everything after the first line)
+								if (fullContentLines.length > 1) {
+									extractedContinuationLines = fullContentLines.slice(1);
+									// Mark continuation lines as consumed to prevent them from being added as text tokens
+									for (const continuationLine of extractedContinuationLines) {
+										consumedContent.add(continuationLine.trim());
+									}
+									annotationContent = fullContentLines.join(' ');
+								} else if (fullContentLines.length === 1) {
+									annotationContent = fullContentLines[0] ?? content;
 								}
+								// When using normalizedComment, we can't skip lines in current token, so just continue
+								continuationIndex = lineIndex + 1;
 							}
 						} else {
-							// Use tokenLines to collect continuation lines
+							// Use tokenLines to collect continuation lines (only from current token)
 							// Look ahead for continuation lines (lines that don't start with @ and aren't empty)
 							while (continuationIndex < tokenLines.length) {
 								const continuationLine = tokenLines[continuationIndex] ?? '';
@@ -886,10 +895,21 @@ const detectAnnotationsInTokens = (
 			}
 
 			if (!hasAnnotations) {
+				// Check if this token's content was consumed as annotation continuation
+				// Check if all non-empty lines (that aren't annotations or code blocks) were consumed
+				const tokenLinesToCheck = token.content
+					.split('\n')
+					.map((l) => l.replace(/^\s*\*\s*/, '').trim())
+					.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'));
+				// Skip if all lines were consumed
+				if (tokenLinesToCheck.length > 0 && tokenLinesToCheck.every((l) => consumedContent.has(l))) {
+					continue;
+				}
 				newTokens.push(token);
 			} else if (processedLines.length > EMPTY) {
 				const remainingContent = processedLines
 					.map((l) => l.replace(/^\s*\*\s*/, '').trim())
+					.filter((l) => l.length > EMPTY && !consumedContent.has(l))
 					.join(' ');
 				if (remainingContent.length > EMPTY) {
 					newTokens.push({
