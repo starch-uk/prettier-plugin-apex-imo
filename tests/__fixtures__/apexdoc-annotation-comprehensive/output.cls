@@ -20,7 +20,7 @@ public class ComprehensiveTest {
   }
 
   /**
-   * Test with {@code} blocks between annotations.
+   * Test with code blocks between annotations.
    * @author Developer
    * {@code String test = 'example'; }
    * @since 1.0

@@ -241,7 +241,10 @@ const createWrappedPrinter = (
 
 						// Replace the code block with formatted version
 						// Add comment prefix (* ) to each code line to preserve comment structure
-						const beforeCode = result.substring(0, startIndex + codeTag.length);
+						// beforeCode should include everything BEFORE {@code, not including {@code itself
+						// beforeCode should include everything BEFORE {@code, not including {@code itself
+						// This ensures we can properly replace {@code ... } with the formatted code block
+						const beforeCode = result.substring(0, startIndex);
 						const afterCode = result.substring(extraction.endPos);
 						// Add * prefix to each formatted code line
 						// Prettier normalizes comment indentation to a single space before *
@@ -249,8 +252,10 @@ const createWrappedPrinter = (
 						const prefixedCodeLines = formattedCodeLines.map((line) =>
 							line ? ` * ${line}` : ' *',
 						);
-						// Add closing } tag with * prefix to match comment structure
-						const newCodeBlock = '\n' + prefixedCodeLines.join('\n') + '\n * }\n';
+						// Add {@code tag with * prefix and closing } tag with * prefix to match comment structure
+						// Check if beforeCode already ends with a newline to avoid extra blank lines
+						const needsLeadingNewline = !beforeCode.endsWith('\n');
+						const newCodeBlock = (needsLeadingNewline ? '\n' : '') + ` * ${codeTag}\n` + prefixedCodeLines.join('\n') + '\n * }\n';
 						result = beforeCode + newCodeBlock + afterCode;
 						hasChanges = true;
 
