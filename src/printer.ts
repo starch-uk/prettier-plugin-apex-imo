@@ -27,6 +27,7 @@ import { getNodeClassOptional } from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
 import { normalizeTypeNamesInCode } from './casing.js';
+import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -242,12 +243,39 @@ const createWrappedPrinter = (
 						const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
 						const effectiveWidth = (options.printWidth || 80) - commentPrefixLength;
 						
-						let formattedCode = await prettier.format(codeContent, {
-							...options,
-							printWidth: effectiveWidth,
-							parser: 'apex-anonymous',
-							plugins,
-						});
+						let formattedCode;
+						try {
+							formattedCode = await prettier.format(codeContent, {
+								...options,
+								printWidth: effectiveWidth,
+								parser: 'apex-anonymous',
+								plugins,
+							});
+						} catch {
+							try {
+								formattedCode = await prettier.format(codeContent, {
+									...options,
+									printWidth: effectiveWidth,
+									parser: 'apex',
+									plugins,
+								});
+							} catch {
+								// Only add FORMAT_FAILED_PREFIX for completely unparseable text
+								// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
+								// should be preserved as-is without the prefix
+								// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
+								// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
+								const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(codeContent.trim());
+								const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(codeContent);
+								if (isSimpleAnnotation || (hasApexLikePatterns && !codeContent.trim().startsWith('@'))) {
+									// Preserve simple annotations or Apex-like code with syntax errors as-is
+									formattedCode = codeContent;
+								} else {
+									// Add prefix for complex annotations or completely unparseable text
+									formattedCode = `${FORMAT_FAILED_PREFIX}${codeContent}`;
+								}
+							}
+						}
 
 						// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
 						// This preserves the structure from original code (blank lines after } before annotations/methods)
@@ -748,8 +776,30 @@ const processCodeBlocksWithApexParser = async (
 				});
 				formattedCode = formattedCode.trim();
 			} catch {
-				// Fallback to type normalization only if full formatting fails
-				formattedCode = await normalizeTypeNamesInCode(cleanedCode);
+				try {
+					formattedCode = await prettier.format(cleanedCode, {
+						...options,
+						printWidth: effectiveWidth,
+						parser: 'apex',
+						plugins: [getCurrentPluginInstance()?.default ?? (await import('./index.js')).default],
+					});
+					formattedCode = formattedCode.trim();
+				} catch {
+					// Only add FORMAT_FAILED_PREFIX for completely unparseable text
+					// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
+					// should be preserved as-is without the prefix
+					// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
+					// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
+					const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(cleanedCode.trim());
+					const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(cleanedCode);
+					if (isSimpleAnnotation || (hasApexLikePatterns && !cleanedCode.trim().startsWith('@'))) {
+						// Preserve simple annotations or Apex-like code with syntax errors as-is
+						formattedCode = cleanedCode;
+					} else {
+						// Add prefix for complex annotations or completely unparseable text
+						formattedCode = `${FORMAT_FAILED_PREFIX}${cleanedCode}`;
+					}
+				}
 			}
 
 			// Replace the code block with formatted version

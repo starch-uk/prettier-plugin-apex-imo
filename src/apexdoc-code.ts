@@ -196,7 +196,20 @@ const formatCodeBlockToken = async ({
 				parser: 'apex',
 			});
 		} catch {
-			formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
+			// Only add FORMAT_FAILED_PREFIX for completely unparseable text
+			// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
+			// should be preserved as-is without the prefix
+			// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
+			// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
+			const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(normalizedCode.trim());
+			const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(normalizedCode);
+			if (isSimpleAnnotation || (hasApexLikePatterns && !normalizedCode.trim().startsWith('@'))) {
+				// Preserve simple annotations or Apex-like code with syntax errors as-is
+				formatted = normalizedCode;
+			} else {
+				// Add prefix for complex annotations or completely unparseable text
+				formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
+			}
 		}
 	}
 
@@ -273,7 +286,20 @@ const formatCodeBlockForComment = async ({
 				parser: 'apex',
 			});
 		} catch {
-			formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
+			// Only add FORMAT_FAILED_PREFIX for completely unparseable text
+			// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
+			// should be preserved as-is without the prefix
+			// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
+			// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
+			const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(normalizedCode.trim());
+			const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(normalizedCode);
+			if (isSimpleAnnotation || (hasApexLikePatterns && !normalizedCode.trim().startsWith('@'))) {
+				// Preserve simple annotations or Apex-like code with syntax errors as-is
+				formatted = normalizedCode;
+			} else {
+				// Add prefix for complex annotations or completely unparseable text
+				formatted = `${FORMAT_FAILED_PREFIX}${normalizedCode}`;
+			}
 		}
 	}
 
