@@ -848,9 +848,17 @@ const detectAnnotationsInTokens = (
 							ARRAY_START_INDEX,
 							match.index ?? ARRAY_START_INDEX,
 						);
-						const beforeText = beforeAnnotation
+						let beforeText = beforeAnnotation
 							.replace(/^\s*\*\s*/, '')
 							.trim();
+
+						// Filter out annotation patterns from beforeText to prevent duplication
+						// When multiple annotations are on the same line, beforeText may contain
+						// other annotations (e.g., "@Author John" before "@Since 1.0")
+						// Only use beforeText as followingText if it doesn't contain annotation patterns
+						if (beforeText.length > EMPTY && /@[a-zA-Z_][a-zA-Z0-9_]*/.test(beforeText)) {
+							beforeText = '';
+						}
 
 						// Collect continuation lines for this annotation
 						// Start with the content already extracted from the current line
