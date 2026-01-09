@@ -372,6 +372,33 @@ const tokensToApexDocString = (
 			if (!token.formattedCode) {
 				codeToUse = normalizeAnnotationNamesInText(codeToUse);
 			}
+			
+			// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
+			// This preserves structure from original code (blank lines after } before annotations/methods)
+			// Apply to both formattedCode and rawCode to ensure blank lines are preserved
+			const codeLines = codeToUse.trim().split('\n');
+			const resultLines: string[] = [];
+
+			for (let i = 0; i < codeLines.length; i++) {
+				const codeLine = codeLines[i] ?? '';
+				const trimmedLine = codeLine.trim();
+				resultLines.push(codeLine);
+
+				// Insert blank line after } when followed by annotations or access modifiers
+				if (trimmedLine.endsWith('}') && i < codeLines.length - 1) {
+					const nextLine = codeLines[i + 1]?.trim() ?? '';
+					if (
+						nextLine.length > 0 &&
+						(nextLine.startsWith('@') ||
+							/^(public|private|protected|static|final)\s/.test(nextLine))
+					) {
+						resultLines.push('');
+					}
+				}
+			}
+
+			codeToUse = resultLines.join('\n');
+			
 			// Handle empty code blocks - render {@code} even if content is empty
 			const isEmptyBlock = codeToUse.trim().length === EMPTY;
 			const lines: string[] = [];
@@ -417,7 +444,12 @@ const tokensToApexDocString = (
 
 				// Add comment prefix to each line
 				for (const codeLine of finalCodeLines) {
-					lines.push(`${commentPrefix}${codeLine}`);
+					if (codeLine.trim().length === EMPTY) {
+						// Empty line - just comment prefix without trailing space
+						lines.push(commentPrefix.trimEnd());
+					} else {
+						lines.push(`${commentPrefix}${codeLine}`);
+					}
 				}
 			}
 			

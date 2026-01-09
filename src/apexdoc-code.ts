@@ -200,6 +200,34 @@ const formatCodeBlockToken = async ({
 		}
 	}
 
+	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
+	// This preserves the structure from original code (blank lines after } before annotations/methods)
+	if (!formatted.startsWith(FORMAT_FAILED_PREFIX)) {
+		const formattedLines = formatted.trim().split('\n');
+		const resultLines: string[] = [];
+
+		for (let i = 0; i < formattedLines.length; i++) {
+			const formattedLine = formattedLines[i] ?? '';
+			const trimmedLine = formattedLine.trim();
+			resultLines.push(formattedLine);
+
+			// Insert blank line after } when followed by annotations or access modifiers
+			if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
+				const nextLine = formattedLines[i + 1]?.trim() ?? '';
+				if (
+					nextLine.length > 0 &&
+					(nextLine.startsWith('@') ||
+						/^(public|private|protected|static|final)\s/.test(nextLine))
+				) {
+					// Insert blank line to preserve structure from original
+					resultLines.push('');
+				}
+			}
+		}
+
+		formatted = resultLines.join('\n');
+	}
+
 	return {
 		...token,
 		formattedCode: formatted.replace(/\n+$/, ''),
