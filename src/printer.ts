@@ -242,7 +242,6 @@ const createWrappedPrinter = (
 						// Replace the code block with formatted version
 						// Add comment prefix (* ) to each code line to preserve comment structure
 						// beforeCode should include everything BEFORE {@code, not including {@code itself
-						// beforeCode should include everything BEFORE {@code, not including {@code itself
 						// This ensures we can properly replace {@code ... } with the formatted code block
 						const beforeCode = result.substring(0, startIndex);
 						const afterCode = result.substring(extraction.endPos);
@@ -255,7 +254,11 @@ const createWrappedPrinter = (
 						// Add {@code tag with * prefix and closing } tag with * prefix to match comment structure
 						// Check if beforeCode already ends with a newline to avoid extra blank lines
 						const needsLeadingNewline = !beforeCode.endsWith('\n');
-						const newCodeBlock = (needsLeadingNewline ? '\n' : '') + ` * ${codeTag}\n` + prefixedCodeLines.join('\n') + '\n * }\n';
+						// For empty code blocks, output {@code} on a single line (no content between braces)
+						const isEmptyBlock = codeContent.trim().length === 0;
+						const newCodeBlock = isEmptyBlock
+							? (needsLeadingNewline ? '\n' : '') + ` * ${codeTag}}\n`
+							: (needsLeadingNewline ? '\n' : '') + ` * ${codeTag}\n` + prefixedCodeLines.join('\n') + '\n * }\n';
 						result = beforeCode + newCodeBlock + afterCode;
 						hasChanges = true;
 

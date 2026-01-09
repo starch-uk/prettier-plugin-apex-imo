@@ -508,7 +508,12 @@ const tokensToCommentString = (
 		} else if (token.type === 'code') {
 			// Use formatted code if available, otherwise use raw code
 			const codeToUse = token.formattedCode ?? token.rawCode;
-			if (codeToUse.length > EMPTY) {
+			// Handle empty code blocks - render {@code} even if content is empty
+			const isEmptyBlock = codeToUse.trim().length === EMPTY;
+			if (isEmptyBlock) {
+				// Empty code block: render as {@code} on a single line
+				lines.push(`${commentPrefix}{@code}`);
+			} else if (codeToUse.length > EMPTY) {
 				// Format code block with comment prefix
 				// Split formatted code into lines and add prefix
 				const codeLines = codeToUse.split('\n');

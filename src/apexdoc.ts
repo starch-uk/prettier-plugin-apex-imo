@@ -354,8 +354,14 @@ const tokensToApexDocString = (
 			if (!token.formattedCode) {
 				codeToUse = normalizeAnnotationNamesInText(codeToUse);
 			}
-			if (codeToUse.length > EMPTY) {
-				const lines: string[] = [];
+			// Handle empty code blocks - render {@code} even if content is empty
+			const isEmptyBlock = codeToUse.trim().length === EMPTY;
+			const lines: string[] = [];
+			
+			if (isEmptyBlock) {
+				// Empty code block: render as {@code} on a single line
+				lines.push(`${commentPrefix}{@code}`);
+			} else if (codeToUse.length > EMPTY) {
 				const codeLines = codeToUse.split('\n');
 
 				// Check if the code already includes {@code} wrapper (from embed)
@@ -395,7 +401,9 @@ const tokensToApexDocString = (
 				for (const codeLine of finalCodeLines) {
 					lines.push(`${commentPrefix}${codeLine}`);
 				}
-
+			}
+			
+			if (lines.length > EMPTY) {
 				apexDocTokens.push({
 					type: 'text',
 					content: lines.join('\n'),
@@ -757,11 +765,6 @@ const detectAnnotationsInTokens = (
 			for (let lineIndex = 0; lineIndex < tokenLines.length; lineIndex++) {
 				const line = tokenLines[lineIndex] ?? '';
 				const matches = [...line.matchAll(annotationPattern)];
-				//#region agent log
-				if (line.includes('@group') || line.includes('@Group')) {
-					fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/apexdoc.ts:detectAnnotationsInTokens',message:'Checking line for @group',data:{line,matchesCount:matches.length,matches:matches.map(m=>({match:m[0],name:m[INDEX_ONE],content:m[INDEX_TWO]}))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'P'})}).catch(()=>{});
-				}
-				//#endregion
 				if (matches.length > EMPTY) {
 					hasAnnotations = true;
 					// Process each annotation match
@@ -770,11 +773,6 @@ const detectAnnotationsInTokens = (
 						const annotationName = match[INDEX_ONE] ?? '';
 						const content = (match[INDEX_TWO] ?? '').trim();
 						const lowerName = annotationName.toLowerCase();
-						//#region agent log
-						if (lowerName === 'group') {
-							fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/apexdoc.ts:detectAnnotationsInTokens',message:'Creating @group annotation token',data:{annotationName,lowerName,content,contentLength:content.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'Q'})}).catch(()=>{});
-						}
-						//#endregion
 
 						// Extract text before annotation if any
 						const beforeAnnotation = line.substring(
@@ -896,11 +894,6 @@ const detectCodeBlockTokens = (
 			const content = token.type === 'paragraph'
 				? token.lines.map((line: string) => line.replace(/^\s*\*\s?/, '')).join('\n')
 				: token.content;
-			//#region agent log
-			if (content.includes('@group') || content.includes('@Group')) {
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/apexdoc.ts:detectCodeBlockTokens',message:'Processing token with @group',data:{tokenType:token.type,contentSubstring:content.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'K'})}).catch(()=>{});
-			}
-			//#endregion
 			let currentPos = ARRAY_START_INDEX;
 			let lastMatchEnd = ARRAY_START_INDEX;
 
@@ -970,35 +963,17 @@ const normalizeAnnotationTokens = (
 	return tokens.map((token) => {
 		if (token.type === 'annotation') {
 			const lowerName = token.name.toLowerCase();
-			//#region agent log
-			if (lowerName === 'group' || lowerName === 'deprecated' || token.name === 'Group' || token.name === 'Deprecated') {
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/apexdoc.ts:normalizeAnnotationTokens',message:'Processing annotation token',data:{tokenName:token.name,lowerName,isApexDoc:APEXDOC_ANNOTATIONS.includes(lowerName as never),content:token.content,contentLength:token.content?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'L'})}).catch(()=>{});
-			}
-			//#endregion
 			if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
 				let normalizedContent = token.content;
 				// Special handling for @group annotations - normalize the group name
 				if (lowerName === 'group' && token.content) {
 					const lowerContent = token.content.toLowerCase().trim();
 					const mappedValue = APEXDOC_GROUP_NAMES[lowerContent as keyof typeof APEXDOC_GROUP_NAMES];
-					//#region agent log
-					fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/apexdoc.ts:normalizeAnnotationTokens',message:'Normalizing @group content',data:{tokenContent:token.content,lowerContent,mappedValue,normalizedContent:normalizedContent},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'N'})}).catch(()=>{});
-					//#endregion
 					normalizedContent = mappedValue ?? token.content;
 				}
-				//#region agent log
-				if (lowerName === 'group') {
-					fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/apexdoc.ts:normalizeAnnotationTokens',message:'After @group normalization',data:{lowerName,normalizedContent,name:lowerName},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'O'})}).catch(()=>{});
-				}
-				//#endregion
 				return { ...token, name: lowerName, content: normalizedContent } satisfies AnnotationToken;
 			}
 		} else if (token.type === 'text' || token.type === 'paragraph') {
-			//#region agent log
-			if (token.content.includes('@group') || token.content.includes('@Group')) {
-				fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/apexdoc.ts:normalizeAnnotationTokens',message:'Processing text/paragraph token with @group',data:{tokenType:token.type,contentSubstring:token.content.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'M'})}).catch(()=>{});
-			}
-			//#endregion
 			// Text/paragraph tokens should NOT contain ApexDoc annotations as text after detectAnnotationsInTokens
 			// ApexDoc annotations should have been converted to annotation tokens by detectAnnotationsInTokens
 			// If any annotations remain as text, they're either:
