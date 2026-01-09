@@ -323,6 +323,15 @@ const tokensToApexDocString = (
 			const lines: string[] = [];
 			const annotationName = token.name;
 
+			// Add followingText before annotation if it exists
+			if (token.followingText && token.followingText.trim().length > EMPTY) {
+				// followingText doesn't have prefixes, so add them
+				const followingLines = token.followingText.split('\n').filter((line: string) => line.trim().length > EMPTY);
+				for (const line of followingLines) {
+					lines.push(`${commentPrefix}${line.trim()}`);
+				}
+			}
+
 			// First line includes the @annotation name
 			const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
 			const firstLine =
@@ -349,11 +358,13 @@ const tokensToApexDocString = (
 				cleanedLines.pop();
 			}
 			
-			apexDocTokens.push({
-				type: 'text',
-				content: cleanedLines.join('\n'),
-				lines: cleanedLines,
-			} satisfies TextToken);
+			if (cleanedLines.length > EMPTY) {
+				apexDocTokens.push({
+					type: 'text',
+					content: cleanedLines.join('\n'),
+					lines: cleanedLines,
+				} satisfies TextToken);
+			}
 		} else if (token.type === 'code') {
 			// Render CodeBlockTokens as text tokens with {@code ...} format
 			let codeToUse = token.formattedCode ?? token.rawCode;
@@ -425,14 +436,21 @@ const tokensToApexDocString = (
 				effectiveWidth,
 			);
 			// Remove trailing empty lines to avoid extra blank lines before code blocks
-			const cleanedLines = [...wrappedLines];
+			// Split wrapped lines by newlines first (in case wrapTextContent returned multi-line strings)
+			const allLines: string[] = [];
+			for (const wrappedLine of wrappedLines) {
+				allLines.push(...wrappedLine.split('\n'));
+			}
+			const cleanedLines = [...allLines];
 			while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
 				cleanedLines.pop();
 			}
+			// Add prefixes back to wrapped lines using commentPrefix (no need to extract from token.lines)
+			const linesWithPrefix = cleanedLines.map((line: string) => `${commentPrefix}${line.trim()}`);
 			apexDocTokens.push({
 				...token,
 				content: cleanedLines.join('\n'),
-				lines: cleanedLines,
+				lines: linesWithPrefix,
 			} satisfies TextToken);
 		} else if (token.type === 'paragraph') {
 			// Wrap paragraph tokens based on effective width
@@ -905,12 +923,12 @@ const detectCodeBlockTokens = (
 	for (const token of tokens) {
 		if (token.type === 'text' || token.type === 'paragraph') {
 			// For paragraphs, work with the lines array to preserve line breaks
-			// For text tokens, reconstruct content from lines
+			// For text tokens, reconstruct content from lines to preserve prefixes
 			// Off-by-one fix: only remove " *" or " * " (asterisk + optional single space), preserve extra indentation spaces
 			// Match /^\s*\*\s?/ to remove asterisk and at most one space, preserving code block indentation
 			const content = token.type === 'paragraph'
 				? token.lines.map((line: string) => line.replace(/^\s*\*\s?/, '')).join('\n')
-				: token.content;
+				: token.lines.join('\n');
 			let currentPos = ARRAY_START_INDEX;
 			let lastMatchEnd = ARRAY_START_INDEX;
 
@@ -921,18 +939,47 @@ const detectCodeBlockTokens = (
 					if (currentPos < content.length) {
 						const remainingText = content.substring(currentPos);
 						if (remainingText.length > EMPTY) {
-							// Split into lines and filter out empty trailing lines
-							const splitLines = remainingText.split('\n');
-							const cleanedLines = [...splitLines];
-							while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
-								cleanedLines.pop();
-							}
-							if (cleanedLines.length > 0) {
-								newTokens.push({
-									type: 'text',
-									content: remainingText,
-									lines: cleanedLines,
-								} satisfies TextToken);
+							// Remove trailing newlines before splitting
+							const cleanedText = remainingText.replace(/\n+$/, '');
+							if (cleanedText.length > EMPTY) {
+								// For paragraph tokens, content has prefixes stripped, so extract prefix from original lines
+								// For text tokens, content now preserves prefixes from token.lines
+								if (token.type === 'paragraph') {
+									// Extract prefix from original lines
+									const firstLineWithPrefix = token.lines.find((line: string) => {
+										const trimmed = line.trimStart();
+										return trimmed.length > 0 && trimmed.startsWith('*');
+									});
+									let prefix = ' * '; // Default fallback
+									if (firstLineWithPrefix) {
+										const prefixMatch = firstLineWithPrefix.match(/^(\s*\*\s*)/);
+										if (prefixMatch?.[1]) {
+											prefix = prefixMatch[1];
+										}
+									}
+									const splitLines = cleanedText.split('\n').filter((line: string) => line.trim().length > 0);
+									if (splitLines.length > 0) {
+										newTokens.push({
+											type: 'text',
+											content: cleanedText,
+											lines: splitLines.map((line: string) => `${prefix}${line.trim()}`),
+										} satisfies TextToken);
+									}
+								} else {
+									// For text tokens, content now preserves prefixes from token.lines
+									const splitLines = cleanedText.split('\n');
+									const cleanedLines = [...splitLines];
+									while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
+										cleanedLines.pop();
+									}
+									if (cleanedLines.length > 0) {
+										newTokens.push({
+											type: 'text',
+											content: cleanedText,
+											lines: cleanedLines,
+										} satisfies TextToken);
+									}
+								}
 							}
 						}
 					}
@@ -945,13 +992,48 @@ const detectCodeBlockTokens = (
 						// Remove trailing newlines from textBeforeCode before splitting to avoid empty trailing lines
 						const cleanedText = textBeforeCode.replace(/\n+$/, '');
 						if (cleanedText.length > EMPTY) {
-							const lines = cleanedText.split('\n').filter((line: string) => line.trim().length > 0);
-							if (lines.length > 0) {
-								newTokens.push({
-									type: 'text',
-									content: cleanedText,
-									lines: lines.map((line: string) => ` * ${line}`),
-								} satisfies TextToken);
+							// For paragraph tokens, content has prefixes stripped, so we need to extract prefix from original lines
+							// For text tokens, content now comes from token.lines which preserves prefixes
+							if (token.type === 'paragraph') {
+								// Extract prefix pattern from first non-empty line in token.lines that has a prefix
+								// The prefix should include base indent (spaces) + ' * '
+								const firstLineWithPrefix = token.lines.find((line: string) => {
+									const trimmed = line.trimStart();
+									return trimmed.length > 0 && trimmed.startsWith('*');
+								});
+								let prefix = ' * '; // Default fallback
+								if (firstLineWithPrefix) {
+									// Match from start: any whitespace + asterisk + optional space
+									const prefixMatch = firstLineWithPrefix.match(/^(\s*\*\s*)/);
+									if (prefixMatch?.[1]) {
+										prefix = prefixMatch[1];
+									}
+								}
+								
+								const lines = cleanedText.split('\n').filter((line: string) => line.trim().length > 0);
+								if (lines.length > 0) {
+									const linesWithPrefix = lines.map((line: string) => `${prefix}${line.trim()}`);
+									newTokens.push({
+										type: 'text',
+										content: cleanedText,
+										lines: linesWithPrefix,
+									} satisfies TextToken);
+								}
+							} else {
+								// For text tokens, content now preserves prefixes from token.lines
+								// Split and filter out empty trailing lines while preserving prefixes
+								const splitLines = cleanedText.split('\n');
+								const cleanedLines = [...splitLines];
+								while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
+									cleanedLines.pop();
+								}
+								if (cleanedLines.length > 0) {
+									newTokens.push({
+										type: 'text',
+										content: cleanedText,
+										lines: cleanedLines,
+									} satisfies TextToken);
+								}
 							}
 						}
 					}
