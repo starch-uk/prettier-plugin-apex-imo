@@ -2,13 +2,12 @@
  * @file Utility functions for finding and processing ApexDoc comments and their indentation.
  */
 
-import type { ApexNode } from './types.js';
 import type { ParserOptions } from 'prettier';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
+import type { ApexNode } from './types.js';
 import {
 	normalizeSingleApexDocComment,
-	processApexDocComment,
 	normalizeAnnotationTokens,
 	removeTrailingEmptyLines,
 } from './apexdoc.js';
@@ -26,26 +25,6 @@ const INDEX_TWO = 2;
  * @param comment - The comment node to check.
  * @returns True if the comment is an Apex comment, false otherwise.
  */
-const isApexComment = (comment: unknown): boolean => {
-	if (
-		comment === null ||
-		comment === undefined ||
-		typeof comment !== 'object' ||
-		!('value' in comment) ||
-		typeof (comment as { value?: unknown }).value !== 'string'
-	) {
-		return false;
-	}
-	const commentValue = (comment as { value: string }).value;
-	// Must start with /** and end with */ (ApexDoc style)
-	if (
-		!commentValue.trimStart().startsWith('/**') ||
-		!commentValue.trimEnd().endsWith('*/')
-	) {
-		return false;
-	}
-	return true;
-};
 
 /**
  * Safely extracts a comment node from an unknown type.
@@ -53,15 +32,6 @@ const isApexComment = (comment: unknown): boolean => {
  * @param comment - The unknown comment to extract.
  * @returns The comment node if valid, null otherwise.
  */
-const getCommentNode = (
-	comment: unknown,
-): { value: string; '@class'?: string } | null => {
-	if (!isApexComment(comment)) {
-		return null;
-	}
-	return comment as { value: string; '@class'?: string };
-};
-
 // Apex AST node types that allow dangling comments
 const ALLOW_DANGLING_COMMENTS = [
 	'apex.jorje.data.ast.ClassDeclaration',

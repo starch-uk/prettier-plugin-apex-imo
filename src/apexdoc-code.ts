@@ -21,6 +21,19 @@ const CODE_TAG_LENGTH = CODE_TAG.length;
 const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
 const LAST_INDEX_OFFSET = 1;
+const ZERO_LENGTH = 0;
+const ONE_INDEX = 1;
+const COMMENT_PREFIX_LENGTH = 4;
+/** Length of closing comment with newline */
+const CLOSING_COMMENT_LENGTH = 5;
+/** Length of alternative closing comment */
+const ALT_CLOSING_COMMENT_LENGTH = 4;
+/** String start index for slice operations */
+const STRING_START_INDEX = 0;
+/** First array index */
+const FIRST_INDEX = 0;
+/** Skip first two lines in processed lines */
+const SKIP_FIRST_TWO_LINES = 2;
 
 /**
  * Extracts code from a code block by counting braces.
@@ -42,7 +55,7 @@ const extractCodeFromBlock = (
 	let braceCount = INITIAL_BRACE_COUNT;
 	let pos = codeStart;
 	let lastClosingBracePos = NOT_FOUND_INDEX;
-	while (pos < text.length && braceCount > 0) {
+	while (pos < text.length && braceCount > ZERO_LENGTH) {
 		if (text[pos] === '{') {
 			braceCount++;
 		} else if (text[pos] === '}') {
@@ -53,7 +66,7 @@ const extractCodeFromBlock = (
 	}
 	// If braces don't match but we found a closing brace, use it as the end position
 	// This preserves invalid code blocks with unmatched brackets
-	if (braceCount !== 0) {
+	if (braceCount !== ZERO_LENGTH) {
 		if (lastClosingBracePos !== NOT_FOUND_INDEX) {
 			// Use the last closing brace position as the end, preserving the invalid code
 			pos = lastClosingBracePos + STRING_OFFSET;
@@ -83,13 +96,14 @@ const extractCodeFromBlock = (
 	// Split into lines to process leading/trailing separately
 	const codeLines = code.split('\n');
 	// Remove leading blank lines
-	while (codeLines.length > 0 && codeLines[0]?.trim().length === 0) {
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers
+	while (codeLines.length > ZERO_LENGTH && codeLines[0]?.trim().length === ZERO_LENGTH) {
 		codeLines.shift();
 	}
 	// Remove trailing blank lines
 	while (
-		codeLines.length > 0 &&
-		codeLines[codeLines.length - 1]?.trim().length === 0
+		codeLines.length > ZERO_LENGTH &&
+		codeLines[codeLines.length - ONE_INDEX]?.trim().length === ZERO_LENGTH
 	) {
 		codeLines.pop();
 	}
@@ -125,7 +139,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 				if (char === '{') codeBlockBraceCount++;
 				else if (char === '}') codeBlockBraceCount--;
 			}
-			willEndCodeBlock = codeBlockBraceCount === 0;
+			willEndCodeBlock = codeBlockBraceCount === ZERO_LENGTH;
 		}
 
 		if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) {
@@ -189,11 +203,11 @@ const preserveBlankLinesAfterBraces = (formatted: string): string => {
 		resultLines.push(formattedLine);
 
 		// Insert blank line after } when followed by annotations or access modifiers
-		if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
-			const nextLine = formattedLines[i + 1]?.trim() ?? '';
+		if (trimmedLine.endsWith('}') && i < formattedLines.length - ONE_INDEX) {
+			const nextLine = formattedLines[i + ONE_INDEX]?.trim() ?? '';
 			// Check if next line starts with annotation or access modifier using Set-based detection
 			if (
-				nextLine.length > 0 &&
+				nextLine.length > ZERO_LENGTH &&
 				(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
 			) {
 				// Insert blank line to preserve structure from original
@@ -207,10 +221,11 @@ const preserveBlankLinesAfterBraces = (formatted: string): string => {
 
 /**
  * Formats a CodeBlockToken using prettier with our plugin and effective page width.
- * @param token - The code block token to format.
- * @param effectiveWidth - The effective page width (reduced from printWidth).
- * @param embedOptions - Parser options for formatting.
- * @param currentPluginInstance - Plugin instance to ensure wrapped printer is used.
+ * @param root0 - The parameters object.
+ * @param root0.token - The code block token to format.
+ * @param root0.effectiveWidth - The effective page width (reduced from printWidth).
+ * @param root0.embedOptions - Parser options for formatting.
+ * @param root0.currentPluginInstance - Plugin instance to ensure wrapped printer is used.
  * @returns Updated CodeBlockToken with formattedCode populated.
  */
 const formatCodeBlockToken = async ({
@@ -227,11 +242,11 @@ const formatCodeBlockToken = async ({
 	const normalizedCode = normalizeAnnotationNamesInText(token.rawCode);
 	const optionsWithPlugin = {
 		...embedOptions,
-		printWidth: effectiveWidth,
 		plugins: [
 			currentPluginInstance?.default ??
 				(await import('./index.js')).default,
 		],
+		printWidth: effectiveWidth,
 	};
 
 	const formatted = await formatCodeWithPrettier(
@@ -247,7 +262,7 @@ const formatCodeBlockToken = async ({
 };
 
 /**
- * Processes a {@code} block, returning formatted lines.
+ * Processes a {&#64;code} block, returning formatted lines.
  * @param codeBlock - The code block text to process.
  * @param _options - Parser options (unused).
  * @param getFormattedCodeBlock - Function to get formatted code blocks.
@@ -265,14 +280,15 @@ function processCodeBlock(
 ): string[] {
 	// Extract content between {@code and }
 	const match = /^\{@code\s*([\s\S]*?)\s*\}$/.exec(codeBlock);
-	if (!match || !match[1]) return [codeBlock];
+	if (!match) return [codeBlock];
 
-	const codeContent = match[1];
+	const [, codeContent] = match;
+	if (codeContent == null) return [codeBlock];
 	if (!codeContent) return [codeBlock];
 
 	const codeLines = codeContent.split('\n');
 
-	if (codeLines.length === 1) {
+	if (codeLines.length === ONE_INDEX) {
 		// Single line - add space before closing } if content ends with ;
 		const separator = codeContent.trim().endsWith(';') ? ' ' : '';
 		return [`{@code ${codeContent}${separator}}`];
@@ -282,17 +298,17 @@ function processCodeBlock(
 			? getFormattedCodeBlock(commentKey)
 			: null;
 
-		if (embedResult) {
+		if (embedResult != null) {
 			// Parse embed result to extract the formatted code
 			// Remove opening /** and closing */
 			let embedContent = embedResult;
 			if (embedContent.startsWith('/**\n')) {
-				embedContent = embedContent.substring(4); // Remove '/**\n'
+				embedContent = embedContent.substring(COMMENT_PREFIX_LENGTH); // Remove '/**\n'
 			}
 			if (embedContent.endsWith('\n */\n')) {
-				embedContent = embedContent.slice(0, -5); // Remove '\n */\n'
+				embedContent = embedContent.slice(STRING_START_INDEX, -CLOSING_COMMENT_LENGTH); // Remove '\n */\n'
 			} else if (embedContent.endsWith('\n */')) {
-				embedContent = embedContent.slice(0, -4); // Remove '\n */'
+				embedContent = embedContent.slice(STRING_START_INDEX, -ALT_CLOSING_COMMENT_LENGTH); // Remove '\n */'
 			}
 
 			// Extract base indentation from the first code line (spaces before *)
@@ -321,16 +337,16 @@ function processCodeBlock(
 
 			// Find the {@code block
 			const codeStart = processedLines.findIndex(
-				(line: string | undefined) => line?.startsWith('{@code'),
+				(line: string | undefined) => line != null && line.startsWith('{@code'),
 			);
 			const codeEnd = processedLines.findIndex(
 				(line: string | undefined, i: number) =>
-					i > codeStart && line === '}',
+					i > codeStart && line != null && line === '}',
 			);
 
-			if (codeStart >= 0 && codeEnd > codeStart) {
+			if (codeStart >= FIRST_INDEX && codeEnd > codeStart) {
 				const extractedCodeLines = processedLines
-					.slice(codeStart + 1, codeEnd)
+					.slice(codeStart + ONE_INDEX, codeEnd)
 					.filter((line): line is string => typeof line === 'string');
 				// For embed results, the formatted code is stored without comment prefixes
 				// comments.ts will handle adding the proper indentation
@@ -341,8 +357,7 @@ function processCodeBlock(
 			return [
 				`{@code`,
 				...processedLines
-					.slice(2)
-					.filter((line): line is string => line !== undefined),
+					.slice(SKIP_FIRST_TWO_LINES),
 				`}`,
 			];
 		} else {

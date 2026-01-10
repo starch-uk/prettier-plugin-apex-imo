@@ -3,7 +3,6 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { ParserOptions } from 'prettier';
 import * as prettier from 'prettier';
 import { processCodeBlock, processCodeBlockLines } from './apexdoc-code.js';
@@ -48,6 +47,9 @@ import {
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
 const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
+const DEFAULT_PRINT_WIDTH = 80;
+const ZERO_INDENT = 0;
+const BODY_INDENT_WHEN_ZERO = 2;
 const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
 
 const isCommentStart = (text: string, pos: number): boolean =>
@@ -138,10 +140,11 @@ const normalizeSingleApexDocComment = (
 	});
 
 	// Parse to tokens
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	const { tokens: initialTokens } = parseApexDocTokens(
 		normalizedComment,
 		commentIndent,
-		printWidth ?? 80,
+		printWidth,
 		{
 			tabWidth: tabWidthValue,
 			useTabs: options.useTabs,
@@ -149,9 +152,11 @@ const normalizeSingleApexDocComment = (
 	);
 
 	// Merge paragraph tokens that contain split {@code} blocks
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	let tokens = mergeCodeBlockTokens(initialTokens);
 
 	// Apply common token processing pipeline
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
 
 	// Wrap annotations if printWidth is available
@@ -164,11 +169,12 @@ const normalizeSingleApexDocComment = (
 		);
 		const commentPrefix = `${baseIndent} * `;
 		// Account for body indentation when commentIndent is 0
-		const bodyIndent = commentIndent === 0 ? 2 : 0;
+		const bodyIndent = commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
 		const actualPrefixLength = commentPrefix.length + bodyIndent;
 		const annotationEffectiveWidth = printWidth - actualPrefixLength;
 
 		// Pass the actual prefix length to wrapAnnotationTokens so it can calculate first line width correctly
+		// eslint-disable-next-line @typescript-eslint/no-use-before-define
 		tokens = wrapAnnotationTokens(
 			tokens,
 			annotationEffectiveWidth,
@@ -186,10 +192,11 @@ const normalizeSingleApexDocComment = (
 	// TODO: Implement proper paragraph wrapping that preserves all token types
 	const finalTokens = tokens;
 
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	return tokensToApexDocString(finalTokens, commentIndent, {
+		printWidth: printWidth,
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
-		printWidth: printWidth,
 	});
 };
 

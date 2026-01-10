@@ -4,12 +4,13 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
-import { doc, type AstPath, type Doc, type ParserOptions } from 'prettier';
+import { doc, type AstPath, type Doc } from 'prettier';
 import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
 import { getNodeClass } from './utils.js';
 import { createTypeNormalizingPrint } from './casing.js';
 
 const MIN_ENTRIES_FOR_MULTILINE = 2;
+const EMPTY_ARRAY_LENGTH = 0;
 const LIST_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewListLiteral';
 const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
@@ -42,6 +43,7 @@ const isNestedInCollection = (
 	if (!Array.isArray(stack) || stack.length === 0) return false;
 	// Check if any parent in the stack is a collection using AST type guards
 	for (const parent of stack) {
+		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 		if (
 			typeof parent === 'object' &&
 			parent !== null &&
@@ -88,17 +90,24 @@ const printEmptyMap = (
 	return [typeDoc, '{}'];
 };
 
-const printList = (
-	path: Readonly<AstPath<ApexListInitNode>>,
-	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
-	originalPrint: () => Doc,
-	printedTypes: readonly Doc[],
-	isNested: boolean,
-	nodeClass: string,
-): Doc => {
-	const node = path.node;
+const printList = ({
+	path,
+	print,
+	originalPrint,
+	printedTypes,
+	isNested,
+	nodeClass,
+}: {
+	readonly path: Readonly<AstPath<ApexListInitNode>>;
+	readonly print: (path: Readonly<AstPath<ApexNode>>) => Doc;
+	readonly originalPrint: () => Doc;
+	readonly printedTypes: readonly Doc[];
+	readonly isNested: boolean;
+	readonly nodeClass: string;
+}): Doc => {
+	const { node } = path;
 	const isSet = nodeClass === SET_LITERAL_CLASS;
-	const isEmpty = !Array.isArray(node.values) || node.values.length === 0;
+	const isEmpty = !Array.isArray(node.values) || node.values.length === EMPTY_ARRAY_LENGTH;
 
 	if (isEmpty) {
 		return printEmptyList(printedTypes, isSet, isNested);
@@ -125,15 +134,21 @@ const printList = (
 	];
 };
 
-const printMap = (
-	path: Readonly<AstPath<ApexMapInitNode>>,
-	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
-	originalPrint: () => Doc,
-	printedTypes: readonly Doc[],
-	isNested: boolean,
-): Doc => {
+const printMap = ({
+	path,
+	print,
+	originalPrint,
+	printedTypes,
+	isNested,
+}: {
+	readonly path: Readonly<AstPath<ApexMapInitNode>>;
+	readonly print: (path: Readonly<AstPath<ApexNode>>) => Doc;
+	readonly originalPrint: () => Doc;
+	readonly printedTypes: readonly Doc[];
+	readonly isNested: boolean;
+}): Doc => {
 	const node = path.node;
-	const isEmpty = !Array.isArray(node.pairs) || node.pairs.length === 0;
+	const isEmpty = !Array.isArray(node.pairs) || node.pairs.length === EMPTY_ARRAY_LENGTH;
 
 	if (isEmpty) {
 		return printEmptyMap(printedTypes, isNested);
@@ -187,22 +202,22 @@ const printCollection = (
 	const isNested = isNestedInCollection(path);
 
 	if (isList) {
-		return printList(
-			path as Readonly<AstPath<ApexListInitNode>>,
+		return printList({
+			path: path as Readonly<AstPath<ApexListInitNode>>,
 			print,
 			originalPrint,
 			printedTypes,
 			isNested,
 			nodeClass,
-		);
+		});
 	}
-	return printMap(
-		path as Readonly<AstPath<ApexMapInitNode>>,
+	return printMap({
+		path: path as Readonly<AstPath<ApexMapInitNode>>,
 		print,
 		originalPrint,
 		printedTypes,
 		isNested,
-	);
+	});
 };
 
 export {

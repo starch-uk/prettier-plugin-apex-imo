@@ -22,7 +22,7 @@ const createNodeClassGuard = <T extends ApexNode>(
 ) => {
 	const checkClass =
 		typeof className === 'string'
-			? (cls: string | undefined) => cls === className
+			? (cls: string | undefined): boolean => cls === className
 			: className;
 
 	return (
@@ -30,14 +30,16 @@ const createNodeClassGuard = <T extends ApexNode>(
 	): node is Readonly<T> => {
 		if (!node || typeof node !== 'object') return false;
 		const nodeClass = getNodeClassOptional(node);
-		return checkClass(nodeClass) ?? false;
+		return checkClass(nodeClass);
 	};
 };
 
 const startsWithAccessModifier = (line: string): boolean => {
 	const trimmed = line.trim();
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers
 	if (trimmed.length === 0) return false;
 	// Find first word without regex - find first whitespace or end of string
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers
 	let firstWordEnd = 0;
 	while (
 		firstWordEnd < trimmed.length &&

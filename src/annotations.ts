@@ -5,7 +5,6 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import { doc, type AstPath, type Doc } from 'prettier';
 import type {
-	ApexNode,
 	ApexAnnotationNode,
 	ApexAnnotationValue,
 	ApexAnnotationKeyValue,
@@ -24,7 +23,6 @@ import { findApexDocComments } from './apexdoc.js';
 const ANNOTATION_REGEX =
 	/@([a-zA-Z_][a-zA-Z0-9_]*)(\s*\(([^)]*)\)|(?![a-zA-Z0-9_(]))/g;
 const ANNOTATION_OPTION_REGEX = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
-const INDEX_ONE = 1;
 
 const { group, indent, hardline, softline, join } = doc.builders;
 
@@ -37,6 +35,10 @@ const ANNOTATION_KEY_VALUE_CLASS =
 	'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue';
 const MIN_PARAM_LENGTH_FOR_MULTILINE = 40;
 const MIN_PARAMS_FOR_MULTILINE = 1;
+const ZERO_LENGTH = 0;
+const ONE_INDEX = 1;
+const STRING_START_INDEX = 0;
+const LOOP_START_INDEX = 0;
 
 const isAnnotation = createNodeClassGuard<ApexAnnotationNode>(ANNOTATION_CLASS);
 
@@ -131,7 +133,7 @@ const printAnnotation = (
 	const originalName = node.name.value;
 	const normalizedName = normalizeAnnotationName(originalName);
 	const parametersLength = node.parameters.length;
-	if (parametersLength === 0) return ['@', normalizedName, hardline];
+	if (parametersLength === ZERO_LENGTH) return ['@', normalizedName, hardline];
 	const formattedParams: Doc[] = node.parameters.map((param) =>
 		formatAnnotationParam(param, originalName),
 	);
@@ -160,7 +162,7 @@ const createAnnotationReplacer =
 	() =>
 	(_match: string, name: string, params?: string): string => {
 		const normalizedName = normalizeAnnotationName(name);
-		if (params === undefined || params.length === 0)
+		if (params === undefined || params.length === ZERO_LENGTH)
 			return `@${normalizedName}`;
 		return `@${normalizedName}${params.replace(
 			ANNOTATION_OPTION_REGEX,
@@ -192,7 +194,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 	const apexDocComments = findApexDocComments(text);
 	const replacer = createAnnotationReplacer();
 	// If no ApexDoc comments, process entire text
-	if (apexDocComments.length === 0) {
+	if (apexDocComments.length === ZERO_LENGTH) {
 		return text.replace(ANNOTATION_REGEX, replacer);
 	}
 
@@ -222,7 +224,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 	}
 
 	// Process non-comment segments
-	for (let i = segments.length - INDEX_ONE; i >= 0; i--) {
+	for (let i = segments.length - ONE_INDEX; i >= LOOP_START_INDEX; i--) {
 		const segment = segments[i];
 		if (!segment || segment.isComment) continue;
 
@@ -231,7 +233,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 
 		if (normalized !== segmentText) {
 			result =
-				result.substring(0, segment.start) +
+				result.substring(STRING_START_INDEX, segment.start) +
 				normalized +
 				result.substring(segment.end);
 		}
@@ -242,7 +244,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 
 /**
  * Normalizes annotation names in text, excluding ApexDoc annotations.
- * ApexDoc annotations (like @deprecated, @param) are preserved as-is.
+ * ApexDoc annotations (like \@deprecated, \@param) are preserved as-is.
  * Only Apex code annotations are normalized.
  * @param text - The source text containing annotations to normalize.
  * @returns The text with normalized annotation names (excluding ApexDoc annotations).
@@ -267,7 +269,13 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (
 	const apexDocAnnotationsSet = new Set(APEXDOC_ANNOTATIONS);
 	const replacer = createAnnotationReplacer();
 
-	// Create a replacer that normalizes ApexDoc annotations to lowercase, not PascalCase
+	/**
+	 * Create a replacer that normalizes ApexDoc annotations to lowercase, not PascalCase.
+	 * @param match - The full regex match.
+	 * @param name - The annotation name.
+	 * @param params - Optional parameters string.
+	 * @returns The normalized annotation string.
+	 */
 	const excludingApexDocReplacer = (
 		match: string,
 		name: string,
@@ -275,12 +283,8 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (
 	): string => {
 		const lowerName = name.toLowerCase();
 		// If it's an ApexDoc annotation, normalize to lowercase (not PascalCase)
-		if (
-			apexDocAnnotationsSet.has(
-				lowerName as (typeof APEXDOC_ANNOTATIONS)[number],
-			)
-		) {
-			if (params === undefined || params.length === 0) {
+		if (apexDocAnnotationsSet.has(lowerName)) {
+			if (params === undefined || params.length === ZERO_LENGTH) {
 				return `@${lowerName}`;
 			}
 			return `@${lowerName}${params}`;

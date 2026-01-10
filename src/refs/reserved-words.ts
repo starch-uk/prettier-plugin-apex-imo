@@ -94,7 +94,7 @@ const TYPE_RELATED_RESERVED_WORDS: readonly string[] = [
 ] as const;
 
 /**
- * Set of declaration modifiers for O(1) lookup performance when checking formatted code strings
+ * Set of declaration modifiers for O(1) lookup performance when checking formatted code strings.
  */
 const DECLARATION_MODIFIERS_SET = new Set(DECLARATION_MODIFIERS);
 

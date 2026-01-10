@@ -48,6 +48,7 @@ const getApexPrinter = (): Parameters<
 	>[0];
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const originalApexPrinter = getApexPrinter();
 
 /**
@@ -104,16 +105,17 @@ const customPrintComment = (
 	);
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const wrappedPrinter = {
 	...createWrappedPrinter(originalApexPrinter),
-	printComment: customPrintComment,
 	canAttachComment,
-	isBlockComment,
 	handleComments: {
-		ownLine: handleOwnLineComment,
 		endOfLine: handleEndOfLineComment,
+		ownLine: handleOwnLineComment,
 		remaining: handleRemainingComment,
 	},
+	isBlockComment,
+	printComment: customPrintComment,
 };
 
 /**

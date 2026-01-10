@@ -29,11 +29,7 @@ import {
 	startsWithAccessModifier,
 } from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
-import {
-	extractCodeFromBlock,
-	CODE_TAG,
-	CODE_TAG_LENGTH,
-} from './apexdoc-code.js';
+import { extractCodeFromBlock } from './apexdoc-code.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -56,6 +52,7 @@ const processTypeParams = (params: unknown[]): Doc[] => {
 			if (j + 1 < params.length) {
 				const remainingParams = params.slice(j + 1) as Doc[];
 				processedParams.push(
+					// eslint-disable-next-line @typescript-eslint/no-magic-numbers
 					group(indent([softline, ...remainingParams])),
 				);
 				break;
@@ -89,11 +86,14 @@ const makeTypeDocBreakable = (
 			const item = typeDoc[i] as Doc;
 			if (
 				item === '<' &&
+				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
 				i + 1 < typeDoc.length &&
+				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
 				Array.isArray(typeDoc[i + 1])
 			) {
 				result.push(item);
-				result.push(processTypeParams(typeDoc[i + 1] as unknown[]));
+				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
+				result.push(processTypeParams(typeDoc[i + 1]! as unknown[]));
 				i++;
 			} else {
 				result.push(item);
@@ -150,8 +150,6 @@ const clearFormattedCodeBlocks = (): void => {
 const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
 const INLINE_COMMENT_CLASS =
 	'apex.jorje.parser.impl.HiddenTokens$InlineComment';
-const ZERO = 0;
-const ONE = 1;
 const SINGLE_DECLARATION = 1;
 
 const isCommentNode = createNodeClassGuard<ApexNode>(

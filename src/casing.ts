@@ -6,8 +6,7 @@
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { APEX_OBJECT_SUFFIXES } from './refs/object-suffixes.js';
-import { getNodeClassOptional, createNodeClassGuard } from './utils.js';
-import { getCurrentPluginInstance } from './printer.js';
+import { getNodeClassOptional } from './utils.js';
 
 /**
  * Normalizes the casing of object type suffixes in a type name.
@@ -78,7 +77,7 @@ const isIdentifier = (
 		nodeClass === IDENTIFIER_CLASS ||
 		(nodeClass?.includes('Identifier') ?? false) ||
 		('value' in node &&
-			typeof (node as { value?: unknown }).value === 'string')
+			typeof (node as Record<string, unknown>).value === 'string')
 	);
 };
 
@@ -93,10 +92,11 @@ const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	// Use AST traversal - check node @class property directly
 	for (const item of stack) {
 		if (typeof item === 'object' && item !== null && '@class' in item) {
-			const nodeClass = getNodeClassOptional(item as Readonly<ApexNode>);
+			const nodeClass = getNodeClassOptional(item as Record<string, unknown>);
+			// eslint-disable-next-line @typescript-eslint/prefer-optional-chain
 			if (
 				nodeClass === FROM_EXPR_CLASS ||
-				nodeClass?.includes('FromExpr')
+				(nodeClass != null && nodeClass.includes('FromExpr'))
 			) {
 				return true;
 			}
@@ -105,16 +105,14 @@ const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	return false;
 };
 
-const isTypeRelatedKey = (key: string | number | undefined): boolean => {
+const isTypeRelatedKey = (key: number | string | undefined): boolean => {
 	if (typeof key !== 'string') return false;
 	const lowerKey = key.toLowerCase();
 	return (
 		lowerKey === 'types' ||
 		lowerKey === 'type' ||
 		lowerKey === 'typeref' ||
-		TYPE_CONTEXT_KEYS_SET.has(
-			lowerKey as (typeof TYPE_CONTEXT_KEYS)[number],
-		) ||
+		TYPE_CONTEXT_KEYS_SET.has(lowerKey) ||
 		lowerKey.startsWith('type')
 	);
 };
@@ -133,6 +131,7 @@ const isTypeRelatedParentClass = (parentClass: string | undefined): boolean => {
 };
 
 const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 	const { key, stack } = path;
 	if (key === 'types') return true;
 	if (!Array.isArray(stack)) return false;
@@ -145,19 +144,19 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 		return true;
 	if (stack.length < STACK_PARENT_OFFSET) return false;
 
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 	const parent = stack[
 		stack.length - STACK_PARENT_OFFSET
-	] as Readonly<ApexNode>;
+	];
+	if (typeof parent !== 'object' || parent == null) return false;
 	const parentClass = getNodeClassOptional(parent);
 	const hasTypesArray =
 		typeof parent === 'object' &&
 		'types' in parent &&
-		Array.isArray(
-			(parent as Readonly<ApexNode & { types?: unknown }>).types,
-		);
+		Array.isArray(parent.types);
 
 	if (!isTypeRelatedParentClass(parentClass) && !hasTypesArray) return false;
-	return key !== 'name' || !parentClass?.includes('Variable');
+	return key !== 'name' || !(parentClass != null && parentClass.includes('Variable'));
 };
 
 interface ShouldNormalizeTypeParams {
