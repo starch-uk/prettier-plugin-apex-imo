@@ -6,25 +6,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import * as prettier from 'prettier';
 import type { ParserOptions } from 'prettier';
-import { ARRAY_START_INDEX, STRING_OFFSET } from './comments.js';
+import {
+	ARRAY_START_INDEX,
+	STRING_OFFSET,
+	removeCommentPrefix,
+} from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
-
-// Access modifiers for checking formatted code strings (use Set for O(1) lookup)
-const ACCESS_MODIFIERS_SET = new Set([
-	'public',
-	'private',
-	'protected',
-	'static',
-	'final',
-	'global',
-]);
-
-const startsWithAccessModifier = (line: string): boolean => {
-	const trimmed = line.trim();
-	if (trimmed.length === 0) return false;
-	const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? '';
-	return ACCESS_MODIFIERS_SET.has(firstWord);
-};
+import { startsWithAccessModifier } from './utils.js';
 import type { CodeBlockToken } from './comments.js';
 
 const CODE_TAG = '{@code';
@@ -42,7 +30,6 @@ const NOT_FOUND_INDEX = -1;
  * @example
  * extractCodeFromBlock('code block text', 0)
  */
-const COMMENT_ASTERISK_REGEX = /^\s*(\*(\s*\*)*)\s*/;
 
 const extractCodeFromBlock = (
 	text: Readonly<string>,
@@ -81,10 +68,7 @@ const extractCodeFromBlock = (
 				.split('\n')
 				.map((line) => {
 					// Remove comment asterisk prefix, preserving content indentation
-					const afterAsterisk = line.replace(
-						COMMENT_ASTERISK_REGEX,
-						'',
-					);
+					const afterAsterisk = removeCommentPrefix(line, true);
 					// Check if this is an empty line (only whitespace)
 					if (afterAsterisk.trim() === '') {
 						// This is an empty line - preserve it as empty string
@@ -122,8 +106,6 @@ const extractCodeFromBlock = (
  * @example
  * processCodeBlockLines([' * code block line', ' *   System.debug("test");', ' * }'])
  */
-const COMMENT_LINE_PREFIX_REGEX = /^\s*\*\s?/;
-
 const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	let inCodeBlock = false;
 	let codeBlockBraceCount = 0;
@@ -147,7 +129,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 		}
 
 		if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) {
-			const trimmed = commentLine.replace(COMMENT_LINE_PREFIX_REGEX, '');
+			const trimmed = removeCommentPrefix(commentLine, true);
 			if (willEndCodeBlock) {
 				inCodeBlock = false;
 			}
@@ -260,7 +242,7 @@ const formatCodeBlockToken = async ({
 
 	return {
 		...token,
-		formattedCode: formattedWithBlankLines.replace(/\n+$/, ''),
+		formattedCode: formattedWithBlankLines.trimEnd(),
 	};
 };
 

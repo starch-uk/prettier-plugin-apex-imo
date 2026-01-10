@@ -3,6 +3,7 @@
  */
 
 import type { ApexNode } from './types.js';
+import { DECLARATION_MODIFIERS_SET } from './refs/reserved-words.js';
 
 const getNodeClass = (node: Readonly<ApexNode>): string => node['@class'];
 
@@ -33,4 +34,12 @@ const createNodeClassGuard = <T extends ApexNode>(
 	};
 };
 
-export { getNodeClass, getNodeClassOptional, createNodeClassGuard };
+
+const startsWithAccessModifier = (line: string): boolean => {
+	const trimmed = line.trim();
+	if (trimmed.length === 0) return false;
+	const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? '';
+	return DECLARATION_MODIFIERS_SET.has(firstWord);
+};
+
+export { getNodeClass, getNodeClassOptional, createNodeClassGuard, startsWithAccessModifier };

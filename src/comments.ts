@@ -67,6 +67,127 @@ const getCommentIndent = (
 };
 
 /**
+ * Normalizes comment start marker: /***** -> /**
+ */
+const normalizeCommentStart = (comment: string): string => {
+	// Find first non-whitespace character
+	let start = 0;
+	while (start < comment.length && (comment[start] === ' ' || comment[start] === '\t')) {
+		start++;
+	}
+	// If we find /*, normalize multiple asterisks
+	if (comment.substring(start).startsWith('/*')) {
+		const prefix = comment.substring(0, start);
+		const afterSlash = comment.substring(start + 1);
+		// Count asterisks after /
+		let asteriskCount = 0;
+		while (
+			asteriskCount < afterSlash.length &&
+			afterSlash[asteriskCount] === '*'
+		) {
+			asteriskCount++;
+		}
+		// Normalize to exactly two asterisks (/**)
+		if (asteriskCount > 2) {
+			return prefix + '/**' + afterSlash.substring(asteriskCount);
+		} else if (asteriskCount === 1) {
+			// Only one asterisk, need to add one more
+			return prefix + '/**' + afterSlash.substring(1);
+		}
+	}
+	return comment;
+};
+
+/**
+ * Normalizes comment end marker: multiple asterisks before slash to single asterisk.
+ */
+const normalizeCommentEnd = (comment: string): string => {
+	// Replace **/ or more with */ - scan for patterns and replace
+	let result = comment;
+	let pos = 0;
+	while (pos < result.length) {
+		// Look for */ pattern
+		const slashPos = result.indexOf('/', pos);
+		if (slashPos === -1) break;
+		
+		// Count asterisks before /
+		let asteriskCount = 0;
+		let checkPos = slashPos - 1;
+		while (checkPos >= 0 && result[checkPos] === '*') {
+			asteriskCount++;
+			checkPos--;
+		}
+		
+		// If we have 2+ asterisks before /, normalize to */
+		if (asteriskCount >= 2) {
+			const replaceStart = checkPos + 1;
+			result = result.substring(0, replaceStart) + '*/' + result.substring(slashPos + 1);
+			pos = replaceStart + 2;
+		} else {
+			pos = slashPos + 1;
+		}
+	}
+	return result;
+};
+
+/**
+ * Normalizes a single comment line with asterisk prefix.
+ */
+const normalizeCommentLine = (
+	line: string,
+	baseIndent: string,
+	isFirstOrLast: boolean,
+): string => {
+	if (isFirstOrLast) {
+		// First/last lines are already normalized by normalizeCommentEnd on entire comment
+		return line;
+	}
+
+	// Find asterisk position
+	let asteriskPos = -1;
+	for (let i = 0; i < line.length; i++) {
+		if (line[i] === ' ' || line[i] === '\t') {
+			continue;
+		}
+		if (line[i] === '*') {
+			asteriskPos = i;
+			break;
+		}
+		// No asterisk found before content
+		break;
+	}
+
+	if (asteriskPos === -1) {
+		// No asterisk - check if trimmed starts with *
+		const trimmed = line.trimStart();
+		if (trimmed.startsWith('*')) {
+			const afterAsterisk = trimmed.substring(1).trimStart();
+			return `${baseIndent} * ${afterAsterisk}`;
+		}
+		return `${baseIndent} * ${line.trimStart()}`;
+	}
+
+	// Found asterisk - normalize
+	const beforeAsterisk = line.substring(0, asteriskPos);
+	let afterAsterisk = line.substring(asteriskPos + 1);
+	// Skip multiple asterisks
+	while (afterAsterisk.startsWith('*')) {
+		afterAsterisk = afterAsterisk.substring(1);
+	}
+	// Skip whitespace after asterisk(s)
+	const spaceAfterAsterisk = afterAsterisk.match(/^\s*/)?.[0] ?? '';
+	afterAsterisk = afterAsterisk.trimStart();
+	// Remove any remaining asterisks at start of content
+	while (afterAsterisk.startsWith('*')) {
+		afterAsterisk = afterAsterisk.substring(1).trimStart();
+	}
+	// Preserve code block indentation (spaces beyond first)
+	const codeBlockIndent =
+		spaceAfterAsterisk.length > 1 ? spaceAfterAsterisk.substring(1) : '';
+	return `${baseIndent} * ${codeBlockIndent}${afterAsterisk}`;
+};
+
+/**
  * Internal function to normalize basic block comment structure.
  * Handles malformed comments by normalizing markers, asterisks, and indentation.
  * @param commentValue - The comment text (e.g., comment block).
@@ -82,73 +203,25 @@ const normalizeBlockCommentBasic = (
 		readonly useTabs?: boolean | null | undefined;
 	}>,
 ): string => {
-	const { tabWidth } = options;
-	// Normalize comment markers first
-	// 1. Normalize comment start: /***** -> /**
-	let normalizedComment = commentValue.replace(/^(\s*)\/\*+/, '$1/**');
-	// 2. Normalize comment end: **/ or more -> */ (preserve single */)
-	// Match 2+ asterisks before / and normalize to */, handling optional trailing whitespace/newlines
-	// Also handle cases where **/ appears in the middle of the comment (shouldn't happen, but be safe)
-	normalizedComment = normalizedComment.replace(/\*{2,}\//g, '*/');
-	// 3. Normalize lines with multiple asterisks: ** @param -> * @param
-	// 4. Add asterisk to lines with no asterisk (but not the first line after /** or last line before */)
+	// Normalize comment markers first on entire comment
+	let normalizedComment = normalizeCommentStart(commentValue);
+	normalizedComment = normalizeCommentEnd(normalizedComment);
+
+	// Normalize lines
 	const lines = normalizedComment.split('\n');
 	const normalizedLines: string[] = [];
-	const baseIndent = createIndent(commentIndent, tabWidth, options.useTabs);
+	const baseIndent = createIndent(
+		commentIndent,
+		options.tabWidth,
+		options.useTabs,
+	);
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
 		const line = lines[i] ?? '';
-		// Skip the first line (/**) and last line (*/)
-		if (i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE) {
-			// Normalize comment end if it has extra asterisks
-			if (i === lines.length - INDEX_ONE && line.includes('**/')) {
-				normalizedLines.push(line.replace(/\*{2,}\//, '*/'));
-			} else {
-				normalizedLines.push(line);
-			}
-			continue;
-		}
-		// Check if line has asterisk(s) - match leading whitespace, then asterisk(s), then optional whitespace
-		// Also handle lines that start with asterisk but have no leading whitespace (like "* @return")
-		const asteriskMatch = /^(\s*)(\*+)(\s*)(.*)$/.exec(line);
-		const asteriskMatchValue = asteriskMatch?.[ARRAY_START_INDEX];
-		// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- asteriskMatchValue is string | undefined from regex exec
-		if (asteriskMatchValue) {
-			// Normalize multiple asterisks to single asterisk
-			// Normalize indentation to match comment indent level
-			// asteriskMatch groups: [0]=full match, [1]=leading whitespace, [2]=asterisks, [3]=whitespace after asterisks, [4]=rest of line
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array index 4 for regex match group
-			let restOfLine = asteriskMatch[4] ?? '';
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array index 3 for regex match group
-			const spaceAfterAsterisk = asteriskMatch[3] ?? '';
-			// Remove any leading asterisks (handle cases like "*   * @param" or "*** {@code")
-			restOfLine = restOfLine.replace(/^\s*\*+\s*/, '');
-			// Off-by-one fix: indentation is in spaceAfterAsterisk, not restOfLine
-			// If spaceAfterAsterisk has more than one space, preserve the extra spaces as code block indentation
-			// For code blocks: spaceAfterAsterisk = "   " (3 spaces), restOfLine = "@AuraEnabled" (no spaces)
-			// We preserve spaces beyond the first one (single space after *) as indentation
-			const codeBlockIndent =
-				spaceAfterAsterisk.length > 1
-					? spaceAfterAsterisk.substring(1)
-					: '';
-			const normalizedRest = codeBlockIndent + restOfLine;
-			// Normal line - use consistent ' * ' spacing (preserve code block indentation)
-			normalizedLines.push(`${baseIndent} * ${normalizedRest}`);
-		} else {
-			// Line has no asterisk - add one with proper indentation
-			// But check if line starts with asterisk but no leading whitespace (like "* @return")
-			const trimmed = line.trimStart();
-			if (trimmed.startsWith('*')) {
-				// Line has asterisk but no leading whitespace - normalize it
-				const afterAsterisk = trimmed.substring(INDEX_ONE).trimStart();
-				normalizedLines.push(`${baseIndent} * ${afterAsterisk}`);
-			} else {
-				// Line truly has no asterisk - add one with proper indentation
-				normalizedLines.push(`${baseIndent} * ${line.trimStart()}`);
-			}
-		}
+		const isFirstOrLast =
+			i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
+		normalizedLines.push(normalizeCommentLine(line, baseIndent, isFirstOrLast));
 	}
-	normalizedComment = normalizedLines.join('\n');
-	return normalizedComment;
+	return normalizedLines.join('\n');
 };
 
 /**
@@ -280,6 +353,21 @@ type CommentToken =
 	| AnnotationToken;
 
 /**
+ * Removes comment prefix (asterisk and spaces) from a line.
+ * @param line - Line to remove prefix from.
+ * @param preserveIndent - If true, uses original regex without trim to preserve code indentation. Otherwise trims result.
+ * @returns Line with prefix removed and optionally trimmed.
+ */
+const removeCommentPrefix = (
+	line: string,
+	preserveIndent: boolean = false,
+): string => {
+	// Use original regex: /^\s*(\*(\s*\*)*)\s*/ - removes leading whitespace, asterisk(s), and all trailing whitespace
+	const result = line.replace(/^\s*(\*(\s*\*)*)\s*/, '');
+	return preserveIndent ? result : result.trim();
+};
+
+/**
  * Parses a normalized comment string into basic tokens.
  * Detects paragraphs based on empty lines and continuation logic.
  * Also detects code blocks (pattern: slash-asterisk ... asterisk-slash).
@@ -328,10 +416,14 @@ const parseCommentToTokens = (
 		const lineEndPos = currentPos + line.length;
 		currentPos = lineEndPos + INDEX_ONE; // +1 for newline
 
-		// Check if this line is inside a code block
-		const isInCodeBlock = codeBlocks.some(
-			(cb) => lineStartPos >= cb.start && lineEndPos <= cb.end,
-		);
+		// Check if this line is inside a code block - use simple loop instead of .some()
+		let isInCodeBlock = false;
+		for (const cb of codeBlocks) {
+			if (lineStartPos >= cb.start && lineEndPos <= cb.end) {
+				isInCodeBlock = true;
+				break;
+			}
+		}
 
 		if (isInCodeBlock) {
 			// Finish current paragraph if any, then handle code block
@@ -367,7 +459,7 @@ const parseCommentToTokens = (
 		}
 
 		// Remove comment prefix (*) to check if line is empty
-		const trimmedLine = line.replace(/^\s*\*\s*/, '').trim();
+		const trimmedLine = removeCommentPrefix(line);
 
 		if (trimmedLine.length === EMPTY) {
 			// Empty line - finish current paragraph if any
@@ -420,14 +512,19 @@ const parseCommentToTokens = (
 
 			// Check for sentence boundary: ends with sentence-ending punctuation
 			// and next line starts with capital letter
-			const endsWithSentencePunctuation = /[.!?]\s*$/.test(trimmedLine);
+			const trimmedEnd = trimmedLine.trimEnd();
+			const endsWithSentencePunctuation =
+				trimmedEnd.length > 0 &&
+				(trimmedEnd.endsWith('.') ||
+					trimmedEnd.endsWith('!') ||
+					trimmedEnd.endsWith('?'));
 			const nextLine = contentLines[i + INDEX_ONE];
 			const nextTrimmed =
-				nextLine !== undefined
-					? nextLine.replace(/^\s*\*\s*/, '').trim()
-					: '';
+				nextLine !== undefined ? removeCommentPrefix(nextLine) : '';
 			const nextStartsWithCapital =
-				nextTrimmed.length > EMPTY && /^[A-Z]/.test(nextTrimmed);
+				nextTrimmed.length > EMPTY &&
+				nextTrimmed.charAt(0) >= 'A' &&
+				nextTrimmed.charAt(0) <= 'Z';
 
 			// Add current line to paragraph
 			currentParagraph.push(trimmedLine);
@@ -742,12 +839,10 @@ const customPrintComment = (
 		if (lines.length <= INDEX_ONE) return false;
 		const middleLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
 		// If at least one middle line has an asterisk, treat it as ApexDoc (even if malformed)
-		if (
-			middleLines.some((commentLine) =>
-				commentLine.trim().startsWith('*'),
-			)
-		) {
-			return true;
+		for (const commentLine of middleLines) {
+			if (commentLine.trim().startsWith('*')) {
+				return true;
+			}
 		}
 		// If no middle lines have asterisks but comment starts with /** and ends with */,
 		// treat it as ApexDoc so we can normalize it (add asterisks)
@@ -826,6 +921,7 @@ export {
 	wrapParagraphTokens,
 	customPrintComment,
 	isMalformedCommentBlock,
+	removeCommentPrefix,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,

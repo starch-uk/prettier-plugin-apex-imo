@@ -17,6 +17,7 @@ import {
 } from './printer.js';
 
 const APEX_PARSERS = ['apex', 'apex-anonymous'] as const;
+const APEX_PARSERS_SET = new Set<string>(APEX_PARSERS);
 
 const APEX_PRINTER_ERROR_MESSAGE =
 	'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. The apex printer was not found.';
@@ -116,7 +117,8 @@ const isApexParser = (
 	parser: string | undefined,
 ): parser is (typeof APEX_PARSERS)[number] => {
 	if (typeof parser !== 'string') return false;
-	return APEX_PARSERS.includes(parser as (typeof APEX_PARSERS)[number]);
+	if (parser === 'apex' || parser === 'apex-anonymous') return true;
+	return APEX_PARSERS_SET.has(parser);
 };
 
 const wrapParsers = (

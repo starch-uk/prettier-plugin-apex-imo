@@ -23,30 +23,13 @@ import {
 	normalizeTypeName,
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
-import { getNodeClassOptional, createNodeClassGuard } from './utils.js';
+import { getNodeClassOptional, createNodeClassGuard, startsWithAccessModifier } from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
 import {
 	extractCodeFromBlock,
 	CODE_TAG,
 	CODE_TAG_LENGTH,
 } from './apexdoc-code.js';
-
-// Access modifiers for checking formatted code strings (use Set for O(1) lookup)
-const ACCESS_MODIFIERS_SET = new Set([
-	'public',
-	'private',
-	'protected',
-	'static',
-	'final',
-	'global',
-]);
-
-const startsWithAccessModifier = (line: string): boolean => {
-	const trimmed = line.trim();
-	if (trimmed.length === 0) return false;
-	const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? '';
-	return ACCESS_MODIFIERS_SET.has(firstWord);
-};
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 

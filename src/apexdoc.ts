@@ -36,23 +36,8 @@ import {
 	EMPTY_CODE_TAG,
 	CODE_TAG,
 } from './apexdoc-code.js';
-
-// Access modifiers for checking formatted code strings (use Set for O(1) lookup)
-const ACCESS_MODIFIERS_SET = new Set([
-	'public',
-	'private',
-	'protected',
-	'static',
-	'final',
-	'global',
-]);
-
-const startsWithAccessModifier = (line: string): boolean => {
-	const trimmed = line.trim();
-	if (trimmed.length === 0) return false;
-	const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? '';
-	return ACCESS_MODIFIERS_SET.has(firstWord);
-};
+import { startsWithAccessModifier } from './utils.js';
+import { removeCommentPrefix } from './comments.js';
 import {
 	normalizeAnnotationNamesInText,
 	normalizeAnnotationNamesInTextExcludingApexDoc,
@@ -539,14 +524,6 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 	return cleaned;
 };
 
-/**
- * Removes comment prefix (asterisk and spaces) from a line and trims it.
- * @param line - Line to remove prefix from.
- * @returns Line with prefix removed and trimmed.
- */
-const removeCommentPrefix = (line: string): string => {
-	return line.replace(/^\s*\*\s*/, '').trim();
-};
 
 /**
  * Wraps text content to fit within effective width.
@@ -983,12 +960,16 @@ const detectAnnotationsInTokens = (
 							!l.startsWith('@') &&
 							!l.startsWith('{@code'),
 					);
-				// Skip if all lines were consumed
-				if (
-					tokenLinesToCheck.length > 0 &&
-					tokenLinesToCheck.every((l) => consumedContent.has(l))
-				) {
-					continue;
+				// Skip if all lines were consumed - use simple loop instead of .every()
+				if (tokenLinesToCheck.length > 0) {
+					let allConsumed = true;
+					for (const line of tokenLinesToCheck) {
+						if (!consumedContent.has(line)) {
+							allConsumed = false;
+							break;
+						}
+					}
+					if (allConsumed) continue;
 				}
 				newTokens.push(token);
 			} else if (processedLines.length > EMPTY) {
@@ -1049,10 +1030,7 @@ const detectCodeBlockTokens = (
 						const remainingText = content.substring(currentPos);
 						if (remainingText.length > EMPTY) {
 							// Remove trailing newlines before splitting
-							const cleanedText = remainingText.replace(
-								/\n+$/,
-								'',
-							);
+							const cleanedText = remainingText.trimEnd();
 							if (cleanedText.length > EMPTY) {
 								// For paragraph tokens, content has prefixes stripped, so extract prefix from original lines
 								// For text tokens, content now preserves prefixes from token.lines
@@ -1118,7 +1096,7 @@ const detectCodeBlockTokens = (
 					);
 					if (textBeforeCode.length > EMPTY) {
 						// Remove trailing newlines from textBeforeCode before splitting to avoid empty trailing lines
-						const cleanedText = textBeforeCode.replace(/\n+$/, '');
+						const cleanedText = textBeforeCode.trimEnd();
 						if (cleanedText.length > EMPTY) {
 							// For paragraph tokens, content has prefixes stripped, so we need to extract prefix from original lines
 							// For text tokens, content now comes from token.lines which preserves prefixes
@@ -1584,17 +1562,37 @@ function processCodeBlock(
 
 		if (embedResult) {
 			// Parse embed result to extract the formatted code
-			const embedContent = embedResult
-				.replace(/^\/\*\*\n/, '')
-				.replace(/\n \*\/\n?$/, '');
+			// Remove opening /** and closing */
+			let embedContent = embedResult;
+			if (embedContent.startsWith('/**\n')) {
+				embedContent = embedContent.substring(4); // Remove '/**\n'
+			}
+			if (embedContent.endsWith('\n */\n')) {
+				embedContent = embedContent.slice(0, -5); // Remove '\n */\n'
+			} else if (embedContent.endsWith('\n */')) {
+				embedContent = embedContent.slice(0, -4); // Remove '\n */'
+			}
 
 			// Extract base indentation from the first code line (spaces before *)
 			const embedLines = embedContent.split('\n');
 			const processedLines = embedLines.map((line: string) => {
 				// Remove the standard comment prefix but preserve relative indentation
-				const lineMatch = line.match(/^(\s*\*\s?)(.*)$/);
-				if (lineMatch) {
-					return lineMatch[2]; // Keep only the content after the comment prefix
+				// Find first non-whitespace character
+				let start = 0;
+				while (
+					start < line.length &&
+					(line[start] === ' ' || line[start] === '\t')
+				) {
+					start++;
+				}
+				// If we found an asterisk, skip it and optional space
+				if (start < line.length && line[start] === '*') {
+					start++;
+					// Skip optional space after asterisk
+					if (start < line.length && line[start] === ' ') {
+						start++;
+					}
+					return line.substring(start);
 				}
 				return line;
 			});

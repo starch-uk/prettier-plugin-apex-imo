@@ -84,16 +84,18 @@ const isIdentifier = (
 };
 
 const TYPE_CONTEXT_KEYS = ['type', 'typeref', 'returntype', 'table'] as const;
+const TYPE_CONTEXT_KEYS_SET = new Set(TYPE_CONTEXT_KEYS);
 const STACK_PARENT_OFFSET = 2;
 
-const FROM_EXPR_CLASS_PATTERN = 'FromExpr';
+const FROM_EXPR_CLASS = 'apex.jorje.data.ast.FromExpr';
+const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
 const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
-	// Use AST traversal instead of array.some() - check node @class property directly
+	// Use AST traversal - check node @class property directly
 	for (const item of stack) {
 		if (typeof item === 'object' && item !== null && '@class' in item) {
 			const nodeClass = getNodeClassOptional(item as Readonly<ApexNode>);
-			if (nodeClass?.includes(FROM_EXPR_CLASS_PATTERN)) {
+			if (nodeClass === FROM_EXPR_CLASS || nodeClass?.includes('FromExpr')) {
 				return true;
 			}
 		}
@@ -101,56 +103,62 @@ const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	return false;
 };
 
+const isTypeRelatedKey = (key: string | number | undefined): boolean => {
+	if (typeof key !== 'string') return false;
+	const lowerKey = key.toLowerCase();
+	return (
+		lowerKey === 'types' ||
+		lowerKey === 'type' ||
+		lowerKey === 'typeref' ||
+		TYPE_CONTEXT_KEYS_SET.has(
+			lowerKey as (typeof TYPE_CONTEXT_KEYS)[number],
+		) ||
+		lowerKey.startsWith('type')
+	);
+};
+
+const isTypeRelatedParentClass = (parentClass: string | undefined): boolean => {
+	if (parentClass === undefined) return false;
+	return (
+		parentClass === TYPEREF_CLASS ||
+		parentClass.includes('TypeRef') ||
+		(parentClass.includes('Type') && !parentClass.includes('Variable')) ||
+		parentClass === FROM_EXPR_CLASS ||
+		parentClass.includes('FromExpr') ||
+		parentClass.includes('NewExpression') ||
+		parentClass.includes('NewObject')
+	);
+};
+
 const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const { key, stack } = path;
 	if (key === 'types') return true;
-	const isStackArray = Array.isArray(stack);
+	if (!Array.isArray(stack)) return false;
+
 	if (typeof key === 'string') {
-		const lowerKey = key.toLowerCase();
-		// Check for type-related keys first (most common case)
-		// Variable declarations use 'type' key, constructor calls use 'type' in NewExpression
-		if (
-			lowerKey === 'type' ||
-			lowerKey === 'typeref' ||
-			TYPE_CONTEXT_KEYS.includes(
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-				lowerKey as (typeof TYPE_CONTEXT_KEYS)[number],
-			) ||
-			lowerKey.startsWith('type')
-		) {
-			return true;
-		}
-		if (lowerKey === 'field' && isStackArray && hasFromExprInStack(stack))
+		if (isTypeRelatedKey(key)) return true;
+		if (key.toLowerCase() === 'field' && hasFromExprInStack(stack))
 			return true;
 	}
-	if (isStackArray && stack.length >= STACK_PARENT_OFFSET) {
-		const stackLength = stack.length;
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-		const parent = stack[
-			stackLength - STACK_PARENT_OFFSET
-		] as Readonly<ApexNode>;
-		const parentClass = getNodeClassOptional(parent);
-		if (parentClass === undefined) return false;
-		const hasTypesArray =
-			typeof parent === 'object' &&
-			'types' in parent &&
-			Array.isArray(
-				(parent as Readonly<ApexNode & { types?: unknown }>).types,
-			);
-		// Check for variable declaration types and constructor calls
-		// Variable declarations have a 'type' key, and constructor calls are in 'NewExpression' nodes
-		if (
-			parentClass.includes('TypeRef') ||
-			(parentClass.includes('Type') &&
-				!parentClass.includes('Variable')) ||
-			parentClass.includes('FromExpr') ||
-			parentClass.includes('NewExpression') ||
-			parentClass.includes('NewObject') ||
-			hasTypesArray
-		) {
-			return key !== 'name' || !parentClass.includes('Variable');
-		}
+
+	if (stack.length < STACK_PARENT_OFFSET) return false;
+	const stackLength = stack.length;
+	const parent = stack[
+		stackLength - STACK_PARENT_OFFSET
+	] as Readonly<ApexNode>;
+	const parentClass = getNodeClassOptional(parent);
+
+	const hasTypesArray =
+		typeof parent === 'object' &&
+		'types' in parent &&
+		Array.isArray(
+			(parent as Readonly<ApexNode & { types?: unknown }>).types,
+		);
+
+	if (isTypeRelatedParentClass(parentClass) || hasTypesArray) {
+		return key !== 'name' || !parentClass?.includes('Variable');
 	}
+
 	return false;
 };
 
