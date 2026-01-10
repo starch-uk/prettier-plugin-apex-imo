@@ -28,18 +28,14 @@ import {
 	createNodeClassGuard,
 	startsWithAccessModifier,
 } from './utils.js';
-import { isValidNodeForComments } from './utils/comment-helpers.js';
-import {
-	createBreakableAssignmentDoc,
-	createGroupedDoc,
-	createJoinedDoc,
-} from './utils/doc-helpers.js';
 import { ARRAY_START_INDEX } from './comments.js';
 import {
 	extractCodeFromBlock,
 	CODE_TAG,
 	CODE_TAG_LENGTH,
 } from './apexdoc-code.js';
+import { allowsDanglingComments } from './utils/comment-utils.js';
+import { createGroupedDoc, createConditionalBreak } from './utils/doc-utils.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -50,52 +46,26 @@ const isTypeRef = createNodeClassGuard<ApexNode>(
 
 /**
  * Processes type parameters array to make first comma breakable.
- * Enhanced to use Prettier doc builder patterns for better consistency.
- * @param params - The type parameters array to process.
- * @returns Processed parameters with breakable first comma using doc builders.
+ * @param params - The type parameters array.
+ * @returns Processed parameters with breakable first comma.
  */
 const processTypeParams = (params: unknown[]): Doc[] => {
 	const processedParams: Doc[] = [];
-
-	// Find the first comma to make it breakable
-	let firstCommaIndex = -1;
 	for (let j = 0; j < params.length; j++) {
 		const param = params[j] as Doc;
-		if (param === ', ' && firstCommaIndex === -1) {
-			firstCommaIndex = j;
-			break;
-		}
-	}
-
-	// If no comma found, return params as-is
-	if (firstCommaIndex === -1) {
-		return params as Doc[];
-	}
-
-	// Process parameters up to the first comma
-	for (let j = 0; j < params.length; j++) {
-		const param = params[j] as Doc;
-
-		if (param === ', ' && j === firstCommaIndex) {
-			// Add the breakable comma
+		if (param === ', ' && j === processedParams.length) {
 			processedParams.push(', ');
-
-			// Group remaining parameters with indentation for breaking
 			if (j + 1 < params.length) {
 				const remainingParams = params.slice(j + 1) as Doc[];
 				processedParams.push(
 					group(indent([softline, ...remainingParams])),
 				);
+				break;
 			}
-
-			// We've processed the breakable comma, remaining params are handled above
-			break;
 		} else {
-			// Add parameters before the first comma as-is
 			processedParams.push(param);
 		}
 	}
-
 	return processedParams;
 };
 
@@ -103,52 +73,37 @@ const processTypeParams = (params: unknown[]): Doc[] => {
  * Make a typeDoc breakable by adding break points at the first comma in generic types.
  * Structure: [baseType, '<', [param1, ', ', param2, ...], '>']
  * We make the first ', ' in the params array breakable.
- * Enhanced to use Prettier's doc builder patterns more consistently.
  * @param typeDoc - The type document to make breakable.
- * @param options - Parser options for consistent formatting.
+ * @param _options - Parser options (unused but required for consistency).
  * @returns The breakable type document.
  */
 const makeTypeDocBreakable = (
 	typeDoc: Doc,
-	options: Readonly<ParserOptions>,
+	_options: Readonly<ParserOptions>,
 ): Doc => {
-	// Handle string types (no processing needed)
 	if (typeof typeDoc === 'string') {
 		return typeDoc;
 	}
 
-	// Handle array-based doc structures (most common case)
 	if (Array.isArray(typeDoc)) {
 		const result: Doc[] = [];
-
 		for (let i = 0; i < typeDoc.length; i++) {
 			const item = typeDoc[i] as Doc;
-
-			// Look for generic type parameter patterns: '<' followed by parameter array
 			if (
 				item === '<' &&
 				i + 1 < typeDoc.length &&
 				Array.isArray(typeDoc[i + 1])
 			) {
-				// Add the opening '<'
 				result.push(item);
-
-				// Process the type parameters to make them breakable
-				const processedParams = processTypeParams(typeDoc[i + 1] as unknown[]);
-				result.push(processedParams);
-
-				// Skip the processed parameter array in the next iteration
+				result.push(processTypeParams(typeDoc[i + 1] as unknown[]));
 				i++;
 			} else {
-				// Add non-generic elements as-is
 				result.push(item);
 			}
 		}
-
 		return result;
 	}
 
-	// Handle Prettier doc objects with contents (recursive processing)
 	if (
 		typeof typeDoc === 'object' &&
 		typeDoc !== null &&
@@ -160,20 +115,17 @@ const makeTypeDocBreakable = (
 			contents?: unknown;
 			[key: string]: unknown;
 		};
-
 		if (docObj.contents !== undefined) {
-			// Recursively process nested contents
 			return {
 				...docObj,
 				contents: makeTypeDocBreakable(
 					docObj.contents as Doc,
-					options,
+					_options,
 				),
 			} as Doc;
 		}
 	}
 
-	// Return unchanged for other doc types
 	return typeDoc;
 };
 
@@ -235,63 +187,109 @@ const isCommentNode = createNodeClassGuard<ApexNode>(
 );
 
 /**
+ * Additional AST node types that can have comments attached.
+ * These extend beyond the basic location check to include more Apex-specific constructs.
+ */
+const COMMENT_ATTACHABLE_NODE_TYPES = [
+	'apex.jorje.data.ast.ClassDeclaration',
+	'apex.jorje.data.ast.InterfaceDeclaration',
+	'apex.jorje.data.ast.EnumDeclaration',
+	'apex.jorje.data.ast.TriggerDeclarationUnit',
+	'apex.jorje.data.ast.MethodDeclaration',
+	'apex.jorje.data.ast.FieldDeclaration',
+	'apex.jorje.data.ast.PropertyDeclaration',
+	'apex.jorje.data.ast.ConstructorDeclaration',
+	'apex.jorje.data.ast.Stmnt$BlockStmnt',
+	'apex.jorje.data.ast.Stmnt$ExpressionStmnt',
+	'apex.jorje.data.ast.Stmnt$IfStmnt',
+	'apex.jorje.data.ast.Stmnt$ForStmnt',
+	'apex.jorje.data.ast.Stmnt$WhileStmnt',
+	'apex.jorje.data.ast.Stmnt$TryStmnt',
+	'apex.jorje.data.ast.Stmnt$CatchStmnt',
+	'apex.jorje.data.ast.VariableDecls',
+	'apex.jorje.data.ast.Expr$BinaryExpr',
+	'apex.jorje.data.ast.Expr$MethodCallExpr',
+	'apex.jorje.data.ast.Expr$NewExpr',
+];
+
+/**
  * Checks if a comment can be attached to a node.
  * This is called by Prettier's comment handling code.
- * Enhanced with sophisticated node type checking and alignment with Prettier patterns.
+ * Enhanced to use more comprehensive node type checking and Prettier patterns.
  * @param node - The node to check.
  * @returns True if a comment can be attached to this node.
  */
 const canAttachComment = (node: unknown): boolean => {
-	// Basic validation - align with Prettier's expectations
 	if (!node || typeof node !== 'object') return false;
 
-	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
+	const nodeWithClass = node as { loc?: unknown; '@class'?: string };
 
-	// Must have location information (required by Prettier)
-	if (!nodeWithClass.loc) return false;
+	// Basic validation: must have location and class
+	if (!nodeWithClass.loc || !nodeWithClass['@class']) {
+		return false;
+	}
 
-	// Must have a class identifier
-	if (!nodeWithClass['@class']) return false;
+	const nodeClass = nodeWithClass['@class'];
 
-	// Cannot attach comments to comment nodes themselves
+	// Exclude comment nodes themselves
 	if (
-		nodeWithClass['@class'] === INLINE_COMMENT_CLASS ||
-		nodeWithClass['@class'] === BLOCK_COMMENT_CLASS
+		nodeClass === INLINE_COMMENT_CLASS ||
+		nodeClass === BLOCK_COMMENT_CLASS ||
+		nodeClass.includes('BlockComment') ||
+		nodeClass.includes('InlineComment')
 	) {
 		return false;
 	}
 
-	// For enhanced validation, check if this is a valid node type for comments
-	// But be permissive to maintain backward compatibility
+	// Check if this is a known attachable node type
+	if (COMMENT_ATTACHABLE_NODE_TYPES.some(type => nodeClass.includes(type.split('.').pop() || ''))) {
+		return true;
+	}
+
+	// Check if this node allows dangling comments (more permissive)
+	if (allowsDanglingComments(nodeClass)) {
+		return true;
+	}
+
+	// Fallback: allow attachment for any node with proper structure
+	// This covers edge cases and future AST node types
 	return true;
 };
 
 /**
  * Checks if a comment is a block comment.
  * This is called by Prettier's comment handling code.
- * Enhanced with better type checking and support for detecting comment types.
+ * Enhanced to align with Prettier patterns and provide better validation.
  * @param comment - The comment node to check.
- * @returns True if the comment is a block comment, false otherwise.
+ * @returns True if the comment is a block comment.
  */
 const isBlockComment = (comment: unknown): boolean => {
-	// Basic validation
 	if (!comment || typeof comment !== 'object') return false;
 
 	const commentWithClass = comment as {
-		'@class'?: unknown;
-		value?: unknown;
+		'@class'?: string;
+		value?: string;
 	};
 
-	// Check by class type (primary method for AST nodes)
+	// Primary check: exact class match
 	if (commentWithClass['@class'] === BLOCK_COMMENT_CLASS) {
 		return true;
 	}
 
-	// Fallback: Check by content structure for non-AST comments
-	// Block comments start with /* and end with */
-	if (typeof commentWithClass.value === 'string') {
-		const value = commentWithClass.value.trim();
-		return value.startsWith('/*') && value.endsWith('*/');
+	// Secondary check: class name pattern (for robustness)
+	const nodeClass = commentWithClass['@class'];
+	if (nodeClass && (
+		nodeClass.includes('BlockComment') ||
+		nodeClass.includes('$BlockComment')
+	)) {
+		return true;
+	}
+
+	// Fallback: check comment value structure
+	// Block comments typically start with /* and end with */
+	const value = commentWithClass.value;
+	if (typeof value === 'string' && value.trimStart().startsWith('/*')) {
+		return true;
 	}
 
 	return false;
@@ -314,8 +312,18 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const commentNode = path.node as { value?: string };
 			const commentText = commentNode.value;
 
-			if (!commentText || !commentText.includes('{@code')) {
+			// Enhanced validation: ensure we have valid comment text
+			if (!commentText || typeof commentText !== 'string' || commentText.trim().length === 0) {
 				return null;
+			}
+
+			if (!commentText.includes('{@code')) {
+				return null;
+			}
+
+			// Additional validation: ensure the comment is properly formed
+			if (!commentText.trimStart().startsWith('/**') || !commentText.trimEnd().endsWith('*/')) {
+				return null; // Not a valid ApexDoc comment
 			}
 
 			// Return async function that processes {@code} blocks using prettier.format
@@ -333,17 +341,35 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				while (
 					(startIndex = result.indexOf(codeTag, startIndex)) !== -1
 				) {
+					// Validate extraction bounds
+					if (startIndex < 0 || startIndex >= result.length) {
+						console.warn('Embed: Invalid start index for code extraction');
+						break;
+					}
+
 					// Use extractCodeFromBlock for proper brace-counting extraction
 					const extraction = extractCodeFromBlock(result, startIndex);
 					if (!extraction) {
+						console.warn(`Embed: Failed to extract code block at position ${startIndex}`);
 						startIndex += codeTag.length;
 						continue;
 					}
 
+					// Validate extracted code
 					const codeContent = extraction.code;
+					if (!codeContent || typeof codeContent !== 'string') {
+						console.warn(`Embed: Invalid code content extracted at position ${startIndex}`);
+						startIndex = extraction.endPos;
+						continue;
+					}
 
 					try {
-						// Format code using prettier.format to get a formatted string
+						// Validate formatting options
+						const tabWidthValue = options.tabWidth || 2;
+						const printWidth = options.printWidth || 80;
+						const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
+						const effectiveWidth = Math.max(20, printWidth - commentPrefixLength); // Ensure minimum width
+
 						// Ensure our plugin is first in the plugins array so our wrapped printer is used
 						const pluginInstance = getCurrentPluginInstance();
 						const plugins = pluginInstance
@@ -353,16 +379,15 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 								]
 							: options.plugins;
 
-						// Calculate effective width: account for comment prefix
-						// In class context, comments are typically indented by tabWidth (usually 2 spaces)
-						// So the full prefix is "  * " (tabWidth + 3 for " * ")
-						// For safety, we use a conservative estimate: tabWidth + 3
-						const tabWidthValue = options.tabWidth || 2;
-						const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
-						const effectiveWidth =
-							(options.printWidth || 80) - commentPrefixLength;
+						if (!plugins || plugins.length === 0) {
+							console.warn('Embed: No plugins available for formatting');
+							startIndex = extraction.endPos;
+							continue;
+						}
 
-						let formattedCode;
+						let formattedCode: string;
+						let formatSuccess = false;
+
 						try {
 							formattedCode = await prettier.format(codeContent, {
 								...options,
@@ -370,7 +395,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 								parser: 'apex-anonymous',
 								plugins,
 							});
-						} catch {
+							formatSuccess = true;
+						} catch (anonError) {
+							console.warn(`Embed: Failed to format with apex-anonymous parser:`, anonError);
 							try {
 								formattedCode = await prettier.format(
 									codeContent,
@@ -381,10 +408,16 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 										plugins,
 									},
 								);
-							} catch {
+								formatSuccess = true;
+							} catch (apexError) {
+								console.warn(`Embed: Failed to format with apex parser:`, apexError);
 								// When parsing fails, preserve the original code as-is
 								formattedCode = codeContent;
 							}
+						}
+
+						if (!formatSuccess && formattedCode === codeContent) {
+							console.warn(`Embed: Using original code as formatting failed for block at position ${startIndex}`);
 						}
 
 						// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
@@ -451,12 +484,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						// Move past this code block
 						startIndex = beforeCode.length + newCodeBlock.length;
 					} catch (error) {
-						// If formatting fails, skip this block
+						// If formatting fails completely, skip this block
 						console.warn(
-							'Embed: Failed to format code block:',
+							`Embed: Unexpected error formatting code block at position ${startIndex}:`,
 							error,
 						);
-						startIndex = extraction.endPos;
+						// Ensure we don't get stuck in an infinite loop
+						startIndex = Math.max(startIndex + 1, extraction.endPos);
 					}
 				}
 
@@ -630,19 +664,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 			if (!assignmentDoc) return print(declPath);
 
-			if (isCollectionAssignment(assignment)) {
-				// Simple collection assignment - keep original inline formatting
+				if (isCollectionAssignment(assignment)) {
 				return [nameDoc, ' ', '=', ' ', assignmentDoc];
 			}
-
-			// Complex assignment with indentation
-			return [
-				nameDoc,
-				' ',
-				'=',
-				' ',
-				group(indent([softline, assignmentDoc])),
-			];
+			return createConditionalBreak(
+				[nameDoc, ' ', '=', indent([line, assignmentDoc])],
+				[nameDoc, ' ', '=', ' ', assignmentDoc]
+			);
 		}, 'decls' as never) as unknown as Doc[];
 
 		const resultParts: Doc[] = [];
@@ -691,24 +719,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			return false;
 		};
 
-		// Build the final document using doc builders
-		const parts: Doc[] = [];
-
-		// Add modifiers if present
-		if (modifierDocs.length > 0) {
-			parts.push(...modifierDocs);
-		}
-
-		// Add type declaration
-		parts.push(breakableTypeDoc);
-
-		// Handle multiple declarations
 		if (declDocs.length > 1) {
-			parts.push(' ', createJoinedDoc(declDocs, ', ', true), ';');
+			resultParts.push(' ', joinDocs([', ', softline], declDocs), ';');
 		} else if (declDocs.length === 1 && declDocs[0] !== undefined) {
 			const declDoc = declDocs[0] as Doc;
-
-			// Check if this is an assignment declaration
 			if (
 				Array.isArray(declDoc) &&
 				declDoc.length >= 5 &&
@@ -716,26 +730,24 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			) {
 				const nameDoc = declDoc[0] as Doc;
 				const assignmentDoc = declDoc[4] as Doc;
-
 				if (isComplexMapType(typeDoc)) {
-					// Special handling for complex map types
-					parts.push(
-						' ',
-						group([nameDoc, ' ', '=']),
-						ifBreak(indent([line, assignmentDoc]), [' ', assignmentDoc]),
-						';',
+					resultParts.push(' ', createGroupedDoc([nameDoc, ' ', '=']));
+					resultParts.push(
+						createConditionalBreak(
+							indent([line, assignmentDoc]),
+							[' ', assignmentDoc]
+						)
 					);
+					resultParts.push(';');
 				} else {
-					// Standard assignment formatting
-					parts.push(' ', [declDoc, ';']);
+					resultParts.push(' ', [declDoc, ';']);
 				}
 			} else {
-				// Non-assignment declaration
-				parts.push(' ', [declDoc, ';']);
+				resultParts.push(' ', [declDoc, ';']);
 			}
 		}
 
-		return createGroupedDoc(parts);
+		return createGroupedDoc(resultParts);
 	};
 
 	/**
@@ -766,42 +778,33 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		if (nameDocs.length === 0) return null;
 
-		// Build the final document using doc builders
-		const parts: Doc[] = [];
-
-		// Add modifiers if present
+		const resultParts: Doc[] = [];
 		if (modifierDocs.length > 0) {
-			parts.push(...modifierDocs);
+			resultParts.push(...modifierDocs);
+		}
+		resultParts.push(breakableTypeDoc);
+
+		if (nameDocs.length > 1) {
+			const typeAndNames = nameDocs
+				.filter((nameDoc): nameDoc is Doc => nameDoc !== undefined)
+				.map((nameDoc) => {
+					const wrappedName = createConditionalBreak(
+						indent([line, nameDoc]),
+						[' ', nameDoc]
+					);
+					return createGroupedDoc([breakableTypeDoc, wrappedName]);
+				});
+			resultParts.push(joinDocs([', ', softline], typeAndNames), ';');
+			return createGroupedDoc(resultParts);
 		}
 
-		// Add type declaration
-		parts.push(breakableTypeDoc);
-
-		// Filter out undefined name docs
-		const validNameDocs = nameDocs.filter(
-			(nameDoc): nameDoc is Doc => nameDoc !== undefined,
-		);
-
-		if (validNameDocs.length > 1) {
-			// Multiple variable names - create breakable type + name combinations
-			const typeAndNames = validNameDocs.map((nameDoc) => {
-				const wrappedName = ifBreak(indent([line, nameDoc]), [
-					' ',
-					nameDoc,
-				]);
-				return group([breakableTypeDoc, wrappedName]);
-			});
-
-			parts.push(createJoinedDoc(typeAndNames, ', ', true), ';');
-			return createGroupedDoc(parts);
-		}
-
-		if (validNameDocs.length === 1) {
-			// Single variable name
-			const nameDoc = validNameDocs[0] as Doc;
-			const wrappedName = ifBreak(indent([line, nameDoc]), [' ', nameDoc]);
-			parts.push(wrappedName, ';');
-			return createGroupedDoc(parts);
+		if (nameDocs[0] !== undefined) {
+			const wrappedName = createConditionalBreak(
+				indent([line, nameDocs[0]]),
+				[' ', nameDocs[0]]
+			);
+			resultParts.push(wrappedName, ';');
+			return createGroupedDoc(resultParts);
 		}
 
 		return null;
@@ -847,9 +850,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		if (!leftPath || !rightPath) return null;
 
-		// Use doc builder helper for consistent assignment formatting
-		const assignmentDoc = createBreakableAssignmentDoc(leftPath, rightPath);
-		return group([assignmentDoc, ';']);
+		const wrappedAssignment = createConditionalBreak(
+			indent([line, rightPath]),
+			[' ', rightPath]
+		);
+		return createGroupedDoc([leftPath, ' ', '=', wrappedAssignment, ';']);
 	};
 
 	const customPrint = (

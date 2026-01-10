@@ -12,17 +12,7 @@ import {
 	normalizeAnnotationTokens,
 	removeTrailingEmptyLines,
 } from './apexdoc.js';
-import {
-	isApexComment,
-	getCommentNode,
-	isApexDoc,
-} from './utils/comment-helpers.js';
-import {
-	removeCommentPrefix,
-	normalizeCommentStart,
-	normalizeCommentEnd,
-	calculateEffectivePrintWidth,
-} from './utils/text-utils.js';
+import { isValidCommentForProcessing, isApexDoc } from './utils/comment-utils.js';
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -31,7 +21,47 @@ const STRING_OFFSET = 1;
 const INDEX_ONE = 1;
 const INDEX_TWO = 2;
 
+/**
+ * Checks if a comment node is an Apex comment.
+ * This identifies comments that can have ApexDoc annotations and formatting.
+ * @param comment - The comment node to check.
+ * @returns True if the comment is an Apex comment, false otherwise.
+ */
+const isApexComment = (comment: unknown): boolean => {
+	if (
+		comment === null ||
+		comment === undefined ||
+		typeof comment !== 'object' ||
+		!('value' in comment) ||
+		typeof (comment as { value?: unknown }).value !== 'string'
+	) {
+		return false;
+	}
+	const commentValue = (comment as { value: string }).value;
+	// Must start with /** and end with */ (ApexDoc style)
+	if (
+		!commentValue.trimStart().startsWith('/**') ||
+		!commentValue.trimEnd().endsWith('*/')
+	) {
+		return false;
+	}
+	return true;
+};
 
+/**
+ * Safely extracts a comment node from an unknown type.
+ * This is used by comment handling functions to ensure type safety.
+ * @param comment - The unknown comment to extract.
+ * @returns The comment node if valid, null otherwise.
+ */
+const getCommentNode = (
+	comment: unknown,
+): { value: string; '@class'?: string } | null => {
+	if (!isApexComment(comment)) {
+		return null;
+	}
+	return comment as { value: string; '@class'?: string };
+};
 
 // Apex AST node types that allow dangling comments
 const ALLOW_DANGLING_COMMENTS = [
@@ -142,19 +172,10 @@ const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
 /**
  * Wraps text content using Prettier's fill builder and returns a Doc.
  * This allows direct integration with Prettier's doc composition system.
- * Enhanced to handle indentation contexts and comment prefix calculation.
  * @param text - The text content to wrap.
- * @param options - Parser options for print width and indentation.
- * @param commentIndent - The indentation level of the comment (default: 0).
- * @param includeCommentPrefix - Whether to include comment prefix (* ) in calculation (default: false).
  * @returns A Prettier Doc that can be used in doc composition.
  */
-const wrapTextWithFill = (
-	text: string,
-	options?: Readonly<ParserOptions>,
-	commentIndent: number = 0,
-	includeCommentPrefix: boolean = false,
-): Doc => {
+const wrapTextWithFill = (text: string): Doc => {
 	if (!text || text.trim().length === 0) {
 		return '';
 	}
@@ -162,38 +183,7 @@ const wrapTextWithFill = (
 	if (words.length === 0) {
 		return '';
 	}
-
 	const { fill, join, line } = prettier.doc.builders;
-
-	// If options are provided, use Prettier's fill with effective width calculation
-	if (options?.printWidth) {
-		// Calculate effective width accounting for comment prefix and indentation
-		let effectiveWidth = options.printWidth;
-
-		if (includeCommentPrefix) {
-			// Account for base indentation + comment prefix (* )
-			const baseIndent = createIndent(
-				commentIndent,
-				options.tabWidth || DEFAULT_TAB_WIDTH,
-				options.useTabs,
-			);
-			const commentPrefixLength = baseIndent.length + ' * '.length;
-			effectiveWidth = Math.max(20, effectiveWidth - commentPrefixLength); // Minimum 20 chars
-		}
-
-		// Create fill doc with calculated width
-		const fillDoc = fill(join(line, words));
-
-		// If we have effective width, wrap it in a group for better control
-		if (effectiveWidth < (options.printWidth || 80)) {
-			const { group } = prettier.doc.builders;
-			return group(fillDoc);
-		}
-
-		return fillDoc;
-	}
-
-	// Fallback to basic fill without width calculation
 	return fill(join(line, words));
 };
 
@@ -207,48 +197,16 @@ const getIndentLevel = (
 	return match.replace(/\t/g, ' '.repeat(tabWidth)).length;
 };
 
-/**
- * Creates an indentation string aligned with Prettier's indentation utilities.
- * This function generates indentation strings that work seamlessly with Prettier's
- * `indent()` doc builder, ensuring consistent spacing throughout the formatting process.
- *
- * @param level - The indentation level in spaces.
- * @param tabWidth - The width of a tab character (default: 2).
- * @param useTabs - Whether to use tabs instead of spaces (default: false).
- * @returns An indentation string compatible with Prettier's formatting system.
- *
- * @example
- * ```typescript
- * // With spaces (default)
- * createIndent(4, 2, false) // Returns '    ' (4 spaces)
- *
- * // With tabs
- * createIndent(4, 2, true)  // Returns '\t\t' (2 tabs = 4 spaces)
- *
- * // Zero indent
- * createIndent(0, 2, false) // Returns '' (empty string)
- * ```
- */
 const createIndent = (
 	level: Readonly<number>,
-	tabWidth: Readonly<number> = DEFAULT_TAB_WIDTH,
+	tabWidth: Readonly<number>,
 	useTabs?: Readonly<boolean | null | undefined>,
-): string => {
-	// Align with Prettier's indentation logic
-	if (level <= MIN_INDENT_LEVEL) {
-		return '';
-	}
-
-	// Use tabs if requested, otherwise use spaces
-	if (useTabs === true) {
-		// Calculate number of tabs needed to reach the desired level
-		const tabCount = Math.floor(level / tabWidth);
-		return '\t'.repeat(tabCount);
-	}
-
-	// Default to spaces for consistent formatting
-	return ' '.repeat(level);
-};
+): string =>
+	level <= MIN_INDENT_LEVEL
+		? ''
+		: useTabs === true
+			? '\t'.repeat(Math.floor(level / tabWidth))
+			: ' '.repeat(level);
 
 const findLineStart = (text: string, pos: number): number => {
 	let lineStart = pos;
@@ -275,7 +233,75 @@ const getCommentIndent = (
 	);
 };
 
+/**
+ * Normalizes comment start marker: /***** -> /**
+ */
+const normalizeCommentStart = (comment: string): string => {
+	// Find first non-whitespace character
+	let start = 0;
+	while (
+		start < comment.length &&
+		(comment[start] === ' ' || comment[start] === '\t')
+	) {
+		start++;
+	}
+	// If we find /*, normalize multiple asterisks
+	if (comment.substring(start).startsWith('/*')) {
+		const prefix = comment.substring(0, start);
+		const afterSlash = comment.substring(start + 1);
+		// Count asterisks after /
+		let asteriskCount = 0;
+		while (
+			asteriskCount < afterSlash.length &&
+			afterSlash[asteriskCount] === '*'
+		) {
+			asteriskCount++;
+		}
+		// Normalize to exactly two asterisks (/**)
+		if (asteriskCount > 2) {
+			return prefix + '/**' + afterSlash.substring(asteriskCount);
+		} else if (asteriskCount === 1) {
+			// Only one asterisk, need to add one more
+			return prefix + '/**' + afterSlash.substring(1);
+		}
+	}
+	return comment;
+};
 
+/**
+ * Normalizes comment end marker: multiple asterisks before slash to single asterisk.
+ */
+const normalizeCommentEnd = (comment: string): string => {
+	// Replace **/ or more with */ - scan for patterns and replace
+	let result = comment;
+	let pos = 0;
+	while (pos < result.length) {
+		// Look for */ pattern
+		const slashPos = result.indexOf('/', pos);
+		if (slashPos === -1) break;
+
+		// Count asterisks before /
+		let asteriskCount = 0;
+		let checkPos = slashPos - 1;
+		while (checkPos >= 0 && result[checkPos] === '*') {
+			asteriskCount++;
+			checkPos--;
+		}
+
+		// If we have 2+ asterisks before /, normalize to */
+		if (asteriskCount >= 2) {
+			const replaceStart = checkPos + 1;
+			result =
+				result.substring(0, replaceStart) +
+				'*/' +
+				result.substring(slashPos + 1);
+			pos = replaceStart + 2;
+		} else {
+			pos = slashPos + 1;
+		}
+	}
+	return result;
+};
 
 /**
  * Normalizes a single comment line with asterisk prefix.
@@ -516,6 +542,20 @@ type CommentToken =
 	| CodeBlockToken
 	| AnnotationToken;
 
+/**
+ * Removes comment prefix (asterisk and spaces) from a line.
+ * @param line - Line to remove prefix from.
+ * @param preserveIndent - If true, uses original regex without trim to preserve code indentation. Otherwise trims result.
+ * @returns Line with prefix removed and optionally trimmed.
+ */
+const removeCommentPrefix = (
+	line: string,
+	preserveIndent: boolean = false,
+): string => {
+	// Use original regex: /^\s*(\*(\s*\*)*)\s*/ - removes leading whitespace, asterisk(s), and all trailing whitespace
+	const result = line.replace(/^\s*(\*(\s*\*)*)\s*/, '');
+	return preserveIndent ? result : result.trim();
+};
 
 /**
  * Parses a normalized comment string into basic tokens.
@@ -955,6 +995,49 @@ const customPrintComment = (
 ): Doc => {
 	const node = path.getNode();
 
+	/**
+	 * Check if this is an ApexDoc comment using the same logic as prettier-plugin-apex.
+	 * But be more lenient: allow malformed comments (lines without asterisks) to be detected as ApexDoc
+	 * if they start with / ** and end with * /.
+	 * @param comment - The comment node to check.
+	 * @returns True if the comment is an ApexDoc comment, false otherwise.
+	 */
+	const isApexDoc = (comment: unknown): boolean => {
+		if (
+			comment === null ||
+			comment === undefined ||
+			typeof comment !== 'object' ||
+			!('value' in comment) ||
+			typeof comment.value !== 'string'
+		) {
+			return false;
+		}
+		const commentValue = (comment as { value: string }).value;
+		// Must start with /** and end with */
+		if (
+			!commentValue.trimStart().startsWith('/**') ||
+			!commentValue.trimEnd().endsWith('*/')
+		) {
+			return false;
+		}
+		const lines = commentValue.split('\n');
+		// For well-formed ApexDoc, all middle lines should have asterisks
+		// For malformed ApexDoc, we still want to detect it if it starts with /** and ends with */
+		// If it has at least one middle line with an asterisk, treat it as ApexDoc
+		// If it has NO asterisks but starts with /** and ends with */, also treat it as ApexDoc
+		// (so we can normalize it by adding asterisks)
+		if (lines.length <= INDEX_ONE) return false;
+		const middleLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
+		// If at least one middle line has an asterisk, treat it as ApexDoc (even if malformed)
+		for (const commentLine of middleLines) {
+			if (commentLine.trim().startsWith('*')) {
+				return true;
+			}
+		}
+		// If no middle lines have asterisks but comment starts with /** and ends with */,
+		// treat it as ApexDoc so we can normalize it (add asterisks)
+		return middleLines.length > ARRAY_START_INDEX;
+	};
 
 	if (node !== null && 'value' in node && typeof node['value'] === 'string') {
 		const commentNode = node as unknown as { value: string };
@@ -972,6 +1055,7 @@ const customPrintComment = (
 			const embedFormattedComment = commentKey
 				? _getFormattedCodeBlock(commentKey)
 				: null;
+
 			// Use embed-formatted comment if available, otherwise normalize the original comment
 			// Normalize the embed-formatted comment to match Prettier's indentation (single space before *)
 			const commentToUse = embedFormattedComment
@@ -1021,115 +1105,176 @@ const customPrintComment = (
 /**
  * Handles comments that are on their own line.
  * This is called by Prettier's comment handling code.
- * Enhanced to use Prettier utilities more effectively with better error handling.
+ * Enhanced to use Prettier utilities more effectively while maintaining compatibility.
  * @param comment - The comment node to handle.
- * @param sourceCode - The entire source code for context.
- * @returns True if the comment was handled, false to let Prettier use default logic.
+ * @param sourceCode - The entire source code.
+ * @returns True if the comment was handled, false otherwise.
  */
 const handleOwnLineComment = (
 	comment: unknown,
 	sourceCode: string,
 ): boolean => {
-	try {
-		// First try dangling comment handling (for empty blocks/statements)
-		if (handleDanglingComment(comment)) {
-			return true;
-		}
-
-		// Then try block statement leading comment handling
-		if (handleBlockStatementLeadingComment(comment)) {
-			return true;
-		}
-
-		// Additional handling for Apex-specific patterns could be added here
-		// For now, return false to let Prettier handle with default logic
-
-		return false;
-	} catch (error) {
-		// If there's an error in comment handling, log it but don't fail
-		// Return false to let Prettier handle with default logic
-		console.warn('handleOwnLineComment: Error handling comment:', error);
-		return false;
+	// Validate comment first using our utilities
+	if (!isValidCommentForProcessing(comment)) {
+		// Still try the handlers even for invalid comments, to maintain compatibility
+		// The handlers have their own validation
 	}
+
+	// Try specialized handlers first (maintains original behavior)
+	if (handleDanglingComment(comment)) {
+		return true;
+	}
+
+	if (handleBlockStatementLeadingComment(comment)) {
+		return true;
+	}
+
+	// Additional enhancement: Use Prettier's utilities for better integration
+	const commentWithContext = comment as {
+		followingNode?: ApexNode;
+		'@class'?: string;
+	};
+
+	// For ApexDoc comments, let Prettier handle with default logic
+	if (comment && isApexDoc(comment)) {
+		return false; // Let Prettier's default logic handle
+	}
+
+	// Check for method/constructor comments that should be attached to the following node
+	if (commentWithContext && commentWithContext.followingNode) {
+		const followingNodeClass = commentWithContext.followingNode['@class'];
+		if (
+			followingNodeClass &&
+			(followingNodeClass.includes('MethodDeclaration') ||
+			 followingNodeClass.includes('ConstructorDeclaration'))
+		) {
+			const { addLeadingComment } = prettier.util;
+			addLeadingComment(commentWithContext.followingNode, comment);
+			return true;
+		}
+	}
+
+	return false;
 };
 
 /**
  * Handles comments that have preceding text but no trailing text on a line.
  * This is called by Prettier's comment handling code.
- * Enhanced with better error handling and improved binary expression trailing comment logic.
+ * Enhanced to use Prettier utilities more effectively while maintaining compatibility.
  * @param comment - The comment node to handle.
- * @param sourceCode - The entire source code for context.
- * @returns True if the comment was handled, false to let Prettier use default logic.
+ * @param sourceCode - The entire source code.
+ * @returns True if the comment was handled, false otherwise.
  */
 const handleEndOfLineComment = (
 	comment: unknown,
 	sourceCode: string,
 ): boolean => {
-	try {
-		// First try dangling comment handling (for empty blocks/statements)
-		if (handleDanglingComment(comment)) {
-			return true;
-		}
-
-		// Handle binary expression trailing comments with enhanced logic
-		if (handleBinaryExpressionTrailingComment(comment)) {
-			return true;
-		}
-
-		// Handle block statement leading comments
-		if (handleBlockStatementLeadingComment(comment)) {
-			return true;
-		}
-
-		// Additional handling for Apex-specific end-of-line patterns could be added here
-		// For example: method parameter comments, variable assignment comments, etc.
-
-		return false;
-	} catch (error) {
-		// If there's an error in comment handling, log it but don't fail
-		// Return false to let Prettier handle with default logic
-		console.warn('handleEndOfLineComment: Error handling comment:', error);
-		return false;
+	// Validate comment first using our utilities
+	if (!isValidCommentForProcessing(comment)) {
+		// Still try the handlers even for invalid comments, to maintain compatibility
+		// The handlers have their own validation
 	}
+
+	// Try specialized handlers first (maintains original behavior)
+	if (handleDanglingComment(comment)) {
+		return true;
+	}
+
+	if (handleBinaryExpressionTrailingComment(comment)) {
+		return true;
+	}
+
+	if (handleBlockStatementLeadingComment(comment)) {
+		return true;
+	}
+
+	// Additional enhancement: Better handling for Apex-specific patterns
+	const commentWithContext = comment as {
+		precedingNode?: ApexNode;
+		followingNode?: ApexNode;
+		placement?: string;
+		'@class'?: string;
+	};
+
+	// For end-of-line comments in ApexDoc, let Prettier handle with default logic
+	if (comment && isApexDoc(comment)) {
+		return false; // Let Prettier's default logic handle
+	}
+
+	// Enhanced handling for assignment expressions and similar constructs
+	if (commentWithContext && commentWithContext.precedingNode) {
+		const precedingNodeClass = commentWithContext.precedingNode['@class'];
+		if (
+			precedingNodeClass &&
+			(precedingNodeClass.includes('Expr$AssignmentExpr') ||
+			 precedingNodeClass.includes('Expr$BinaryExpr'))
+		) {
+			// For assignment and binary expressions, trailing comments are often better
+			// handled by Prettier's default logic
+			return false;
+		}
+	}
+
+	return false;
 };
 
 /**
  * Handles comments that have both preceding text and trailing text on a line.
  * This is called by Prettier's comment handling code.
- * Enhanced with better error handling and improved comment placement logic aligned with Prettier patterns.
+ * Enhanced to use Prettier utilities more effectively while maintaining compatibility.
  * @param comment - The comment node to handle.
- * @param sourceCode - The entire source code for context.
- * @returns True if the comment was handled, false to let Prettier use default logic.
+ * @param sourceCode - The entire source code.
+ * @returns True if the comment was handled, false otherwise.
  */
 const handleRemainingComment = (
 	comment: unknown,
 	sourceCode: string,
 ): boolean => {
-	try {
-		// First try dangling comment handling (for empty blocks/statements)
-		if (handleDanglingComment(comment)) {
-			return true;
-		}
-
-		// Handle block statement leading comments
-		if (handleBlockStatementLeadingComment(comment)) {
-			return true;
-		}
-
-		// For remaining comments (those with both preceding and trailing text),
-		// we typically want to let Prettier handle them with its default logic
-		// since these are often inline comments that belong where they are
-
-		// Additional handling for Apex-specific remaining comment patterns could be added here
-		// For example: inline parameter documentation, complex expression comments, etc.
-
-		return false;
-	} catch (error) {
-		// If there's an error in comment handling, log it but don't fail
-		// Return false to let Prettier handle with default logic
-		console.warn('handleRemainingComment: Error handling comment:', error);
-		return false;
+	// Validate comment first using our utilities
+	if (!isValidCommentForProcessing(comment)) {
+		// Still try the handlers even for invalid comments, to maintain compatibility
+		// The handlers have their own validation
 	}
+
+	// Try specialized handlers first (maintains original behavior)
+	if (handleDanglingComment(comment)) {
+		return true;
+	}
+
+	if (handleBlockStatementLeadingComment(comment)) {
+		return true;
+	}
+
+	// Additional enhancement: For remaining comments, which are typically
+	// inline comments within expressions, let Prettier handle with default logic
+	// unless we have specific Apex handling needs
+	const commentWithContext = comment as {
+		precedingNode?: ApexNode;
+		followingNode?: ApexNode;
+		placement?: string;
+		'@class'?: string;
+	};
+
+	// For ApexDoc comments that appear inline, let Prettier handle with default logic
+	if (comment && isApexDoc(comment)) {
+		return false; // Let Prettier's default logic handle
+	}
+
+	// For remaining comments in complex expressions, Prettier's default handling
+	// is usually better than custom attachment logic
+	if (commentWithContext && commentWithContext.precedingNode) {
+		const precedingNodeClass = commentWithContext.precedingNode['@class'];
+		if (
+			precedingNodeClass &&
+			(precedingNodeClass.includes('Expr$') ||
+			 precedingNodeClass.includes('Stmnt$'))
+		) {
+			// Let Prettier handle inline comments in expressions
+			return false;
+		}
+	}
+
+	return false;
 };
 
 export {

@@ -1,8 +1,12 @@
 /**
- * @file Utility functions for comment processing and validation.
+ * @file Utility functions for comment detection and validation.
  */
 
 import type { ApexNode } from '../types.js';
+
+// Constants
+const ARRAY_START_INDEX = 0;
+const INDEX_ONE = 1;
 
 /**
  * Checks if a comment node is an Apex comment.
@@ -10,7 +14,7 @@ import type { ApexNode } from '../types.js';
  * @param comment - The comment node to check.
  * @returns True if the comment is an Apex comment, false otherwise.
  */
-const isApexComment = (comment: unknown): boolean => {
+export const isApexComment = (comment: unknown): boolean => {
 	if (
 		comment === null ||
 		comment === undefined ||
@@ -37,7 +41,7 @@ const isApexComment = (comment: unknown): boolean => {
  * @param comment - The unknown comment to extract.
  * @returns The comment node if valid, null otherwise.
  */
-const getCommentNode = (
+export const getCommentNode = (
 	comment: unknown,
 ): { value: string; '@class'?: string } | null => {
 	if (!isApexComment(comment)) {
@@ -47,19 +51,18 @@ const getCommentNode = (
 };
 
 /**
- * Checks if a comment is an ApexDoc comment using Prettier patterns.
- * This is more lenient than isApexComment and allows for malformed comments
- * that should still be treated as ApexDoc for normalization purposes.
+ * Checks if a comment is an ApexDoc comment.
+ * This is more specific than isApexComment - it checks for actual ApexDoc content.
  * @param comment - The comment node to check.
- * @returns True if the comment should be treated as ApexDoc, false otherwise.
+ * @returns True if the comment is an ApexDoc comment, false otherwise.
  */
-const isApexDocComment = (comment: unknown): boolean => {
+export const isApexDoc = (comment: unknown): boolean => {
 	if (
 		comment === null ||
 		comment === undefined ||
 		typeof comment !== 'object' ||
 		!('value' in comment) ||
-		typeof (comment as { value?: unknown }).value !== 'string'
+		typeof comment.value !== 'string'
 	) {
 		return false;
 	}
@@ -71,15 +74,14 @@ const isApexDocComment = (comment: unknown): boolean => {
 	) {
 		return false;
 	}
-
 	const lines = commentValue.split('\n');
 	// For well-formed ApexDoc, all middle lines should have asterisks
 	// For malformed ApexDoc, we still want to detect it if it starts with /** and ends with */
 	// If it has at least one middle line with an asterisk, treat it as ApexDoc
 	// If it has NO asterisks but starts with /** and ends with */, also treat it as ApexDoc
 	// (so we can normalize it by adding asterisks)
-	if (lines.length <= 1) return false;
-	const middleLines = lines.slice(1, lines.length - 1);
+	if (lines.length <= INDEX_ONE) return false;
+	const middleLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
 	// If at least one middle line has an asterisk, treat it as ApexDoc (even if malformed)
 	for (const commentLine of middleLines) {
 		if (commentLine.trim().startsWith('*')) {
@@ -88,34 +90,49 @@ const isApexDocComment = (comment: unknown): boolean => {
 	}
 	// If no middle lines have asterisks but comment starts with /** and ends with */,
 	// treat it as ApexDoc so we can normalize it (add asterisks)
-	return middleLines.length > 0;
+	return middleLines.length > ARRAY_START_INDEX;
 };
 
 /**
- * Extracts the comment value from a comment node safely.
- * @param comment - The comment node to extract value from.
- * @returns The comment value string, or null if invalid.
- */
-const extractCommentValue = (comment: unknown): string | null => {
-	const commentNode = getCommentNode(comment);
-	return commentNode ? commentNode.value : null;
-};
-
-/**
- * Checks if a comment node has location information for attachment.
+ * Checks if a comment is valid for processing.
+ * This combines basic validation with content checks.
  * @param comment - The comment node to check.
- * @returns True if the comment has location data for attachment.
+ * @returns True if the comment can be processed, false otherwise.
  */
-const hasCommentLocation = (comment: unknown): comment is ApexNode & { loc?: unknown } => {
-	if (!comment || typeof comment !== 'object') return false;
-	const commentWithLoc = comment as { loc?: unknown; '@class'?: unknown };
-	return !!commentWithLoc.loc && !!commentWithLoc['@class'];
+export const isValidCommentForProcessing = (comment: unknown): boolean => {
+	if (!isApexComment(comment)) {
+		return false;
+	}
+
+	const commentNode = getCommentNode(comment);
+	if (!commentNode) {
+		return false;
+	}
+
+	// Must have non-empty content
+	const trimmedValue = commentNode.value.trim();
+	return trimmedValue.length > 0;
 };
 
-export {
-	isApexComment,
-	getCommentNode,
-	isApexDocComment,
-	extractCommentValue,
-	hasCommentLocation,
+/**
+ * Apex AST node types that allow dangling comments.
+ */
+export const ALLOW_DANGLING_COMMENTS = [
+	'apex.jorje.data.ast.ClassDeclaration',
+	'apex.jorje.data.ast.InterfaceDeclaration',
+	'apex.jorje.data.ast.EnumDeclaration',
+	'apex.jorje.data.ast.TriggerDeclarationUnit',
+	'apex.jorje.data.ast.Stmnt$BlockStmnt',
+];
+
+/**
+ * Checks if an AST node allows dangling comments.
+ * @param nodeClass - The AST node class name.
+ * @returns True if the node allows dangling comments, false otherwise.
+ */
+export const allowsDanglingComments = (nodeClass: string | undefined): boolean => {
+	if (!nodeClass) {
+		return false;
+	}
+	return ALLOW_DANGLING_COMMENTS.includes(nodeClass);
 };

@@ -5,79 +5,153 @@
 import type { Doc } from 'prettier';
 import * as prettier from 'prettier';
 
-const { group, indent, ifBreak, line, softline } = prettier.doc.builders;
+const { group, indent, ifBreak, join, line, softline, hardline } = prettier.doc.builders;
 
 /**
- * Creates a group with the given contents.
- * @param contents - The doc contents to group.
- * @returns A grouped doc.
+ * Creates a grouped document with optional indentation.
+ * @param docs - The documents to group.
+ * @param shouldIndent - Whether to indent the grouped content (default: false).
+ * @returns A grouped document.
  * @example
  * ```typescript
- * const doc = createGroup(['function', ' ', name, '()']);
+ * createGroupedDoc([nameDoc, ' = ', valueDoc], true)
  * ```
  */
-const createGroup = (contents: Doc): Doc => group(contents);
+export const createGroupedDoc = (
+	docs: Doc[],
+	shouldIndent: boolean = false,
+): Doc => {
+	const content = shouldIndent ? indent(docs) : docs;
+	return group(content);
+};
 
 /**
- * Creates a group with indentation for the given contents.
- * @param contents - The doc contents to group and indent.
- * @returns A grouped and indented doc.
+ * Creates an indented document.
+ * @param docs - The documents to indent.
+ * @param shouldGroup - Whether to wrap the indented content in a group (default: false).
+ * @returns An indented document.
  * @example
  * ```typescript
- * const doc = createIndentGroup(['param1,', line, 'param2']);
+ * createIndentedDoc([line, assignmentDoc])
  * ```
  */
-const createIndentGroup = (contents: Doc): Doc => group(indent(contents));
+export const createIndentedDoc = (
+	docs: Doc[],
+	shouldGroup: boolean = false,
+): Doc => {
+	const content = indent(docs);
+	return shouldGroup ? group(content) : content;
+};
 
 /**
- * Creates a conditional break group that behaves differently based on whether a break occurs.
- * @param flatContents - The contents when no break occurs.
- * @param breakContents - The contents when a break occurs.
- * @returns A conditional break doc.
+ * Creates a fill document for text wrapping.
+ * @param content - The content to wrap.
+ * @param separator - The separator to use between words (default: line).
+ * @returns A fill document.
  * @example
  * ```typescript
- * const doc = createIfBreakGroup(['name = value'], indent([line, 'name =', line, 'value']));
+ * createFillDoc(words, line)
  * ```
  */
-const createIfBreakGroup = (flatContents: Doc, breakContents: Doc): Doc =>
-	ifBreak(breakContents, flatContents);
+export const createFillDoc = (
+	content: string | Doc[],
+	separator: Doc = line,
+): Doc => {
+	if (typeof content === 'string') {
+		const words = content.split(/\s+/).filter((word) => word.length > 0);
+		return prettier.doc.builders.fill(join(separator, words));
+	}
+	return prettier.doc.builders.fill(content);
+};
 
 /**
- * Creates a soft line break that becomes a space in flat mode or a newline when broken.
- * @returns A soft line doc.
+ * Creates a conditional break document.
+ * @param breakDoc - The document to use when breaking.
+ * @param flatDoc - The document to use when not breaking.
+ * @returns A conditional break document.
  * @example
  * ```typescript
- * const doc = group(['item1,', softLineBreak(), 'item2']);
+ * createConditionalBreak(indent([line, content]), [' ', content])
  * ```
  */
-const softLineBreak = (): Doc => softline;
+export const createConditionalBreak = (breakDoc: Doc, flatDoc: Doc): Doc => {
+	return ifBreak(breakDoc, flatDoc);
+};
 
 /**
- * Creates a line break that becomes a space in flat mode or a newline when broken.
- * @returns A line doc.
+ * Creates a joined document with a separator.
+ * @param docs - The documents to join.
+ * @param separator - The separator to use between documents.
+ * @returns A joined document.
  * @example
  * ```typescript
- * const doc = group(['item1,', lineBreak(), 'item2']);
+ * createJoinedDoc([item1, item2, item3], [',', line])
  * ```
  */
-const lineBreak = (): Doc => line;
+export const createJoinedDoc = (docs: Doc[], separator: Doc): Doc => {
+	return join(separator, docs);
+};
 
 /**
- * Creates an indented doc with the given contents.
- * @param contents - The contents to indent.
- * @returns An indented doc.
+ * Creates a document with proper line breaks for assignments.
+ * @param leftDoc - The left side of the assignment.
+ * @param rightDoc - The right side of the assignment.
+ * @param operator - The assignment operator (default: '=').
+ * @returns A properly formatted assignment document.
  * @example
  * ```typescript
- * const doc = createIndent(['line1', line, 'line2']);
+ * createAssignmentDoc(nameDoc, valueDoc, '=')
  * ```
  */
-const createIndent = (contents: Doc): Doc => indent(contents);
+export const createAssignmentDoc = (
+	leftDoc: Doc,
+	rightDoc: Doc,
+	operator: string = '=',
+): Doc => {
+	return createGroupedDoc([
+		leftDoc,
+		' ',
+		operator,
+		createConditionalBreak(indent([line, rightDoc]), [' ', rightDoc]),
+	]);
+};
 
-export {
-	createGroup,
-	createIndent,
-	createIndentGroup,
-	createIfBreakGroup,
-	lineBreak,
-	softLineBreak,
+/**
+ * Creates a document for comma-separated lists with proper line breaks.
+ * @param items - The items to join.
+ * @param shouldBreak - Whether to allow line breaks (default: true).
+ * @returns A comma-separated list document.
+ * @example
+ * ```typescript
+ * createCommaSeparatedList([item1, item2, item3])
+ * ```
+ */
+export const createCommaSeparatedList = (
+	items: Doc[],
+	shouldBreak: boolean = true,
+): Doc => {
+	if (shouldBreak) {
+		return createJoinedDoc(items, [',', line]);
+	}
+	return createJoinedDoc(items, [', ', '']);
+};
+
+/**
+ * Creates a document for semicolon-terminated statements.
+ * @param content - The statement content.
+ * @param shouldBreak - Whether to allow line breaks before semicolon (default: false).
+ * @returns A semicolon-terminated document.
+ * @example
+ * ```typescript
+ * createStatementDoc(variableDeclaration)
+ * ```
+ */
+export const createStatementDoc = (
+	content: Doc,
+	shouldBreak: boolean = false,
+): Doc => {
+	if (shouldBreak) {
+		return createGroupedDoc([content, ifBreak('', ';')]);
+	}
+	return [content, ';'];
 };
