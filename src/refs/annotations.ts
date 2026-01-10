@@ -68,9 +68,9 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.lightning.meta/lightning/apex_continuations_auraenabled.htm}
 	 */
 	auraenabled: {
-		cacheable: { preferredCase: 'cacheable', type: 'boolean' },
-		continuation: { preferredCase: 'continuation', type: 'boolean' },
-		scope: { preferredCase: 'scope', type: 'string' },
+		cacheable: { preferredCase: 'Cacheable', type: 'boolean' },
+		continuation: { preferredCase: 'Continuation', type: 'boolean' },
+		scope: { preferredCase: 'Scope', type: 'string' },
 	},
 
 	/**
@@ -86,7 +86,7 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_future.htm}
 	 */
 	future: {
-		callout: { preferredCase: 'callout', type: 'boolean' },
+		callout: { preferredCase: 'Callout', type: 'boolean' },
 	},
 
 	/**
@@ -136,16 +136,16 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_InvocableMethod.htm}
 	 */
 	invocablemethod: {
-		callout: { preferredCase: 'callout', type: 'boolean' },
-		capabilitytype: { preferredCase: 'capabilityType', type: 'string' },
-		category: { preferredCase: 'category', type: 'string' },
+		callout: { preferredCase: 'Callout', type: 'boolean' },
+		capabilitytype: { preferredCase: 'CapabilityType', type: 'string' },
+		category: { preferredCase: 'Category', type: 'string' },
 		configurationeditor: {
-			preferredCase: 'configurationEditor',
+			preferredCase: 'ConfigurationEditor',
 			type: 'string',
 		},
-		description: { preferredCase: 'description', type: 'string' },
-		iconname: { preferredCase: 'iconName', type: 'string' },
-		label: { preferredCase: 'label', type: 'string' },
+		description: { preferredCase: 'Description', type: 'string' },
+		iconname: { preferredCase: 'IconName', type: 'string' },
+		label: { preferredCase: 'Label', type: 'string' },
 	},
 
 	/**
@@ -158,11 +158,11 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_InvocableVariable.htm}
 	 */
 	invocablevariable: {
-		defaultvalue: { preferredCase: 'defaultValue', type: 'string' },
-		description: { preferredCase: 'description', type: 'string' },
-		label: { preferredCase: 'label', type: 'string' },
-		placeholdertext: { preferredCase: 'placeholderText', type: 'string' },
-		required: { preferredCase: 'required', type: 'boolean' },
+		defaultvalue: { preferredCase: 'DefaultValue', type: 'string' },
+		description: { preferredCase: 'Description', type: 'string' },
+		label: { preferredCase: 'Label', type: 'string' },
+		placeholdertext: { preferredCase: 'PlaceholderText', type: 'string' },
+		required: { preferredCase: 'Required', type: 'boolean' },
 	},
 
 	/**
@@ -174,9 +174,9 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_isTest.htm}
 	 */
 	istest: {
-		isparallel: { preferredCase: 'isParallel', type: 'boolean' },
-		oninstall: { preferredCase: 'onInstall', type: 'boolean' },
-		seealldata: { preferredCase: 'seeAllData', type: 'boolean' },
+		isparallel: { preferredCase: 'IsParallel', type: 'boolean' },
+		oninstall: { preferredCase: 'OnInstall', type: 'boolean' },
+		seealldata: { preferredCase: 'SeeAllData', type: 'boolean' },
 	},
 
 	/**
@@ -186,8 +186,8 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_JsonAccess.htm}
 	 */
 	jsonaccess: {
-		deserializable: { preferredCase: 'deserializable', type: 'string' },
-		serializable: { preferredCase: 'serializable', type: 'string' },
+		deserializable: { preferredCase: 'Deserializable', type: 'string' },
+		serializable: { preferredCase: 'Serializable', type: 'string' },
 	},
 
 	/**
@@ -217,7 +217,7 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_rest_resource.htm}
 	 */
 	restresource: {
-		urlmapping: { preferredCase: 'urlMapping', type: 'string' },
+		urlmapping: { preferredCase: 'UrlMapping', type: 'string' },
 	},
 
 	/**
@@ -230,7 +230,7 @@ const APEX_ANNOTATION_OPTIONS: Record<
 	 * @see {@link https://pmd.github.io/pmd/pmd_userdocs_suppressing_warnings.html}
 	 */
 	suppresswarnings: {
-		value: { preferredCase: 'value', type: 'string[]' },
+		value: { preferredCase: 'Value', type: 'string[]' },
 	},
 
 	/**
