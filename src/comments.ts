@@ -12,6 +12,117 @@ import {
 	removeTrailingEmptyLines,
 } from './apexdoc.js';
 
+// Doc-based token types for future token-to-Doc conversion
+interface DocContentToken {
+	readonly type: 'text' | 'paragraph';
+	readonly content: Doc;
+	readonly lines: readonly Doc[];
+	readonly isContinuation: boolean | undefined;
+}
+
+interface DocCodeBlockToken {
+	readonly type: 'code';
+	readonly startPos: number;
+	readonly endPos: number;
+	readonly content: Doc; // Formatted code as Doc structure
+}
+
+interface DocAnnotationToken {
+	readonly type: 'annotation';
+	readonly name: string;
+	readonly content: Doc;
+	readonly followingText?: Doc;
+}
+
+type DocCommentToken =
+	| DocContentToken
+	| DocCodeBlockToken
+	| DocAnnotationToken;
+
+/**
+ * Utility functions for converting legacy tokens to Doc-based tokens
+ */
+const tokenConverters = {
+	/**
+	 * Converts a ContentToken to a DocContentToken.
+	 * @param token - The legacy ContentToken to convert.
+	 * @returns A DocContentToken with Doc-based content.
+	 */
+	contentTokenToDoc: (token: ContentToken): DocContentToken => {
+		const { join, hardline } = prettier.doc.builders;
+
+		// Convert lines to Doc - each line becomes a string, joined with hardlines
+		const docLines: Doc[] = token.lines.map(line => line);
+
+		return {
+			type: token.type,
+			content: join(hardline, docLines),
+			lines: docLines,
+			isContinuation: token.isContinuation ?? false,
+		};
+	},
+
+	/**
+	 * Converts a CodeBlockToken to a DocCodeBlockToken.
+	 * @param token - The legacy CodeBlockToken to convert.
+	 * @returns A DocCodeBlockToken with formatted code as Doc.
+	 */
+	codeBlockTokenToDoc: (token: CodeBlockToken): DocCodeBlockToken => {
+		const { join, hardline, group, indent } = prettier.doc.builders;
+
+		// Use formattedCode if available, otherwise rawCode
+		const codeContent = token.formattedCode ?? token.rawCode;
+
+		if (!codeContent || codeContent.trim().length === 0) {
+			// Empty code block: {@code}
+			return {
+				type: 'code',
+				startPos: token.startPos,
+				endPos: token.endPos,
+				content: '{@code}',
+			};
+		}
+
+		const codeLines = codeContent.split('\n');
+
+		if (codeLines.length === 1) {
+			// Single line: {@code content }
+			return {
+				type: 'code',
+				startPos: token.startPos,
+				endPos: token.endPos,
+				content: `{@code ${codeLines[0]} }`,
+			};
+		} else {
+			// Multi-line: {@code\n  content\n}
+			const indentedContent = indent(join(hardline, codeLines));
+			return {
+				type: 'code',
+				startPos: token.startPos,
+				endPos: token.endPos,
+				content: group([
+					'{@code',
+					hardline,
+					indentedContent,
+					hardline,
+					'}'
+				]),
+			};
+		}
+	},
+
+	/**
+	 * Converts a comment string to Doc format (what currently happens in the integration).
+	 * @param commentString - The formatted comment string.
+	 * @returns Doc array representing the comment lines.
+	 */
+	commentStringToDoc: (commentString: string): Doc => {
+		const lines = commentString.split('\n');
+		const { join, hardline } = prettier.doc.builders;
+		return join(hardline, lines);
+	},
+};
+
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
 const ARRAY_START_INDEX = 0;
@@ -407,6 +518,7 @@ const CommentPrefix = {
  * All token processing is async-first and integrated into Prettier's main processing flow.
  */
 //
+/** @deprecated Use DocContentToken instead - legacy string-based token */
 interface ContentToken {
 	readonly type: 'text' | 'paragraph';
 	readonly content: string;
@@ -414,6 +526,7 @@ interface ContentToken {
 	readonly isContinuation?: boolean;
 }
 
+/** @deprecated Use DocCodeBlockToken instead - legacy string-based token */
 interface CodeBlockToken {
 	readonly type: 'code';
 	readonly startPos: number;
@@ -422,6 +535,7 @@ interface CodeBlockToken {
 	readonly formattedCode?: string;
 }
 
+/** @deprecated Use DocAnnotationToken instead - legacy string-based token */
 interface AnnotationToken {
 	readonly type: 'annotation';
 	readonly name: string;
@@ -429,6 +543,7 @@ interface AnnotationToken {
 	readonly followingText?: string;
 }
 
+/** @deprecated Use DocCommentToken instead - legacy string-based token union */
 type CommentToken =
 	| ContentToken
 	| CodeBlockToken
@@ -1017,7 +1132,7 @@ const customPrintComment = (
 				: null;
 			// Use embed-formatted comment if available, otherwise normalize the original comment
 			// Normalize the embed-formatted comment to match Prettier's indentation (single space before *)
-			const commentToUse = embedFormattedComment
+			const commentDoc = embedFormattedComment
 				? normalizeSingleApexDocComment(
 						embedFormattedComment,
 						0,
@@ -1025,10 +1140,8 @@ const customPrintComment = (
 					)
 				: normalizeSingleApexDocComment(commentValue, 0, options);
 
-			// Return the comment as Prettier documents
-			const lines = commentToUse.split('\n');
-			const { fill, join, hardline } = prettier.doc.builders;
-			return [join(hardline, lines)];
+			// Return the comment as Prettier documents (already in Doc format)
+			return [commentDoc];
 		} else {
 			// Check if this is an inline comment (starts with //)
 			// Inline comments should be passed through unchanged, like the reference implementation
@@ -1143,4 +1256,9 @@ export type {
 	CodeBlockToken,
 	AnnotationToken,
 	CommentToken,
+	// New Doc-based token types
+	DocContentToken,
+	DocCodeBlockToken,
+	DocAnnotationToken,
+	DocCommentToken,
 };

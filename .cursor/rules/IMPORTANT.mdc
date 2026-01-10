@@ -80,15 +80,15 @@ This applies to ALL pnpm commands, not just install commands.
 
 **CRITICAL**: When running specific tests, you MUST follow the patterns documented in `docs/VITEST.md`:
 
-1. **Use `vitest run` for single-run mode** (not watch mode):
-   - `pnpm exec vitest run [filters]` - runs once and exits
-   - `pnpm exec vitest [filters]` - runs in watch mode (default in dev)
-   - Always use `vitest run` when running specific tests to avoid watch mode issues
+1. **Always use `pnpm test` for running tests**:
+   - `pnpm test` - run all tests
+   - `pnpm test -- [filters]` - run tests with specific filters
+   - All test commands should use the `pnpm test` script instead of direct `vitest` commands
 
 2. **Run specific test files** using file paths or patterns:
-   - `pnpm exec vitest run tests/apexdoc.test.ts` - run a specific test file
-   - `pnpm exec vitest run tests/apexdoc` - run tests matching pattern (finds `apexdoc.test.ts`)
-   - `pnpm exec vitest run apexdoc` - run tests matching pattern from any location
+   - `pnpm test -- tests/apexdoc.test.ts` - run a specific test file
+   - `pnpm test -- tests/apexdoc` - run tests matching pattern (finds `apexdoc.test.ts`)
+   - `pnpm test -- apexdoc` - run tests matching pattern from any location
    - Patterns use tinyglobby and are relative to the project root
 
 3. **Run specific test suites or tests**:
@@ -97,29 +97,29 @@ This applies to ALL pnpm commands, not just install commands.
      - Remember to remove `.only` before committing
    - Using `-t` flag to filter by test name:
      - **CRITICAL**: When test names contain spaces, escape them with `\s` instead of using quotes
-     - **DO NOT** use: `pnpm exec vitest run tests/integration.test.ts -t "should wrap field"`
-     - **DO THIS**: `pnpm exec vitest run tests/integration.test.ts -t "should\swrap\sfield"`
+     - **DO NOT** use: `pnpm test -- tests/integration.test.ts -t "should wrap field"`
+     - **DO THIS**: `pnpm test -- tests/integration.test.ts -t "should\swrap\sfield"`
      - The `-t` flag accepts a regex pattern, so spaces must be escaped as `\s`
 
 4. **Common test commands**:
-   - All tests: `pnpm exec vitest run` or `pnpm run test`
-   - Specific file: `pnpm exec vitest run tests/apexdoc.test.ts` or `pnpm run test -- tests/apexdoc.test.ts`
-   - Pattern match: `pnpm exec vitest run apexdoc` or `pnpm run test -- apexdoc`
-   - With coverage: `pnpm exec vitest run --coverage [filters]` or `pnpm run test:coverage -- [filters]`
-   - Watch mode: `pnpm exec vitest [filters]` or `pnpm run test:watch -- [filters]`
-   - Note: When using `pnpm run test`, pass filters after `--` to avoid pnpm interpreting them as script arguments
+   - All tests: `pnpm test`
+   - Specific file: `pnpm test -- tests/apexdoc.test.ts`
+   - Pattern match: `pnpm test -- apexdoc`
+   - With coverage: `pnpm run test:coverage -- [filters]`
+   - Watch mode: `pnpm run test:watch -- [filters]`
+   - Note: Pass filters after `--` to avoid pnpm interpreting them as script arguments
 
 5. **Important notes**:
-   - Always use `pnpm exec vitest` instead of calling `vitest` directly to ensure correct environment
-   - Use `vitest run` (single run) when debugging or running specific tests to avoid watch mode complications
+   - Always use `pnpm test` instead of direct `vitest` commands to ensure correct environment
+   - Use single run mode when debugging or running specific tests to avoid watch mode complications
    - Test filters support glob patterns and are case-sensitive
-   - Multiple filters can be provided: `pnpm exec vitest run tests/apexdoc tests/casing`
+   - Multiple filters can be provided: `pnpm test -- tests/apexdoc tests/casing`
 
 6. **When debugging specific tests**:
    - Clear debug logs first using `delete_file` tool - **NEVER** use shell commands like `> .cursor/debug.log` or `rm .cursor/debug.log`
-   - Run specific test: `pnpm exec vitest run tests/apexdoc.test.ts`
-   - Use `--no-file-parallelism` if needed: `pnpm exec vitest run --no-file-parallelism tests/apexdoc.test.ts`
-   - Use `--reporter=verbose` for detailed output: `pnpm exec vitest run --reporter=verbose tests/apexdoc.test.ts`
+   - Run specific test: `pnpm test -- tests/apexdoc.test.ts`
+   - Use `--no-file-parallelism` if needed: `pnpm test -- --no-file-parallelism tests/apexdoc.test.ts`
+   - Use `--reporter=verbose` for detailed output: `pnpm test -- --reporter=verbose tests/apexdoc.test.ts`
 
 **Reference**: See `docs/VITEST.md` for complete Vitest CLI documentation and all available options.
 
@@ -201,7 +201,7 @@ This ensures:
 
 4. **Examples of things you should NEVER ask the user to do**:
    - Clear the debug log: `> .cursor/debug.log` or `rm .cursor/debug.log` - **YOU DO THIS** using `delete_file`
-   - Run the failing test: `pnpm exec vitest run tests/integration.test.ts -t "..."` - **YOU DO THIS** using `run_terminal_cmd`
+   - Run the failing test: `pnpm test -- tests/integration.test.ts -t "..."` - **YOU DO THIS** using `run_terminal_cmd`
    - Check the output - it should show X instead of Y - **YOU DO THIS** by reading the test output yourself
    - Review the debug logs to see if something is being used - **YOU DO THIS** by reading `.cursor/debug.log` yourself
    - Check test results - **YOU DO THIS** by running tests and reading the output yourself

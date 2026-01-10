@@ -9,7 +9,7 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
-import type { ParserOptions } from 'prettier';
+import type { ParserOptions, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import { processCodeBlock } from './apexdoc-code.js';
 import {
@@ -136,7 +136,7 @@ const normalizeSingleApexDocComment = (
 	commentValue: Readonly<string>,
 	commentIndent: number,
 	options: Readonly<ParserOptions>,
-): string => {
+): Doc => {
 	const { printWidth, tabWidth } = options;
 	const tabWidthValue = tabWidth;
 
@@ -198,11 +198,16 @@ const normalizeSingleApexDocComment = (
 	const finalTokens = tokens;
 
 	// eslint-disable-next-line @typescript-eslint/no-use-before-define
-	return tokensToApexDocString(finalTokens, commentIndent, {
+	const commentString = tokensToApexDocString(finalTokens, commentIndent, {
 		printWidth: printWidth,
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
 	});
+
+	// Convert the formatted comment string to Doc
+	const lines = commentString.split('\n');
+	const { join, hardline } = prettier.doc.builders;
+	return join(hardline, lines);
 };
 
 
