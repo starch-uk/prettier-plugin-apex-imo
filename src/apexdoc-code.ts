@@ -19,7 +19,6 @@ const CODE_TAG_LENGTH = CODE_TAG.length;
 const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
 const LAST_INDEX_OFFSET = 1;
-const ZERO_LENGTH = 0;
 const NOT_FOUND_INDEX = -1;
 
 /**
@@ -43,7 +42,7 @@ const extractCodeFromBlock = (
 	let braceCount = INITIAL_BRACE_COUNT;
 	let pos = codeStart;
 	let lastClosingBracePos = NOT_FOUND_INDEX;
-	while (pos < text.length && braceCount > ARRAY_START_INDEX) {
+	while (pos < text.length && braceCount > 0) {
 		if (text[pos] === '{') {
 			braceCount++;
 		} else if (text[pos] === '}') {
@@ -54,7 +53,7 @@ const extractCodeFromBlock = (
 	}
 	// If braces don't match but we found a closing brace, use it as the end position
 	// This preserves invalid code blocks with unmatched brackets
-	if (braceCount !== ARRAY_START_INDEX) {
+	if (braceCount !== 0) {
 		if (lastClosingBracePos !== NOT_FOUND_INDEX) {
 			// Use the last closing brace position as the end, preserving the invalid code
 			pos = lastClosingBracePos + STRING_OFFSET;
@@ -111,9 +110,9 @@ const extractCodeFromBlock = (
  */
 const COMMENT_LINE_PREFIX_REGEX = /^\s*\*\s?/;
 
-const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
+	const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	let inCodeBlock = false;
-	let codeBlockBraceCount = ARRAY_START_INDEX;
+	let codeBlockBraceCount = 0;
 
 	return lines.map((commentLine, index) => {
 		const prefix = index > ARRAY_START_INDEX ? ' ' : '';
@@ -130,7 +129,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 				if (char === '{') codeBlockBraceCount++;
 				else if (char === '}') codeBlockBraceCount--;
 			}
-			willEndCodeBlock = codeBlockBraceCount === ARRAY_START_INDEX;
+			willEndCodeBlock = codeBlockBraceCount === 0;
 		}
 
 		if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) {
@@ -258,32 +257,6 @@ const formatCodeBlockToken = async ({
 	};
 };
 
-/**
- * Formats {@code} block content for comment processing, returning formatted lines.
- * This is used when {@code} blocks are found during comment processing (not embed phase).
- * @param codeContent - The raw code content from inside {@code ... }
- * @param embedOptions - Parser options with reduced printWidth for comment context
- * @param currentPluginInstance - Plugin instance for formatting
- * @returns Array of formatted code lines (without comment prefixes)
- */
-const formatCodeBlockForComment = async ({
-	codeContent,
-	embedOptions,
-	currentPluginInstance,
-}: {
-	readonly codeContent: string;
-	readonly embedOptions: ParserOptions;
-	readonly currentPluginInstance: { default: unknown } | undefined;
-}): Promise<readonly string[]> => {
-	const normalizedCode = normalizeAnnotationNamesInText(codeContent);
-	const optionsWithPlugin = {
-		...embedOptions,
-		plugins: [currentPluginInstance?.default ?? (await import('./index.js')).default],
-	};
-	
-	const formatted = await formatCodeWithPrettier(normalizedCode, optionsWithPlugin);
-	return formatted.replace(/\n+$/, '').split('\n');
-};
 
 export {
 	CODE_TAG,

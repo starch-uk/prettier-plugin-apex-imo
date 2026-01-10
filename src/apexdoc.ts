@@ -32,7 +32,6 @@ import { extractCodeFromBlock, EMPTY_CODE_TAG, CODE_TAG } from './apexdoc-code.j
 import { normalizeAnnotationNamesInText, normalizeAnnotationNamesInTextExcludingApexDoc } from './annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
-const INITIAL_BRACE_COUNT = 1;
 const NOT_FOUND_INDEX = -1;
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -141,12 +140,8 @@ const normalizeSingleApexDocComment = (
 		},
 	);
 
-	// Process paragraph tokens: decide whether to pass through as regular comments
-	// or let them be processed by ApexDoc detection functions
-	let tokens = processParagraphTokensForApexDoc(initialTokens, normalizedComment);
-
 	// Merge paragraph tokens that contain split {@code} blocks
-	tokens = mergeCodeBlockTokens(tokens);
+	let tokens = mergeCodeBlockTokens(initialTokens);
 
 	// Apply common token processing pipeline
 	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
@@ -576,43 +571,10 @@ const parseApexDocTokens = (
 	// Parse comment to tokens using the basic parser
 	let tokens = parseCommentToTokens(normalizedComment);
 
-	// Process paragraph tokens: decide whether to pass through as regular comments
-	// or let them be processed by ApexDoc detection functions
-	tokens = processParagraphTokensForApexDoc(tokens, normalizedComment);
-
 	return {
 		tokens,
 		effectiveWidth,
 	};
-};
-
-/**
- * Processes paragraph tokens to decide whether they should be passed through as regular comments
- * or broken up into ApexDoc-specific tokens (annotations, code blocks).
- * @param tokens - Array of comment tokens including paragraph tokens.
- * @param originalComment - The original normalized comment string for position tracking.
- * @returns Array of processed tokens.
- */
-const processParagraphTokensForApexDoc = (
-	tokens: readonly CommentToken[],
-	originalComment: Readonly<string>,
-): readonly CommentToken[] => {
-	const processedTokens: CommentToken[] = [];
-
-	for (const token of tokens) {
-		if (token.type === 'paragraph') {
-			// Check if this paragraph contains ApexDoc-specific content
-			const hasApexDocContent = containsApexDocContent(token.content);
-
-			// Keep all paragraphs as paragraphs - they will be handled correctly by tokensToCommentString
-			processedTokens.push(token);
-		} else {
-			// Keep other token types as-is
-			processedTokens.push(token);
-		}
-	}
-
-	return processedTokens;
 };
 
 /**
@@ -732,19 +694,6 @@ const mergeCodeBlockTokens = (tokens: readonly CommentToken[]): readonly Comment
  * @param content - The paragraph content to check.
  * @returns True if the content contains ApexDoc elements.
  */
-const containsApexDocContent = (content: string): boolean => {
-	// Check for annotations (@param, @return, etc.)
-	if (/@\w+/.test(content)) {
-		return true;
-	}
-
-	// Check for code blocks ({@code ...})
-	if (/{@code[^}]*}/.test(content)) {
-		return true;
-	}
-
-	return false;
-};
 
 
 

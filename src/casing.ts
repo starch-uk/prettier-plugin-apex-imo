@@ -221,18 +221,17 @@ function normalizeSingleIdentifier(
 	// When key === 'names', we're processing identifiers in a names array (likely from a TypeRef)
 	// The Doc returned is composite and evaluated lazily, so we shouldn't restore values
 	const isInNamesArray = subPath.key === 'names';
+	node.value = normalizedValue;
 	if (isInNamesArray) {
 		// Don't restore values - the Doc is composite and evaluated lazily
 		// The AST is already being mutated, so we keep the normalized values
-		(node as { value: string }).value = normalizedValue;
 		return originalPrint(subPath);
 	}
 	// For simple identifiers (not in names arrays), restore values after printing
 	try {
-		(node as { value: string }).value = normalizedValue;
 		return originalPrint(subPath);
 	} finally {
-		(node as { value: string }).value = nodeValue;
+		node.value = nodeValue;
 	}
 }
 
@@ -260,25 +259,23 @@ function normalizeNamesArray(
 	// Normalize each identifier in the names array
 	let hasChanges = false;
 	for (let i = 0; i < namesArray.length; i++) {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- namesArray is typed as readonly ApexIdentifier[]
 		const nameNode = namesArray[i];
-		if (typeof nameNode !== 'object' || !('value' in nameNode))
+		if (
+			typeof nameNode !== 'object' ||
+			!('value' in nameNode) ||
+			typeof nameNode.value !== 'string' ||
+			!nameNode.value
+		) {
 			continue;
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-		const nameValue = (nameNode as { value?: unknown }).value;
-		if (typeof nameValue !== 'string' || !nameValue) continue;
-		const normalizedValue = normalizeTypeName(nameValue);
-		if (normalizedValue !== nameValue) {
+		}
+		const normalizedValue = normalizeTypeName(nameNode.value);
+		if (normalizedValue !== nameNode.value) {
 			hasChanges = true;
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-			(nameNode as { value: string }).value = normalizedValue;
+			nameNode.value = normalizedValue;
 		}
 	}
-	if (hasChanges) {
-		// Don't restore values - the Doc may be evaluated lazily and needs the normalized values
-		// The AST is already being mutated, so we keep the normalized values
-		return originalPrint(subPath);
-	}
+	// Don't restore values - the Doc may be evaluated lazily and needs the normalized values
+	// The AST is already being mutated, so we keep the normalized values
 	return originalPrint(subPath);
 }
 

@@ -70,6 +70,7 @@ const printCollection = (
 	const nodeClass = getNodeClass(node);
 	const isList =
 		nodeClass === LIST_LITERAL_CLASS || nodeClass === SET_LITERAL_CLASS;
+	
 	const hasMultipleEntries = isList
 		? hasMultipleListEntries(node as ApexListInitNode)
 		: hasMultipleMapEntries(node as ApexMapInitNode);
@@ -83,9 +84,11 @@ const printCollection = (
 	
 	const EMPTY_COLLECTION_LENGTH = 0;
 	// Check if collection is actually empty (no entries at all)
+	const listNode = isList ? (node as ApexListInitNode) : undefined;
+	const mapNode = !isList ? (node as ApexMapInitNode) : undefined;
 	const isEmpty = isList
-		? !Array.isArray((node as ApexListInitNode).values) || (node as ApexListInitNode).values.length === EMPTY_COLLECTION_LENGTH
-		: !Array.isArray((node as ApexMapInitNode).pairs) || (node as ApexMapInitNode).pairs.length === EMPTY_COLLECTION_LENGTH;
+		? !Array.isArray(listNode?.values) || (listNode?.values.length ?? 0) === EMPTY_COLLECTION_LENGTH
+		: !Array.isArray(mapNode?.pairs) || (mapNode?.pairs.length ?? 0) === EMPTY_COLLECTION_LENGTH;
 	
 	// For empty collections (no entries), we still need to handle them to ensure
 	// type parameters can break when they exceed printWidth

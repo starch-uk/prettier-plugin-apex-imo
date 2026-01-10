@@ -165,18 +165,13 @@ const ZERO = 0;
 const ONE = 1;
 const SINGLE_DECLARATION = 1;
 
-const isCommentNode = (
-	node: Readonly<ApexNode> | null | undefined,
-): boolean => {
-	if (!node || typeof node !== 'object') return false;
-	const nodeClass = getNodeClassOptional(node);
-	return (
-		nodeClass !== undefined &&
-		(nodeClass === BLOCK_COMMENT_CLASS ||
-			nodeClass.includes('BlockComment') ||
-			nodeClass.includes('InlineComment'))
-	);
-};
+const isCommentNode = createNodeClassGuard<ApexNode>(
+	(cls) =>
+		cls !== undefined &&
+		(cls === BLOCK_COMMENT_CLASS ||
+			cls.includes('BlockComment') ||
+			cls.includes('InlineComment')),
+);
 
 const createWrappedPrinter = (
 	originalPrinter: any

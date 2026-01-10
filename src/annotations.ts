@@ -54,16 +54,29 @@ const normalizeAnnotationOptionName = (
 	return optionMap?.[optionName.toLowerCase()] ?? optionName;
 };
 
+const isAnnotationKeyValue = (
+	param: Readonly<ApexAnnotationParameter>,
+): param is Readonly<ApexAnnotationKeyValue> =>
+	getNodeClass(param) === ANNOTATION_KEY_VALUE_CLASS;
+
+const isStringAnnotationValue = (
+	value: Readonly<ApexAnnotationValue>,
+): value is Readonly<ApexAnnotationValue & { value: string }> => {
+	const cls = getNodeClass(value);
+	if (cls === TRUE_ANNOTATION_VALUE_CLASS || cls === FALSE_ANNOTATION_VALUE_CLASS) {
+		return false;
+	}
+	return 'value' in value && typeof value.value === 'string';
+};
+
 const formatAnnotationValue = (
 	value: Readonly<ApexAnnotationValue>,
 ): string => {
 	const cls = getNodeClass(value);
 	if (cls === TRUE_ANNOTATION_VALUE_CLASS) return 'true';
 	if (cls === FALSE_ANNOTATION_VALUE_CLASS) return 'false';
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ApexAnnotationValue has index signature, need assertion to access value
-	const valueField = (value as { value?: unknown }).value;
-	if (typeof valueField === 'string') {
-		return valueField ? `'${valueField}'` : "''";
+	if (isStringAnnotationValue(value)) {
+		return value.value ? `'${value.value}'` : "''";
 	}
 	return "''";
 };
@@ -72,18 +85,17 @@ const formatAnnotationParam = (
 	param: Readonly<ApexAnnotationParameter>,
 	originalName: string,
 ): Doc => {
-	const paramClass = getNodeClass(param);
-	if (paramClass === ANNOTATION_KEY_VALUE_CLASS) {
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-		const keyValue = param as ApexAnnotationKeyValue;
+	if (isAnnotationKeyValue(param)) {
 		return [
-			normalizeAnnotationOptionName(originalName, keyValue.key.value),
+			normalizeAnnotationOptionName(originalName, param.key.value),
 			'=',
-			formatAnnotationValue(keyValue.value),
+			formatAnnotationValue(param.value),
 		];
 	}
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	return `'${(param as unknown as { value: string }).value}'`;
+	if ('value' in param && typeof param.value === 'string') {
+		return `'${param.value}'`;
+	}
+	return "''";
 };
 
 const INVOCABLE_ANNOTATIONS = ['invocablemethod', 'invocablevariable'] as const;

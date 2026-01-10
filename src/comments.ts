@@ -224,21 +224,15 @@ function isMalformedCommentBlock(commentValue: string): boolean {
 	// Skip first and last lines (comment markers)
 	for (let i = 1; i < lines.length - 1; i++) {
 		const line = lines[i] ?? '';
-
-		// Check for lines with multiple consecutive asterisks (**, ***, ****)
-		if (/\*{2,}/.test(line)) {
-			return true;
-		}
-
-		// Check for lines without asterisk prefix but with content
 		const trimmed = line.trim();
-		if (trimmed && !trimmed.startsWith('*') && trimmed.length > 0) {
-			return true;
-		}
 
-		// Check for inconsistent spacing around asterisks
-		// Look for patterns like "*   " (multiple spaces after *) or inconsistent spacing
-		if (/^\s+\*\s{2,}/.test(line) || /^\s+\*\s*$/.test(line)) {
+		// Check for lines with multiple consecutive asterisks, missing asterisk prefix, or inconsistent spacing
+		if (
+			/\*{2,}/.test(line) ||
+			(trimmed && !trimmed.startsWith('*') && trimmed.length > 0) ||
+			/^\s+\*\s{2,}/.test(line) ||
+			/^\s+\*\s*$/.test(line)
+		) {
 			return true;
 		}
 	}
