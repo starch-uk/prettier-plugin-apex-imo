@@ -12,7 +12,6 @@ import {
 	normalizeAnnotationTokens,
 	removeTrailingEmptyLines,
 } from './apexdoc.js';
-import { isValidCommentForProcessing, isApexDoc } from './utils/comment-utils.js';
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -1055,7 +1054,6 @@ const customPrintComment = (
 			const embedFormattedComment = commentKey
 				? _getFormattedCodeBlock(commentKey)
 				: null;
-
 			// Use embed-formatted comment if available, otherwise normalize the original comment
 			// Normalize the embed-formatted comment to match Prettier's indentation (single space before *)
 			const commentToUse = embedFormattedComment
@@ -1105,176 +1103,53 @@ const customPrintComment = (
 /**
  * Handles comments that are on their own line.
  * This is called by Prettier's comment handling code.
- * Enhanced to use Prettier utilities more effectively while maintaining compatibility.
- * @param comment - The comment node to handle.
- * @param sourceCode - The entire source code.
- * @returns True if the comment was handled, false otherwise.
+ * @param _comment - The comment node (unused in stub).
+ * @param _sourceCode - The entire source code (unused in stub).
+ * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleOwnLineComment = (
 	comment: unknown,
-	sourceCode: string,
+	_sourceCode: string,
 ): boolean => {
-	// Validate comment first using our utilities
-	if (!isValidCommentForProcessing(comment)) {
-		// Still try the handlers even for invalid comments, to maintain compatibility
-		// The handlers have their own validation
-	}
-
-	// Try specialized handlers first (maintains original behavior)
-	if (handleDanglingComment(comment)) {
-		return true;
-	}
-
-	if (handleBlockStatementLeadingComment(comment)) {
-		return true;
-	}
-
-	// Additional enhancement: Use Prettier's utilities for better integration
-	const commentWithContext = comment as {
-		followingNode?: ApexNode;
-		'@class'?: string;
-	};
-
-	// For ApexDoc comments, let Prettier handle with default logic
-	if (comment && isApexDoc(comment)) {
-		return false; // Let Prettier's default logic handle
-	}
-
-	// Check for method/constructor comments that should be attached to the following node
-	if (commentWithContext && commentWithContext.followingNode) {
-		const followingNodeClass = commentWithContext.followingNode['@class'];
-		if (
-			followingNodeClass &&
-			(followingNodeClass.includes('MethodDeclaration') ||
-			 followingNodeClass.includes('ConstructorDeclaration'))
-		) {
-			const { addLeadingComment } = prettier.util;
-			addLeadingComment(commentWithContext.followingNode, comment);
-			return true;
-		}
-	}
-
-	return false;
+	return (
+		handleDanglingComment(comment) ||
+		handleBlockStatementLeadingComment(comment)
+	);
 };
 
 /**
  * Handles comments that have preceding text but no trailing text on a line.
  * This is called by Prettier's comment handling code.
- * Enhanced to use Prettier utilities more effectively while maintaining compatibility.
- * @param comment - The comment node to handle.
- * @param sourceCode - The entire source code.
- * @returns True if the comment was handled, false otherwise.
+ * @param _comment - The comment node (unused in stub).
+ * @param _sourceCode - The entire source code (unused in stub).
+ * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleEndOfLineComment = (
 	comment: unknown,
-	sourceCode: string,
+	_sourceCode: string,
 ): boolean => {
-	// Validate comment first using our utilities
-	if (!isValidCommentForProcessing(comment)) {
-		// Still try the handlers even for invalid comments, to maintain compatibility
-		// The handlers have their own validation
-	}
-
-	// Try specialized handlers first (maintains original behavior)
-	if (handleDanglingComment(comment)) {
-		return true;
-	}
-
-	if (handleBinaryExpressionTrailingComment(comment)) {
-		return true;
-	}
-
-	if (handleBlockStatementLeadingComment(comment)) {
-		return true;
-	}
-
-	// Additional enhancement: Better handling for Apex-specific patterns
-	const commentWithContext = comment as {
-		precedingNode?: ApexNode;
-		followingNode?: ApexNode;
-		placement?: string;
-		'@class'?: string;
-	};
-
-	// For end-of-line comments in ApexDoc, let Prettier handle with default logic
-	if (comment && isApexDoc(comment)) {
-		return false; // Let Prettier's default logic handle
-	}
-
-	// Enhanced handling for assignment expressions and similar constructs
-	if (commentWithContext && commentWithContext.precedingNode) {
-		const precedingNodeClass = commentWithContext.precedingNode['@class'];
-		if (
-			precedingNodeClass &&
-			(precedingNodeClass.includes('Expr$AssignmentExpr') ||
-			 precedingNodeClass.includes('Expr$BinaryExpr'))
-		) {
-			// For assignment and binary expressions, trailing comments are often better
-			// handled by Prettier's default logic
-			return false;
-		}
-	}
-
-	return false;
+	return (
+		handleDanglingComment(comment) ||
+		handleBinaryExpressionTrailingComment(comment) ||
+		handleBlockStatementLeadingComment(comment)
+	);
 };
 
 /**
  * Handles comments that have both preceding text and trailing text on a line.
  * This is called by Prettier's comment handling code.
- * Enhanced to use Prettier utilities more effectively while maintaining compatibility.
- * @param comment - The comment node to handle.
- * @param sourceCode - The entire source code.
- * @returns True if the comment was handled, false otherwise.
+ * @param _comment - The comment node (unused in stub).
+ * @param _sourceCode - The entire source code (unused in stub).
+ * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleRemainingComment = (
 	comment: unknown,
-	sourceCode: string,
+	_sourceCode: string,
 ): boolean => {
-	// Validate comment first using our utilities
-	if (!isValidCommentForProcessing(comment)) {
-		// Still try the handlers even for invalid comments, to maintain compatibility
-		// The handlers have their own validation
-	}
-
-	// Try specialized handlers first (maintains original behavior)
-	if (handleDanglingComment(comment)) {
-		return true;
-	}
-
-	if (handleBlockStatementLeadingComment(comment)) {
-		return true;
-	}
-
-	// Additional enhancement: For remaining comments, which are typically
-	// inline comments within expressions, let Prettier handle with default logic
-	// unless we have specific Apex handling needs
-	const commentWithContext = comment as {
-		precedingNode?: ApexNode;
-		followingNode?: ApexNode;
-		placement?: string;
-		'@class'?: string;
-	};
-
-	// For ApexDoc comments that appear inline, let Prettier handle with default logic
-	if (comment && isApexDoc(comment)) {
-		return false; // Let Prettier's default logic handle
-	}
-
-	// For remaining comments in complex expressions, Prettier's default handling
-	// is usually better than custom attachment logic
-	if (commentWithContext && commentWithContext.precedingNode) {
-		const precedingNodeClass = commentWithContext.precedingNode['@class'];
-		if (
-			precedingNodeClass &&
-			(precedingNodeClass.includes('Expr$') ||
-			 precedingNodeClass.includes('Stmnt$'))
-		) {
-			// Let Prettier handle inline comments in expressions
-			return false;
-		}
-	}
-
-	return false;
+	return (
+		handleDanglingComment(comment) ||
+		handleBlockStatementLeadingComment(comment)
+	);
 };
 
 export {
