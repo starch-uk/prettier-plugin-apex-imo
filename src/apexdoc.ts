@@ -8,7 +8,6 @@ import type { ParserOptions } from 'prettier';
 import * as prettier from 'prettier';
 import { processCodeBlockLines } from './apexdoc-code.js';
 import {
-	wrapTextWithFill,
 	createIndent,
 	normalizeBlockComment,
 	parseCommentToTokens,
@@ -552,12 +551,13 @@ const wrapTextContent = (
 	}
 
 	// Use fill builder to wrap content
-	const fillDoc = wrapTextWithFill(textContent);
-	const wrappedText = prettier.doc.printer.printDocToString(fillDoc, {
+	const words = textContent.split(/\s+/).filter((word) => word.length > 0);
+	const fillDoc = words.length > 0 ? prettier.doc.builders.fill(prettier.doc.builders.join(prettier.doc.builders.line, words)) : '';
+	const wrappedText = fillDoc ? prettier.doc.printer.printDocToString(fillDoc, {
 		printWidth: effectiveWidth,
 		tabWidth: 2,
 		useTabs: false,
-	}).formatted;
+	}).formatted : '';
 	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
 };
 

@@ -102,27 +102,6 @@ const makeTypeDocBreakable = (
 		return result;
 	}
 
-	if (
-		typeof typeDoc === 'object' &&
-		typeDoc !== null &&
-		'type' in typeDoc &&
-		'contents' in typeDoc
-	) {
-		const docObj = typeDoc as {
-			type: string;
-			contents?: unknown;
-			[key: string]: unknown;
-		};
-		if (docObj.contents !== undefined) {
-			return {
-				...docObj,
-				contents: makeTypeDocBreakable(
-					docObj.contents as Doc,
-					_options,
-				),
-			} as Doc;
-		}
-	}
 
 	return typeDoc;
 };

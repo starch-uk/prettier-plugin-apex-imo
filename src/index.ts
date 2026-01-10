@@ -151,25 +151,14 @@ const wrapParsers = (
 			typeof originalParser.parse !== 'function'
 		)
 			continue;
-		const originalPreprocess = originalParser.preprocess;
 		wrappedParsers[parserName] = {
 			...originalParser,
 			parse: async (
 				text: Readonly<string>,
 				options: Readonly<ParserOptions<ApexNode>>,
 			): Promise<ApexNode> =>
-				// Parse raw text - annotation normalization happens in token processing
+				// Parse raw text
 				originalParser.parse(text, options),
-			preprocess: originalPreprocess
-				? async (
-						text: Readonly<string>,
-						options: Readonly<ParserOptions<ApexNode>>,
-					): Promise<string> => {
-						// Apply original preprocessing if it exists
-						// All normalization (annotations and {@code} blocks) happens in token processing
-						return await originalPreprocess(text, options);
-					}
-				: undefined,
 		};
 	}
 	return wrappedParsers as Plugin<ApexNode>['parsers'];

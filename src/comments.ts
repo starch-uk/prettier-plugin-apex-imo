@@ -168,23 +168,6 @@ const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
 	return true;
 };
 
-/**
- * Wraps text content using Prettier's fill builder and returns a Doc.
- * This allows direct integration with Prettier's doc composition system.
- * @param text - The text content to wrap.
- * @returns A Prettier Doc that can be used in doc composition.
- */
-const wrapTextWithFill = (text: string): Doc => {
-	if (!text || text.trim().length === 0) {
-		return '';
-	}
-	const words = text.split(/\s+/).filter((word) => word.length > 0);
-	if (words.length === 0) {
-		return '';
-	}
-	const { fill, join, line } = prettier.doc.builders;
-	return fill(join(line, words));
-};
 
 const getIndentLevel = (
 	line: Readonly<string>,
@@ -359,44 +342,6 @@ const normalizeCommentLine = (
 	return `${baseIndent} * ${codeBlockIndent}${afterAsterisk}`;
 };
 
-/**
- * Internal function to normalize basic block comment structure.
- * Handles malformed comments by normalizing markers, asterisks, and indentation.
- * @param commentValue - The comment text (e.g., comment block).
- * @param commentIndent - The indentation level of the comment in spaces.
- * @param options - Options including tabWidth and useTabs.
- * @returns The normalized comment value.
- */
-const normalizeBlockCommentBasic = (
-	commentValue: Readonly<string>,
-	commentIndent: number,
-	options: Readonly<{
-		readonly tabWidth: number;
-		readonly useTabs?: boolean | null | undefined;
-	}>,
-): string => {
-	// Normalize comment markers first on entire comment
-	let normalizedComment = normalizeCommentStart(commentValue);
-	normalizedComment = normalizeCommentEnd(normalizedComment);
-
-	// Normalize lines
-	const lines = normalizedComment.split('\n');
-	const normalizedLines: string[] = [];
-	const baseIndent = createIndent(
-		commentIndent,
-		options.tabWidth,
-		options.useTabs,
-	);
-	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
-		const line = lines[i] ?? '';
-		const isFirstOrLast =
-			i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
-		normalizedLines.push(
-			normalizeCommentLine(line, baseIndent, isFirstOrLast),
-		);
-	}
-	return normalizedLines.join('\n');
-};
 
 /**
  * Normalizes a block comment to standard format.
@@ -424,14 +369,26 @@ const normalizeBlockComment = (
 		options.printWidth > EMPTY
 	) {
 		// First normalize basic structure
-		const basicNormalized = normalizeBlockCommentBasic(
-			commentValue,
+		let basicNormalized = normalizeCommentStart(commentValue);
+		basicNormalized = normalizeCommentEnd(basicNormalized);
+
+		// Normalize lines
+		const lines = basicNormalized.split('\n');
+		const normalizedLines: string[] = [];
+		const baseIndent = createIndent(
 			commentIndent,
-			{
-				tabWidth: options.tabWidth,
-				useTabs: options.useTabs,
-			},
+			options.tabWidth,
+			options.useTabs,
 		);
+		for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
+			const line = lines[i] ?? '';
+			const isFirstOrLast =
+				i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
+			normalizedLines.push(
+				normalizeCommentLine(line, baseIndent, isFirstOrLast),
+			);
+		}
+		basicNormalized = normalizedLines.join('\n');
 
 		// Parse to tokens
 		const tokens = parseCommentToTokens(basicNormalized);
@@ -455,10 +412,26 @@ const normalizeBlockComment = (
 	}
 
 	// Use basic normalization (original implementation)
-	return normalizeBlockCommentBasic(commentValue, commentIndent, {
-		tabWidth: options.tabWidth,
-		useTabs: options.useTabs,
-	});
+	let normalizedComment = normalizeCommentStart(commentValue);
+	normalizedComment = normalizeCommentEnd(normalizedComment);
+
+	// Normalize lines
+	const lines = normalizedComment.split('\n');
+	const normalizedLines: string[] = [];
+	const baseIndent = createIndent(
+		commentIndent,
+		options.tabWidth,
+		options.useTabs,
+	);
+	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
+		const line = lines[i] ?? '';
+		const isFirstOrLast =
+			i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
+		normalizedLines.push(
+			normalizeCommentLine(line, baseIndent, isFirstOrLast),
+		);
+	}
+	return normalizedLines.join('\n');
 };
 
 const EMPTY = 0;
@@ -930,14 +903,15 @@ const wrapParagraphTokens = (
 		}
 
 		// Use fill builder directly to get a Doc
-		const fillDoc = wrapTextWithFill(token.content);
+		const words = token.content.split(/\s+/).filter((word) => word.length > 0);
+		const fillDoc = words.length > 0 ? prettier.doc.builders.fill(prettier.doc.builders.join(prettier.doc.builders.line, words)) : '';
 
 		// Convert the fill Doc to string lines for compatibility with existing token structure
-		const wrappedText = prettier.doc.printer.printDocToString(fillDoc, {
+		const wrappedText = fillDoc ? prettier.doc.printer.printDocToString(fillDoc, {
 			printWidth: effectiveWidth,
 			tabWidth: options.tabWidth,
 			useTabs: options.useTabs,
-		}).formatted;
+		}).formatted : '';
 		const wrappedLines = wrappedText
 			.split('\n')
 			.filter((line) => line.trim().length > 0);
@@ -1166,7 +1140,6 @@ export {
 	handleOwnLineComment,
 	handleEndOfLineComment,
 	handleRemainingComment,
-	wrapTextWithFill,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,
