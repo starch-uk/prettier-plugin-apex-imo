@@ -1,2 +1,3 @@
 @Deprecated
-
+public class DeprecatedTest {
+}

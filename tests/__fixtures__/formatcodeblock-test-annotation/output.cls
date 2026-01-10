@@ -1,2 +1,3 @@
-@TestAnnotation
-
+@IsTest
+public class TestAnnotation {
+}

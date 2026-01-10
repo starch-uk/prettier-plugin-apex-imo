@@ -290,30 +290,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 									},
 								);
 							} catch {
-								// Only add FORMAT_FAILED_PREFIX for completely unparseable text
-								// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
-								// should be preserved as-is without the prefix
-								// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
-								// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
-								const isSimpleAnnotation =
-									/^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(
-										codeContent.trim(),
-									);
-								const hasApexLikePatterns =
-									/(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(
-										codeContent,
-									);
-								if (
-									isSimpleAnnotation ||
-									(hasApexLikePatterns &&
-										!codeContent.trim().startsWith('@'))
-								) {
-									// Preserve simple annotations or Apex-like code with syntax errors as-is
-									formattedCode = codeContent;
-								} else {
-									// Add prefix for complex annotations or completely unparseable text
-									formattedCode = `${FORMAT_FAILED_PREFIX}${codeContent}`;
-								}
+								// Add prefix for completely unparseable text
+								formattedCode = `${FORMAT_FAILED_PREFIX}${codeContent}`;
 							}
 						}
 
