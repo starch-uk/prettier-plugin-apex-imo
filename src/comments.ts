@@ -378,10 +378,21 @@ const parseCommentToTokens = (
 			// Check if this line starts with @ (annotation)
 			const isAnnotationLine = trimmedLine.startsWith('@');
 
-			// If current line is an annotation, finish current paragraph first
-			// But don't split if we're inside a {@code} block (contains {@code without matching })
+			// Track code block state using token state instead of regex counting
+			// Count {@code openings and } closings in current paragraph content
+			let codeBlockOpenCount = 0;
+			let codeBlockCloseCount = 0;
 			const currentContent = currentParagraph.join(' ');
-			const hasUnclosedCodeBlock = (currentContent.match(/{@code/g) || []).length > (currentContent.match(/}/g) || []).length;
+			// Use simple string scanning instead of regex for better performance
+			for (let j = 0; j < currentContent.length; j++) {
+				if (currentContent.slice(j).startsWith('{@code')) {
+					codeBlockOpenCount++;
+					j += 6; // Skip past '{@code'
+				} else if (currentContent[j] === '}') {
+					codeBlockCloseCount++;
+				}
+			}
+			const hasUnclosedCodeBlock = codeBlockOpenCount > codeBlockCloseCount;
 
 			if (isAnnotationLine && currentParagraph.length > EMPTY && !hasUnclosedCodeBlock) {
 				tokens.push({

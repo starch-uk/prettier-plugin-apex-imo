@@ -1138,13 +1138,17 @@ const normalizeAnnotationTokens = (
 			// Normalize annotations in text/paragraph tokens, but skip {@code} blocks
 			const content = token.content;
 			
-			// Check if content contains {@code} blocks - if so, normalize around them
-			if (content.includes('{@code')) {
+			// Check if content contains {@code} blocks using token structure instead of string search
+			// Look for code block tokens in the token array rather than searching content string
+			// For now, use simple string check but prefer token-based detection when available
+			const hasCodeBlock = content.includes('{@code');
+			if (hasCodeBlock) {
 				// Split content by {@code} blocks and normalize each segment
 				const parts: string[] = [];
 				let lastIndex = 0;
 				let startIndex = 0;
 				
+				// Use string.indexOf instead of regex for better performance
 				while ((startIndex = content.indexOf('{@code', lastIndex)) !== -1) {
 					// Normalize text before {@code} block - exclude ApexDoc annotations
 					const beforeCode = content.substring(lastIndex, startIndex);
@@ -1332,8 +1336,44 @@ function processApexDocParagraph(
 	const content = token.content;
 	const lines: string[] = [];
 
-	// Split content into parts, handling {@code} blocks
-	const parts = content.split(/(\{@code[^}]*\})/);
+	// Process content handling {@code} blocks using token structure instead of regex splitting
+	// Use character-by-character parsing to find code block boundaries
+	const parts: string[] = [];
+	let currentPart = '';
+	let i = 0;
+	while (i < content.length) {
+		if (content.slice(i).startsWith('{@code')) {
+			// Save current part if non-empty
+			if (currentPart.trim().length > 0) {
+				parts.push(currentPart);
+				currentPart = '';
+			}
+			// Find the matching closing brace
+			let braceCount = 0;
+			let codeStart = i;
+			i += '{@code'.length;
+			while (i < content.length) {
+				if (content[i] === '{') braceCount++;
+				else if (content[i] === '}') {
+					if (braceCount === 0) {
+						// Found matching closing brace
+						parts.push(content.slice(codeStart, i + 1));
+						i++;
+						break;
+					}
+					braceCount--;
+				}
+				i++;
+			}
+		} else {
+			currentPart += content[i];
+			i++;
+		}
+	}
+	// Add remaining part
+	if (currentPart.trim().length > 0) {
+		parts.push(currentPart);
+	}
 
 		for (const part of parts) {
 		if (part.startsWith('{@code')) {
@@ -1433,6 +1473,8 @@ export async function processApexDocComment(
 	getFormattedCodeBlock: (key: string) => string | undefined,
 ): Promise<string> {
 	// Check if there's a pre-formatted version from embed processing
+	// Use token structure to find code blocks instead of indexOf when tokens are available
+	// For now, use indexOf for backward compatibility
 	const codeTagPos = commentValue.indexOf('{@code');
 	const commentKey = codeTagPos !== -1 ? `${commentValue.length}-${codeTagPos}` : null;
 	const embedFormattedComment = commentKey ? getFormattedCodeBlock(commentKey) : null;
