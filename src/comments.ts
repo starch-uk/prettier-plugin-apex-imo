@@ -160,16 +160,6 @@ const createIndent = (
 			? '\t'.repeat(Math.floor(level / tabWidth))
 			: ' '.repeat(level);
 
-const findLineStart = (text: string, pos: number): number => {
-	let lineStart = pos;
-	while (
-		lineStart > ARRAY_START_INDEX &&
-		text[lineStart - STRING_OFFSET] !== '\n'
-	)
-		lineStart--;
-	return lineStart;
-};
-
 const getCommentIndent = (
 	text: Readonly<string>,
 	commentStart: number,
@@ -178,7 +168,13 @@ const getCommentIndent = (
 	// skipToLineEnd returns commentStart, and skipNewline doesn't advance past it,
 	// so we can always find the * at commentStart + 1
 	const asteriskInCommentStart = commentStart + STRING_OFFSET;
-	const lineStart = findLineStart(text, asteriskInCommentStart);
+	// Find line start by scanning backwards for newline
+	let lineStart = asteriskInCommentStart;
+	while (
+		lineStart > ARRAY_START_INDEX &&
+		text[lineStart - STRING_OFFSET] !== '\n'
+	)
+		lineStart--;
 	return getIndentLevel(
 		text.substring(lineStart, asteriskInCommentStart),
 		DEFAULT_TAB_WIDTH,
@@ -316,10 +312,10 @@ const normalizeCommentLine = (
 /**
  * Normalizes a block comment to standard format.
  * Handles malformed comments by normalizing markers, asterisks, and indentation.
- * Optionally uses token-based system for paragraph wrapping.
+ * Uses unified token processing for consistent formatting.
  * @param commentValue - The comment text (e.g., comment block).
  * @param commentIndent - The indentation level of the comment in spaces.
- * @param options - Options including tabWidth, useTabs, printWidth, and useTokenSystem.
+ * @param options - Options including tabWidth, useTabs, and printWidth.
  * @returns The normalized comment value.
  */
 const normalizeBlockComment = (
@@ -329,58 +325,8 @@ const normalizeBlockComment = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 		readonly printWidth?: number;
-		readonly useTokenSystem?: boolean;
 	}>,
 ): string => {
-	// If token system is requested and printWidth is available, use it
-	if (
-		options.useTokenSystem === true &&
-		options.printWidth !== undefined &&
-		options.printWidth > EMPTY
-	) {
-		// First normalize basic structure
-		let basicNormalized = normalizeCommentStart(commentValue);
-		basicNormalized = normalizeCommentEnd(basicNormalized);
-
-		// Normalize lines
-		const lines = basicNormalized.split('\n');
-		const normalizedLines: string[] = [];
-		const baseIndent = createIndent(
-			commentIndent,
-			options.tabWidth,
-			options.useTabs,
-		);
-		for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
-			const line = lines[i] ?? '';
-			const isFirstOrLast =
-				i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
-			normalizedLines.push(
-				normalizeCommentLine(line, baseIndent, isFirstOrLast),
-			);
-		}
-		basicNormalized = normalizedLines.join('\n');
-
-		// Parse to tokens
-		const tokens = parseCommentToTokens(basicNormalized);
-
-		// Wrap paragraphs if needed
-		const wrappedTokens = wrapParagraphTokens(
-			tokens,
-			options.printWidth,
-			commentIndent,
-			{
-				tabWidth: options.tabWidth,
-				useTabs: options.useTabs,
-			},
-		);
-
-		// Convert back to string
-		return tokensToCommentString(wrappedTokens, commentIndent, {
-			tabWidth: options.tabWidth,
-			useTabs: options.useTabs,
-		});
-	}
-
 	// Use basic normalization (original implementation)
 	let normalizedComment = normalizeCommentStart(commentValue);
 	normalizedComment = normalizeCommentEnd(normalizedComment);
@@ -408,60 +354,64 @@ const EMPTY = 0;
 const NOT_FOUND_INDEX = -1;
 
 /**
- * Detects if a block comment is malformed.
- * Checks for common formatting issues like extra asterisks, missing asterisks, or inconsistent spacing.
- * @param commentValue - The comment text to check
- * @returns True if the comment is malformed, false otherwise
+ * Type guard to check if a token is a ContentToken (text or paragraph).
+ * @param token - The token to check.
+ * @returns True if the token is a ContentToken.
  */
-function isMalformedCommentBlock(commentValue: string): boolean {
-	const lines = commentValue.split('\n');
+const isContentToken = (token: CommentToken): token is ContentToken => {
+	return token.type === 'text' || token.type === 'paragraph';
+};
 
-	// Skip first and last lines (comment markers)
-	for (let i = 1; i < lines.length - 1; i++) {
-		const line = lines[i] ?? '';
-		const trimmed = line.trim();
+/**
+ * Comment prefix utilities for consistent handling of comment formatting.
+ */
+const CommentPrefix = {
+	/**
+	 * Creates a comment prefix string for a given indentation level.
+	 * @param indentLevel - The indentation level in spaces.
+	 * @param options - Options including tabWidth and useTabs.
+	 * @returns The comment prefix string (e.g., "  * ").
+	 */
+	create: (
+		indentLevel: number,
+		options: Readonly<{
+			readonly tabWidth: number;
+			readonly useTabs?: boolean | null | undefined;
+		}>,
+	): string => {
+		const baseIndent = createIndent(indentLevel, options.tabWidth, options.useTabs);
+		return `${baseIndent} * `;
+	},
 
-		// Check for lines with multiple consecutive asterisks, missing asterisk prefix, or inconsistent spacing
-		if (
-			/\*{2,}/.test(line) ||
-			(trimmed && !trimmed.startsWith('*') && trimmed.length > 0) ||
-			/^\s+\*\s{2,}/.test(line) ||
-			/^\s+\*\s*$/.test(line)
-		) {
-			return true;
-		}
-	}
+	/**
+	 * Gets the length of a comment prefix for a given indentation level.
+	 * @param indentLevel - The indentation level in spaces.
+	 * @returns The length of the comment prefix.
+	 */
+	getLength: (indentLevel: number): number => {
+		return indentLevel + ' * '.length;
+	},
+};
 
-	return false;
-}
 
 // Token type definitions for comment processing
 //
-// ANALYSIS: Token Type Usage
-// - TextToken: Fallback token when no paragraphs detected in comment
-// - ParagraphToken: Main token type for paragraph content with wrapping
-// - CodeBlockToken: Specialized for {@code} blocks
-// - AnnotationToken: Specialized for ApexDoc annotations (@param, @return, etc.)
+/**
+ * Token-based comment processing system for ApexDoc comments.
+ *
+ * The system uses a unified token architecture:
+ * - ContentToken: Unified token for text/paragraph content with optional isContinuation flag
+ * - CodeBlockToken: Specialized for {@code} blocks
+ * - AnnotationToken: Specialized for ApexDoc annotations (@param, @return, etc.)
+ *
+ * All token processing is async-first and integrated into Prettier's main processing flow.
+ */
 //
-// POTENTIAL SIMPLIFICATIONS:
-// 1. TextToken vs ParagraphToken: TextToken could be merged into ParagraphToken
-//    since both have content (string) and lines (string[]) fields. However,
-//    this would require updating ~20+ usages across apexdoc.ts and extensive testing.
-//    Left for future major refactoring.
-// 2. CodeBlockToken: Necessary for {@code} block processing
-// 3. AnnotationToken: Necessary for ApexDoc annotation handling
-//
-interface TextToken {
-	readonly type: 'text';
+interface ContentToken {
+	readonly type: 'text' | 'paragraph';
 	readonly content: string;
 	readonly lines: readonly string[];
-}
-
-interface ParagraphToken {
-	readonly type: 'paragraph';
-	readonly content: string;
-	readonly lines: readonly string[];
-	readonly isContinuation: boolean;
+	readonly isContinuation?: boolean;
 }
 
 interface CodeBlockToken {
@@ -480,8 +430,7 @@ interface AnnotationToken {
 }
 
 type CommentToken =
-	| TextToken
-	| ParagraphToken
+	| ContentToken
 	| CodeBlockToken
 	| AnnotationToken;
 
@@ -771,12 +720,12 @@ const tokensToCommentString = (
 		readonly useTabs?: boolean | null | undefined;
 	}>,
 ): string => {
+	const commentPrefix = CommentPrefix.create(commentIndent, options);
 	const baseIndent = createIndent(
 		commentIndent,
 		options.tabWidth,
 		options.useTabs,
 	);
-	const commentPrefix = `${baseIndent} * `;
 	const lines: string[] = [`${baseIndent}/**`];
 
 	for (let i = 0; i < tokens.length; i++) {
@@ -880,13 +829,61 @@ const tokensToCommentString = (
 };
 
 /**
- * Wraps paragraph tokens based on effective page width.
+ * Unified async text wrapping utility that provides consistent wrapping behavior.
+ * Used by both token processing and direct content wrapping to ensure uniform results.
+ * Splits text into words and wraps using Prettier's fill builder with proper width constraints.
+ * @param textContent - The text content to wrap.
+ * @param effectiveWidth - The effective width available for content.
+ * @param options - Options including tabWidth and useTabs.
+ * @returns Array of wrapped lines.
+ */
+const wrapTextToWidth = (
+	textContent: string,
+	effectiveWidth: number,
+	options: Readonly<{
+		readonly tabWidth: number;
+		readonly useTabs?: boolean | null | undefined;
+	}>,
+): string[] => {
+	if (textContent.length <= effectiveWidth) {
+		// Content fits, return as single line
+		return [textContent];
+	}
+
+	// Use fill builder to wrap content - split on whitespace characters manually
+	const words: string[] = [];
+	let currentWord = '';
+	for (let i = 0; i < textContent.length; i++) {
+		const char = textContent[i];
+		if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+			if (currentWord.length > 0) {
+				words.push(currentWord);
+				currentWord = '';
+			}
+		} else {
+			currentWord += char;
+		}
+	}
+	if (currentWord.length > 0) {
+		words.push(currentWord);
+	}
+	const fillDoc = words.length > 0 ? prettier.doc.builders.fill(prettier.doc.builders.join(prettier.doc.builders.line, words)) : '';
+	const wrappedText = fillDoc ? prettier.doc.printer.printDocToString(fillDoc, {
+		printWidth: effectiveWidth,
+		tabWidth: options.tabWidth,
+		useTabs: options.useTabs,
+	}).formatted : '';
+	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
+};
+
+/**
+ * Wraps content tokens based on effective page width.
  * Effective width accounts for comment prefix: printWidth - (baseIndent + ' * '.length)
- * @param tokens - Array of tokens (should be ParagraphTokens).
+ * @param tokens - Array of tokens (should be ContentTokens).
  * @param printWidth - The maximum line width.
  * @param baseIndent - The base indentation level in spaces.
  * @param options - Options including tabWidth and useTabs.
- * @returns Array of wrapped paragraph tokens.
+ * @returns Array of wrapped content tokens.
  */
 const wrapParagraphTokens = (
 	tokens: readonly CommentToken[],
@@ -896,11 +893,11 @@ const wrapParagraphTokens = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
-): readonly ParagraphToken[] => {
-	const commentPrefixLength = baseIndent + ' * '.length;
+): readonly ContentToken[] => {
+	const commentPrefixLength = CommentPrefix.getLength(baseIndent);
 	const effectiveWidth = printWidth - commentPrefixLength;
 
-	const wrappedTokens: ParagraphToken[] = [];
+	const wrappedTokens: ContentToken[] = [];
 
 	for (const token of tokens) {
 		if (token.type !== 'paragraph') {
@@ -908,43 +905,12 @@ const wrapParagraphTokens = (
 			continue;
 		}
 
-		// Use fill builder directly to get a Doc - split on whitespace characters manually
-		const words: string[] = [];
-		let currentWord = '';
-		for (let i = 0; i < token.content.length; i++) {
-			const char = token.content[i];
-			if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
-				if (currentWord.length > 0) {
-					words.push(currentWord);
-					currentWord = '';
-				}
-			} else {
-				currentWord += char;
-			}
-		}
-		if (currentWord.length > 0) {
-			words.push(currentWord);
-		}
-		const fillDoc = words.length > 0 ? prettier.doc.builders.fill(prettier.doc.builders.join(prettier.doc.builders.line, words)) : '';
-
-		// Convert the fill Doc to string lines for compatibility with existing token structure
-		const wrappedText = fillDoc ? prettier.doc.printer.printDocToString(fillDoc, {
-			printWidth: effectiveWidth,
-			tabWidth: options.tabWidth,
-			useTabs: options.useTabs,
-		}).formatted : '';
-		const wrappedLines = wrappedText
-			.split('\n')
-			.filter((line) => line.trim().length > 0);
+		// Use unified wrapping function
+		const wrappedLines = wrapTextToWidth(token.content, effectiveWidth, options);
 
 		// Create new paragraph token with wrapped lines
 		// Need to reconstruct lines with comment prefix
-		const baseIndentStr = createIndent(
-			baseIndent,
-			options.tabWidth,
-			options.useTabs,
-		);
-		const commentPrefix = `${baseIndentStr} * `;
+		const commentPrefix = CommentPrefix.create(baseIndent, options);
 		const wrappedTokenLines = wrappedLines.map(
 			(line) => `${commentPrefix}${line}`,
 		);
@@ -1155,8 +1121,10 @@ export {
 	parseCommentToTokens,
 	tokensToCommentString,
 	wrapParagraphTokens,
+	wrapTextToWidth,
+	CommentPrefix,
+	isContentToken,
 	customPrintComment,
-	isMalformedCommentBlock,
 	removeCommentPrefix,
 	handleOwnLineComment,
 	handleEndOfLineComment,
@@ -1171,9 +1139,8 @@ export {
 	NOT_FOUND_INDEX,
 };
 export type {
-	TextToken,
+	ContentToken,
 	CodeBlockToken,
 	AnnotationToken,
-	ParagraphToken,
 	CommentToken,
 };
