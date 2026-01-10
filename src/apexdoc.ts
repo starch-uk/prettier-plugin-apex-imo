@@ -1374,37 +1374,66 @@ const wrapAnnotationTokens = (
 				continue;
 			}
 
-			// Manual word-splitting logic for annotations
-			// Annotations need special handling: first line has less width (includes @annotationName)
-			// while continuation lines have full effectiveWidth
-			// Fill builder doesn't support different widths for different lines, so we use manual logic
-			const words = annotationContent.split(/\s+/);
-			let currentLine = '';
-			const wrappedLines: string[] = [];
-			let isFirstLine = true;
+			// Adapt fill approach for annotations with different widths per line
+			// First line has less width due to @annotationName prefix
+			// Continuation lines have full effectiveWidth
+			const words = annotationContent.split(/\s+/).filter((word) => word.length > 0);
 
-			for (const word of words) {
-				const testLine =
-					currentLine === '' ? word : `${currentLine} ${word}`;
-				// Use firstLineAvailableWidth for first line, continuationLineAvailableWidth for subsequent lines
-				const availableWidth = isFirstLine
-					? firstLineAvailableWidth
-					: continuationLineAvailableWidth;
-				if (prettier.util.getStringWidth(testLine) <= availableWidth) {
-					currentLine = testLine;
+			if (words.length === 0) {
+				newTokens.push(token);
+				continue;
+			}
+
+			// Calculate what fits on the first line
+			let firstLineWords: string[] = [];
+			let currentFirstLine = '';
+			let remainingWords = [...words];
+
+			while (remainingWords.length > 0) {
+				const word = remainingWords[0];
+				const testLine = currentFirstLine === '' ? word : `${currentFirstLine} ${word}`;
+				if (prettier.util.getStringWidth(testLine) <= firstLineAvailableWidth) {
+					firstLineWords.push(word);
+					currentFirstLine = testLine;
+					remainingWords.shift();
 				} else {
-					if (currentLine !== '') {
-						wrappedLines.push(currentLine);
-						isFirstLine = false;
-					}
-					currentLine = word;
+					break;
 				}
 			}
-			if (currentLine !== '') {
-				wrappedLines.push(currentLine);
+
+			// Use fill builder for remaining content with continuation width
+			let wrappedContent = '';
+			if (firstLineWords.length > 0) {
+				wrappedContent = firstLineWords.join(' ');
 			}
 
-			const newContent = wrappedLines.join('\n');
+			if (remainingWords.length > 0) {
+				// Use fill for continuation lines with full effectiveWidth
+				const continuationFill = prettier.doc.builders.fill(
+					prettier.doc.builders.join(prettier.doc.builders.line, remainingWords)
+				);
+				const continuationText = prettier.doc.printer.printDocToString(continuationFill, {
+					printWidth: continuationLineAvailableWidth,
+					tabWidth: options.tabWidth,
+					useTabs: options.useTabs,
+				}).formatted;
+
+				// Combine first line and continuation lines
+				const continuationLines = continuationText.split('\n').filter((line) => line.trim().length > 0);
+				const allLines = [];
+				if (firstLineWords.length > 0) {
+					allLines.push(firstLineWords.join(' '));
+				}
+				allLines.push(...continuationLines);
+
+				wrappedContent = prettier.doc.builders.join(prettier.doc.builders.hardline, allLines);
+			}
+
+			const newContent = prettier.doc.printer.printDocToString(wrappedContent, {
+				printWidth: Math.max(firstLineAvailableWidth, continuationLineAvailableWidth),
+				tabWidth: options.tabWidth,
+				useTabs: options.useTabs,
+			}).formatted;
 			newTokens.push({
 				...token,
 				content: newContent,
