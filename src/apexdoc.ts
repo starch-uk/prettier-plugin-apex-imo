@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { ParserOptions } from 'prettier';
 import * as prettier from 'prettier';
-import { processCodeBlockLines } from './apexdoc-code.js';
+import { processCodeBlock, processCodeBlockLines } from './apexdoc-code.js';
 import {
 	createIndent,
 	normalizeBlockComment,
@@ -1522,104 +1522,6 @@ function processApexDocParagraph(
 	return lines;
 }
 
-/**
- * Processes a {@code} block, returning formatted lines.
- */
-function processCodeBlock(
-	codeBlock: string,
-	_options: ParserOptions,
-	getFormattedCodeBlock: (key: string) => string | undefined,
-	commentKey: string | null,
-	_embedOptions: ParserOptions,
-): string[] {
-	// Extract content between {@code and }
-	const match = codeBlock.match(/^\{@code\s*([\s\S]*?)\s*\}$/);
-	if (!match || !match[1]) return [codeBlock];
-
-	const codeContent = match[1];
-	if (!codeContent) return [codeBlock];
-
-	const codeLines = codeContent.split('\n');
-
-	if (codeLines.length === 1) {
-		// Single line - add space before closing } if content ends with ;
-		const separator = codeContent.trim().endsWith(';') ? ' ' : '';
-		return [`{@code ${codeContent}${separator}}`];
-	} else {
-		// Multi line - use embed result
-		const embedResult = commentKey
-			? getFormattedCodeBlock(commentKey)
-			: null;
-
-		if (embedResult) {
-			// Parse embed result to extract the formatted code
-			// Remove opening /** and closing */
-			let embedContent = embedResult;
-			if (embedContent.startsWith('/**\n')) {
-				embedContent = embedContent.substring(4); // Remove '/**\n'
-			}
-			if (embedContent.endsWith('\n */\n')) {
-				embedContent = embedContent.slice(0, -5); // Remove '\n */\n'
-			} else if (embedContent.endsWith('\n */')) {
-				embedContent = embedContent.slice(0, -4); // Remove '\n */'
-			}
-
-			// Extract base indentation from the first code line (spaces before *)
-			const embedLines = embedContent.split('\n');
-			const processedLines = embedLines.map((line: string) => {
-				// Remove the standard comment prefix but preserve relative indentation
-				// Find first non-whitespace character
-				let start = 0;
-				while (
-					start < line.length &&
-					(line[start] === ' ' || line[start] === '\t')
-				) {
-					start++;
-				}
-				// If we found an asterisk, skip it and optional space
-				if (start < line.length && line[start] === '*') {
-					start++;
-					// Skip optional space after asterisk
-					if (start < line.length && line[start] === ' ') {
-						start++;
-					}
-					return line.substring(start);
-				}
-				return line;
-			});
-
-			// Find the {@code block
-			const codeStart = processedLines.findIndex(
-				(line: string | undefined) => line?.startsWith('{@code'),
-			);
-			const codeEnd = processedLines.findIndex(
-				(line: string | undefined, i: number) =>
-					i > codeStart && line === '}',
-			);
-
-			if (codeStart >= 0 && codeEnd > codeStart) {
-				const extractedCodeLines = processedLines
-					.slice(codeStart + 1, codeEnd)
-					.filter((line): line is string => typeof line === 'string');
-				// For embed results, the formatted code is stored without comment prefixes
-				// comments.ts will handle adding the proper indentation
-				return [`{@code`, ...extractedCodeLines, `}`];
-			}
-
-			// Fallback
-			return [
-				`{@code`,
-				...processedLines
-					.slice(2)
-					.filter((line): line is string => line !== undefined),
-				`}`,
-			];
-		} else {
-			// Fallback to original format
-			return [`{@code`, ...codeLines, `}`];
-		}
-	}
-}
 
 /**
  * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.
