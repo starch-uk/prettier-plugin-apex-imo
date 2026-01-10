@@ -67,13 +67,13 @@ describe('annotations', () => {
 			{
 				description:
 					'should normalize annotation names with parameters',
-				expected: '@InvocableMethod(label="Test")',
+				expected: '@InvocableMethod(Label="Test")',
 				input: '@invocablemethod(label="Test")',
 			},
 			{
 				description:
 					'should normalize annotation option names to camelCase',
-				expected: '@InvocableMethod(label="Test", description="Desc")',
+				expected: '@InvocableMethod(Label="Test", Description="Desc")',
 				input: '@invocablemethod(LABEL="Test", DESCRIPTION="Desc")',
 			},
 			{
@@ -95,13 +95,13 @@ describe('annotations', () => {
 			},
 			{
 				description: 'should handle multiple annotations in text',
-				expected: '@AuraEnabled @Future(callout=true) @Test',
+				expected: '@AuraEnabled @Future(Callout=true) @Test',
 				input: '@auraenabled @future(callout=true) @test',
 			},
 			{
 				description:
 					'should handle annotation with option name that matches preferred case',
-				expected: '@InvocableMethod(label="Test")',
+				expected: '@InvocableMethod(Label="Test")',
 				input: '@invocablemethod(label="Test")',
 			},
 		])(
