@@ -495,6 +495,15 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 };
 
 /**
+ * Removes comment prefix (asterisk and spaces) from a line and trims it.
+ * @param line - Line to remove prefix from.
+ * @returns Line with prefix removed and trimmed.
+ */
+const removeCommentPrefix = (line: string): string => {
+	return line.replace(/^\s*\*\s*/, '').trim();
+};
+
+/**
  * Wraps text content to fit within effective width.
  * @param content - The text content to wrap.
  * @param originalLines - The original lines array (for reference).
@@ -508,7 +517,7 @@ const wrapTextContent = (
 ): string[] => {
 	// Extract content from lines (remove comment prefixes)
 	const textContent = content || originalLines
-		.map((line) => line.replace(/^\s*\*\s*/, '').trim())
+		.map(removeCommentPrefix)
 		.filter((line) => line.length > EMPTY)
 		.join(' ');
 	
@@ -771,7 +780,7 @@ const collectContinuationFromComment = (
 	}
 	const continuationLines = continuationContent
 		.split('\n')
-		.map((l) => l.replace(/^\s*\*\s*/, '').trim())
+		.map(removeCommentPrefix)
 		.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'));
 	if (continuationLines.length > 0) {
 		for (const continuationLine of continuationLines) {
@@ -886,7 +895,7 @@ const detectAnnotationsInTokens = (
 				// Check if all non-empty lines (that aren't annotations or code blocks) were consumed
 				const tokenLinesToCheck = token.content
 					.split('\n')
-					.map((l) => l.replace(/^\s*\*\s*/, '').trim())
+					.map(removeCommentPrefix)
 					.filter((l) => l.length > EMPTY && !l.startsWith('@') && !l.startsWith('{@code'));
 				// Skip if all lines were consumed
 				if (tokenLinesToCheck.length > 0 && tokenLinesToCheck.every((l) => consumedContent.has(l))) {
