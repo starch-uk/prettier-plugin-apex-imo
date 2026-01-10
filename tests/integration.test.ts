@@ -411,7 +411,8 @@ describe('prettier-plugin-apex-imo integration', () => {
 				fixture: 'apexdoc-invalid-apex',
 			},
 			{
-				description: 'should format @AuraEnabled annotation in {@code} blocks',
+				description:
+					'should format @AuraEnabled annotation in {@code} blocks',
 				fixture: 'apexdoc-code-block-annotation',
 			},
 			{
@@ -464,19 +465,23 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 		it.concurrent.each([
 			{
-				description: 'should format simple integer assignment in {@code} blocks',
+				description:
+					'should format simple integer assignment in {@code} blocks',
 				fixture: 'formatcodeblock-simple-integer',
 			},
 			{
-				description: 'should format @Deprecated annotation in {@code} blocks',
+				description:
+					'should format @Deprecated annotation in {@code} blocks',
 				fixture: 'formatcodeblock-deprecated',
 			},
 			{
-				description: 'should preserve invalid Apex code in {@code} blocks with __FORMAT_FAILED__ prefix',
+				description:
+					'should preserve invalid Apex code in {@code} blocks with __FORMAT_FAILED__ prefix',
 				fixture: 'formatcodeblock-invalid-apex',
 			},
 			{
-				description: 'should preserve multiline @InvocableMethod in {@code} blocks with __FORMAT_FAILED__ prefix',
+				description:
+					'should preserve multiline @InvocableMethod in {@code} blocks with __FORMAT_FAILED__ prefix',
 				fixture: 'formatcodeblock-invocable-multiline',
 			},
 			{
@@ -492,7 +497,8 @@ describe('prettier-plugin-apex-imo integration', () => {
 				fixture: 'formatcodeblock-test-annotation',
 			},
 			{
-				description: 'should preserve @TestAnnotation with value in {@code} blocks with __FORMAT_FAILED__ prefix',
+				description:
+					'should preserve @TestAnnotation with value in {@code} blocks with __FORMAT_FAILED__ prefix',
 				fixture: 'formatcodeblock-test-annotation-value',
 			},
 		])(
@@ -518,7 +524,9 @@ describe('prettier-plugin-apex-imo integration', () => {
 				const CODE_TAG_LENGTH = 6;
 				const codeBlockStart = result.indexOf('{@code');
 				if (codeBlockStart === NOT_FOUND_INDEX) {
-					throw new Error(`Could not find {@code} block in result: ${result}`);
+					throw new Error(
+						`Could not find {@code} block in result: ${result}`,
+					);
 				}
 
 				/**
@@ -526,7 +534,11 @@ describe('prettier-plugin-apex-imo integration', () => {
 				 */
 				let contentStart = codeBlockStart + CODE_TAG_LENGTH;
 				// Skip whitespace and newline after {@code
-				while (contentStart < result.length && (result[contentStart] === ' ' || result[contentStart] === '\n')) {
+				while (
+					contentStart < result.length &&
+					(result[contentStart] === ' ' ||
+						result[contentStart] === '\n')
+				) {
 					contentStart++;
 				}
 				// Check if this is a single-line code block: {@code ...} or {@code ...; }
@@ -536,7 +548,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 				let closingLineIndex = -1;
 				const EMPTY_LINE_LENGTH = 0;
 				const ARRAY_START_INDEX = 0;
-				
+
 				// First, check if this is a single-line code block: {@code ...} or {@code ...; }
 				// Single-line format has the closing } on the same line as the content
 				const firstLine = lines[ARRAY_START_INDEX] ?? '';
@@ -553,11 +565,13 @@ describe('prettier-plugin-apex-imo integration', () => {
 					if (codeBlockContent.length > ZERO_LENGTH) {
 						expect(codeBlockContent).toBe(expectedCode);
 					} else {
-						throw new Error(`Code block content is empty in result: ${result}`);
+						throw new Error(
+							`Code block content is empty in result: ${result}`,
+						);
 					}
 					return;
 				}
-				
+
 				// Multiline format: find the closing } that's on a line with just whitespace, asterisk, space, and } (no semicolon)
 				// This distinguishes the closing } of {@code} from the }; in the code
 				// Look for pattern: \n   * } (newline, spaces, asterisk, space, }, but NOT };)
@@ -570,10 +584,15 @@ describe('prettier-plugin-apex-imo integration', () => {
 					}
 				}
 				if (closingLineIndex === NOT_FOUND_INDEX) {
-					throw new Error(`Could not find closing } for {@code} block in result: ${result}`);
+					throw new Error(
+						`Could not find closing } for {@code} block in result: ${result}`,
+					);
 				}
 				// Get all lines up to (but not including) the closing line
-				const codeBlockLines = lines.slice(ARRAY_START_INDEX, closingLineIndex);
+				const codeBlockLines = lines.slice(
+					ARRAY_START_INDEX,
+					closingLineIndex,
+				);
 				const codeBlockContent = codeBlockLines.join('\n');
 				const ZERO_LENGTH = 0;
 				if (codeBlockContent.length > ZERO_LENGTH) {
@@ -581,11 +600,17 @@ describe('prettier-plugin-apex-imo integration', () => {
 					const codeLines = codeBlockContent
 						.split('\n')
 						.map((line) => line.replace(/^\s*\*\s?/, '').trimEnd())
-						.filter((line) => line.length > ZERO_LENGTH || codeBlockContent.includes('\n'));
+						.filter(
+							(line) =>
+								line.length > ZERO_LENGTH ||
+								codeBlockContent.includes('\n'),
+						);
 					const formattedCode = codeLines.join('\n').trim();
 					expect(formattedCode).toBe(expectedCode);
 				} else {
-					throw new Error(`Code block content is empty in result: ${result}`);
+					throw new Error(
+						`Code block content is empty in result: ${result}`,
+					);
 				}
 			},
 		);

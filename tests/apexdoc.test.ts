@@ -5,10 +5,7 @@
 /* eslint-disable @typescript-eslint/no-magic-numbers */
 import { describe, it, expect } from 'vitest';
 import type { ParserOptions } from 'prettier';
-import {
-	FORMAT_FAILED_PREFIX,
-	EMPTY_CODE_TAG,
-} from '../src/apexdoc.js';
+import { FORMAT_FAILED_PREFIX, EMPTY_CODE_TAG } from '../src/apexdoc.js';
 import { loadFixture } from './test-utils.js';
 
 describe('apexdoc', () => {
@@ -23,5 +20,4 @@ describe('apexdoc', () => {
 			expect(FORMAT_FAILED_PREFIX).toBe('__FORMAT_FAILED__');
 		});
 	});
-
 });

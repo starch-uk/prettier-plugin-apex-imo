@@ -21,7 +21,6 @@ import { getCurrentPluginInstance } from './printer.js';
  */
 const SLICE_START_INDEX = 0;
 
-
 const normalizeStandardObjectType = (typeName: string): string =>
 	typeof typeName === 'string' && typeName
 		? (STANDARD_OBJECTS[typeName.toLowerCase()] ?? typeName)
@@ -321,21 +320,21 @@ const createTypeNormalizingPrint =
 		if (!shouldNormalize || !isIdent) {
 			return originalPrint(subPath);
 		}
-	const valueField = (node as { value?: unknown }).value;
-	if (typeof valueField === 'string') {
-		return normalizeSingleIdentifier(
-			node as ApexIdentifier,
-			originalPrint,
-			subPath,
-		);
-	}
-	if ('names' in node) {
-		return normalizeNamesArray(
-			node as ApexNode & { names?: readonly ApexIdentifier[] },
-			originalPrint,
-			subPath,
-		);
-	}
+		const valueField = (node as { value?: unknown }).value;
+		if (typeof valueField === 'string') {
+			return normalizeSingleIdentifier(
+				node as ApexIdentifier,
+				originalPrint,
+				subPath,
+			);
+		}
+		if ('names' in node) {
+			return normalizeNamesArray(
+				node as ApexNode & { names?: readonly ApexIdentifier[] },
+				originalPrint,
+				subPath,
+			);
+		}
 		return originalPrint(subPath, ..._extraArgs);
 	};
 

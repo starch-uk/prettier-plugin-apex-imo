@@ -18,7 +18,6 @@ import { createMockPath, createMockPrint } from './test-utils.js';
 const nodeClassKey = '@class';
 
 describe('casing', () => {
-
 	describe('normalizeTypeName', () => {
 		it.concurrent(
 			'should normalize standard objects and then suffixes',

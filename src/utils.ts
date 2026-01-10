@@ -19,11 +19,14 @@ const getNodeClassOptional = (node: Readonly<ApexNode>): string | undefined => {
 const createNodeClassGuard = <T extends ApexNode>(
 	className: string | ((cls: string | undefined) => boolean),
 ) => {
-	const checkClass = typeof className === 'string'
-		? (cls: string | undefined) => cls === className
-		: className;
-	
-	return (node: Readonly<ApexNode> | null | undefined): node is Readonly<T> => {
+	const checkClass =
+		typeof className === 'string'
+			? (cls: string | undefined) => cls === className
+			: className;
+
+	return (
+		node: Readonly<ApexNode> | null | undefined,
+	): node is Readonly<T> => {
 		if (!node || typeof node !== 'object') return false;
 		const nodeClass = getNodeClassOptional(node);
 		return checkClass(nodeClass) ?? false;

@@ -6,15 +6,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import * as prettier from 'prettier';
 import type { ParserOptions } from 'prettier';
-import {
-	ARRAY_START_INDEX,
-	STRING_OFFSET,
-} from './comments.js';
+import { ARRAY_START_INDEX, STRING_OFFSET } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
 import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 // Access modifiers for checking formatted code strings (use Set for O(1) lookup)
-const ACCESS_MODIFIERS_SET = new Set(['public', 'private', 'protected', 'static', 'final', 'global']);
+const ACCESS_MODIFIERS_SET = new Set([
+	'public',
+	'private',
+	'protected',
+	'static',
+	'final',
+	'global',
+]);
 
 const startsWithAccessModifier = (line: string): boolean => {
 	const trimmed = line.trim();
@@ -78,7 +82,10 @@ const extractCodeFromBlock = (
 				.split('\n')
 				.map((line) => {
 					// Remove comment asterisk prefix, preserving content indentation
-					const afterAsterisk = line.replace(COMMENT_ASTERISK_REGEX, '');
+					const afterAsterisk = line.replace(
+						COMMENT_ASTERISK_REGEX,
+						'',
+					);
 					// Check if this is an empty line (only whitespace)
 					if (afterAsterisk.trim() === '') {
 						// This is an empty line - preserve it as empty string
@@ -93,22 +100,20 @@ const extractCodeFromBlock = (
 	// Split into lines to process leading/trailing separately
 	const codeLines = code.split('\n');
 	// Remove leading blank lines
-	while (codeLines.length > 0 && (codeLines[0]?.trim().length === 0)) {
+	while (codeLines.length > 0 && codeLines[0]?.trim().length === 0) {
 		codeLines.shift();
 	}
 	// Remove trailing blank lines
-	while (codeLines.length > 0 && (codeLines[codeLines.length - 1]?.trim().length === 0)) {
+	while (
+		codeLines.length > 0 &&
+		codeLines[codeLines.length - 1]?.trim().length === 0
+	) {
 		codeLines.pop();
 	}
 	// Join back - middle blank lines are preserved
 	const trimmedCode = codeLines.join('\n');
 	return { code: trimmedCode, endPos: pos };
 };
-
-
-
-
-
 
 /**
  * Processes comment lines to handle code block boundaries.
@@ -120,7 +125,7 @@ const extractCodeFromBlock = (
  */
 const COMMENT_LINE_PREFIX_REGEX = /^\s*\*\s?/;
 
-	const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
+const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	let inCodeBlock = false;
 	let codeBlockBraceCount = 0;
 
@@ -187,9 +192,17 @@ const formatCodeWithPrettier = async (
 			// should be preserved as-is without the prefix
 			// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
 			// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
-			const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(normalizedCode.trim());
-			const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(normalizedCode);
-			if (isSimpleAnnotation || (hasApexLikePatterns && !normalizedCode.trim().startsWith('@'))) {
+			const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(
+				normalizedCode.trim(),
+			);
+			const hasApexLikePatterns =
+				/(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(
+					normalizedCode,
+				);
+			if (
+				isSimpleAnnotation ||
+				(hasApexLikePatterns && !normalizedCode.trim().startsWith('@'))
+			) {
 				// Preserve simple annotations or Apex-like code with syntax errors as-is
 				return normalizedCode;
 			}
@@ -206,7 +219,7 @@ const formatCodeWithPrettier = async (
  */
 const preserveBlankLinesAfterBraces = (formatted: string): string => {
 	if (formatted.startsWith(FORMAT_FAILED_PREFIX)) return formatted;
-	
+
 	const formattedLines = formatted.trim().split('\n');
 	const resultLines: string[] = [];
 
@@ -255,10 +268,16 @@ const formatCodeBlockToken = async ({
 	const optionsWithPlugin = {
 		...embedOptions,
 		printWidth: effectiveWidth,
-		plugins: [currentPluginInstance?.default ?? (await import('./index.js')).default],
+		plugins: [
+			currentPluginInstance?.default ??
+				(await import('./index.js')).default,
+		],
 	};
-	
-	const formatted = await formatCodeWithPrettier(normalizedCode, optionsWithPlugin);
+
+	const formatted = await formatCodeWithPrettier(
+		normalizedCode,
+		optionsWithPlugin,
+	);
 	const formattedWithBlankLines = preserveBlankLinesAfterBraces(formatted);
 
 	return {
@@ -266,7 +285,6 @@ const formatCodeBlockToken = async ({
 		formattedCode: formattedWithBlankLines.replace(/\n+$/, ''),
 	};
 };
-
 
 export {
 	CODE_TAG,

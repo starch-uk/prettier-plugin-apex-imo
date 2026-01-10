@@ -63,7 +63,10 @@ const isStringAnnotationValue = (
 	value: Readonly<ApexAnnotationValue>,
 ): value is Readonly<ApexAnnotationValue & { value: string }> => {
 	const cls = getNodeClass(value);
-	if (cls === TRUE_ANNOTATION_VALUE_CLASS || cls === FALSE_ANNOTATION_VALUE_CLASS) {
+	if (
+		cls === TRUE_ANNOTATION_VALUE_CLASS ||
+		cls === FALSE_ANNOTATION_VALUE_CLASS
+	) {
 		return false;
 	}
 	return 'value' in value && typeof value.value === 'string';
@@ -99,7 +102,10 @@ const formatAnnotationParam = (
 };
 
 // Use Set for O(1) lookup instead of array.includes() O(n)
-const INVOCABLE_ANNOTATIONS_SET = new Set(['invocablemethod', 'invocablevariable']);
+const INVOCABLE_ANNOTATIONS_SET = new Set([
+	'invocablemethod',
+	'invocablevariable',
+]);
 
 const isInvocableAnnotation = (name: string): boolean =>
 	INVOCABLE_ANNOTATIONS_SET.has(name.toLowerCase());
@@ -244,7 +250,9 @@ const normalizeAnnotationNamesInText = (text: string): string => {
  * @param text - The source text containing annotations to normalize.
  * @returns The text with normalized annotation names (excluding ApexDoc annotations).
  */
-const normalizeAnnotationNamesInTextExcludingApexDoc = (text: string): string => {
+const normalizeAnnotationNamesInTextExcludingApexDoc = (
+	text: string,
+): string => {
 	// Import APEXDOC_ANNOTATIONS dynamically to avoid circular dependency
 	const APEXDOC_ANNOTATIONS = [
 		'param',
@@ -258,10 +266,10 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (text: string): string =>
 		'group',
 		'example',
 	] as const;
-	
+
 	const apexDocAnnotationsSet = new Set(APEXDOC_ANNOTATIONS);
 	const replacer = createAnnotationReplacer();
-	
+
 	// Create a replacer that normalizes ApexDoc annotations to lowercase, not PascalCase
 	const excludingApexDocReplacer = (
 		match: string,
@@ -270,7 +278,11 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (text: string): string =>
 	): string => {
 		const lowerName = name.toLowerCase();
 		// If it's an ApexDoc annotation, normalize to lowercase (not PascalCase)
-		if (apexDocAnnotationsSet.has(lowerName as (typeof APEXDOC_ANNOTATIONS)[number])) {
+		if (
+			apexDocAnnotationsSet.has(
+				lowerName as (typeof APEXDOC_ANNOTATIONS)[number],
+			)
+		) {
 			if (params === undefined || params.length === ZERO_LENGTH) {
 				return `@${lowerName}`;
 			}
@@ -279,8 +291,13 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (text: string): string =>
 		// Otherwise, normalize it to PascalCase (Apex code annotations)
 		return replacer(match, name, params);
 	};
-	
+
 	return text.replace(ANNOTATION_REGEX, excludingApexDocReplacer);
 };
 
-export { isAnnotation, normalizeAnnotationNamesInText, normalizeAnnotationNamesInTextExcludingApexDoc, printAnnotation };
+export {
+	isAnnotation,
+	normalizeAnnotationNamesInText,
+	normalizeAnnotationNamesInTextExcludingApexDoc,
+	printAnnotation,
+};

@@ -42,9 +42,16 @@ const isNestedInCollection = (
 	if (!Array.isArray(stack) || stack.length === 0) return false;
 	// Check if any parent in the stack is a collection using AST type guards
 	for (const parent of stack) {
-		if (typeof parent === 'object' && parent !== null && '@class' in parent) {
+		if (
+			typeof parent === 'object' &&
+			parent !== null &&
+			'@class' in parent
+		) {
 			// Use AST type guards instead of array check
-			if (isListInit(parent as ApexNode) || isMapInit(parent as ApexNode)) {
+			if (
+				isListInit(parent as ApexNode) ||
+				isMapInit(parent as ApexNode)
+			) {
 				return true;
 			}
 		}
@@ -61,7 +68,7 @@ const printCollection = (
 	const nodeClass = getNodeClass(node);
 	const isList =
 		nodeClass === LIST_LITERAL_CLASS || nodeClass === SET_LITERAL_CLASS;
-	
+
 	const hasMultipleEntries = isList
 		? hasMultipleListEntries(node as ApexListInitNode)
 		: hasMultipleMapEntries(node as ApexMapInitNode);
@@ -72,15 +79,17 @@ const printCollection = (
 	);
 	const printedTypes = path.map(typeNormalizingPrint, 'types' as never);
 	const isNested = isNestedInCollection(path);
-	
+
 	const EMPTY_COLLECTION_LENGTH = 0;
 	// Check if collection is actually empty (no entries at all)
 	const listNode = isList ? (node as ApexListInitNode) : undefined;
 	const mapNode = !isList ? (node as ApexMapInitNode) : undefined;
 	const isEmpty = isList
-		? !Array.isArray(listNode?.values) || (listNode?.values.length ?? 0) === EMPTY_COLLECTION_LENGTH
-		: !Array.isArray(mapNode?.pairs) || (mapNode?.pairs.length ?? 0) === EMPTY_COLLECTION_LENGTH;
-	
+		? !Array.isArray(listNode?.values) ||
+			(listNode?.values.length ?? 0) === EMPTY_COLLECTION_LENGTH
+		: !Array.isArray(mapNode?.pairs) ||
+			(mapNode?.pairs.length ?? 0) === EMPTY_COLLECTION_LENGTH;
+
 	// For empty collections (no entries), we still need to handle them to ensure
 	// type parameters can break when they exceed printWidth
 	if (isEmpty) {
@@ -88,25 +97,31 @@ const printCollection = (
 		// Prettier to break long type parameters when they exceed printWidth
 		if (isList) {
 			const isSet = nodeClass === SET_LITERAL_CLASS;
-		// For Set, add break points after commas to allow breaking
-		// For List, the dot separator is part of the type name syntax, so we can't break there
-		const typeName = isSet ? 'Set' : 'List';
-		const typeSeparator: Doc = isSet ? [',', softline] : '.';
-		// For non-nested, don't wrap in group to allow parent to break when line exceeds printWidth
-		const typeDoc: Doc = isNested
-			? group([typeName, '<', join(typeSeparator, printedTypes), '>'])
-			: [typeName, '<', join(typeSeparator, printedTypes), '>'];
-		return [typeDoc, '{}'];
+			// For Set, add break points after commas to allow breaking
+			// For List, the dot separator is part of the type name syntax, so we can't break there
+			const typeName = isSet ? 'Set' : 'List';
+			const typeSeparator: Doc = isSet ? [',', softline] : '.';
+			// For non-nested, don't wrap in group to allow parent to break when line exceeds printWidth
+			const typeDoc: Doc = isNested
+				? group([typeName, '<', join(typeSeparator, printedTypes), '>'])
+				: [typeName, '<', join(typeSeparator, printedTypes), '>'];
+			return [typeDoc, '{}'];
 		}
 		// For empty Maps, add break points in type parameters to allow breaking
 		// Use group with softline to allow breaking when line exceeds printWidth
 		// Add softline before and after type parameters to allow breaking
 		const typeDoc: Doc = isNested
 			? group(['Map<', join([', ', softline], printedTypes), '>'])
-			: group(['Map<', softline, join([', ', softline], printedTypes), softline, '>']);
+			: group([
+					'Map<',
+					softline,
+					join([', ', softline], printedTypes),
+					softline,
+					'>',
+				]);
 		return [typeDoc, '{}'];
 	}
-	
+
 	// For collections with entries but fewer than MIN_ENTRIES_FOR_MULTILINE (single item),
 	// delegate to the original printer to handle inline formatting
 	if (!hasMultipleEntries) {

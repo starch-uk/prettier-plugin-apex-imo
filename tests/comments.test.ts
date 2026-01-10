@@ -332,7 +332,6 @@ describe('comments', () => {
 		);
 	});
 
-
 	describe('normalizeBlockComment', () => {
 		/**
 		 * Helper to extract comment value from fixture.

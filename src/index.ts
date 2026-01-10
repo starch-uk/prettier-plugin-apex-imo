@@ -8,9 +8,7 @@ import type { Plugin, ParserOptions, AstPath, Doc } from 'prettier';
 import * as apexPlugin from 'prettier-plugin-apex';
 import { createWrappedPrinter } from './printer.js';
 import type { ApexNode } from './types.js';
-import {
-	customPrintComment as customPrintCommentFn,
-} from './comments.js';
+import { customPrintComment as customPrintCommentFn } from './comments.js';
 import {
 	getCurrentPrintOptions,
 	getCurrentOriginalText,
@@ -120,7 +118,6 @@ const isApexParser = (
 	if (typeof parser !== 'string') return false;
 	return APEX_PARSERS.includes(parser as (typeof APEX_PARSERS)[number]);
 };
-
 
 const wrapParsers = (
 	parsers: Readonly<Plugin<ApexNode>['parsers']>,

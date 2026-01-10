@@ -6,7 +6,12 @@ import type { ApexNode } from './types.js';
 import type { ParserOptions } from 'prettier';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
-import { normalizeSingleApexDocComment, processApexDocComment, normalizeAnnotationTokens, removeTrailingEmptyLines } from './apexdoc.js';
+import {
+	normalizeSingleApexDocComment,
+	processApexDocComment,
+	normalizeAnnotationTokens,
+	removeTrailingEmptyLines,
+} from './apexdoc.js';
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -60,7 +65,6 @@ const getCommentIndent = (
 		DEFAULT_TAB_WIDTH,
 	);
 };
-
 
 /**
  * Internal function to normalize basic block comment structure.
@@ -122,7 +126,10 @@ const normalizeBlockCommentBasic = (
 			// If spaceAfterAsterisk has more than one space, preserve the extra spaces as code block indentation
 			// For code blocks: spaceAfterAsterisk = "   " (3 spaces), restOfLine = "@AuraEnabled" (no spaces)
 			// We preserve spaces beyond the first one (single space after *) as indentation
-			const codeBlockIndent = spaceAfterAsterisk.length > 1 ? spaceAfterAsterisk.substring(1) : '';
+			const codeBlockIndent =
+				spaceAfterAsterisk.length > 1
+					? spaceAfterAsterisk.substring(1)
+					: '';
 			const normalizedRest = codeBlockIndent + restOfLine;
 			// Normal line - use consistent ' * ' spacing (preserve code block indentation)
 			normalizedLines.push(`${baseIndent} * ${normalizedRest}`);
@@ -302,7 +309,8 @@ const parseCommentToTokens = (
 	codeBlockPattern.lastIndex = ARRAY_START_INDEX;
 	while ((match = codeBlockPattern.exec(fullContent)) !== null) {
 		const start = match.index ?? ARRAY_START_INDEX;
-		const end = (match.index ?? ARRAY_START_INDEX) + (match[0]?.length ?? 0);
+		const end =
+			(match.index ?? ARRAY_START_INDEX) + (match[0]?.length ?? 0);
 		const content = match[1] ?? '';
 		codeBlocks.push({ start, end, content });
 	}
@@ -392,9 +400,14 @@ const parseCommentToTokens = (
 					codeBlockCloseCount++;
 				}
 			}
-			const hasUnclosedCodeBlock = codeBlockOpenCount > codeBlockCloseCount;
+			const hasUnclosedCodeBlock =
+				codeBlockOpenCount > codeBlockCloseCount;
 
-			if (isAnnotationLine && currentParagraph.length > EMPTY && !hasUnclosedCodeBlock) {
+			if (
+				isAnnotationLine &&
+				currentParagraph.length > EMPTY &&
+				!hasUnclosedCodeBlock
+			) {
 				tokens.push({
 					type: 'paragraph',
 					content: currentParagraph.join(' '),
@@ -492,24 +505,24 @@ const tokensToCommentString = (
 		const token = tokens[i];
 		const nextToken = i + 1 < tokens.length ? tokens[i + 1] : null;
 		const isFollowedByCodeBlock = nextToken?.type === 'code';
-		
+
 		if (token.type === 'text') {
 			// Filter out empty trailing lines if followed by a code block
 			const linesToProcess = isFollowedByCodeBlock
 				? (() => {
-					const filtered = removeTrailingEmptyLines(token.lines);
-					// Remove trailing newlines from the last line
-					if (filtered.length > 0) {
-						const lastIndex = filtered.length - 1;
-						let lastLine = filtered[lastIndex];
-						if (lastLine && lastLine.endsWith('\n')) {
-							filtered[lastIndex] = lastLine.slice(0, -1);
+						const filtered = removeTrailingEmptyLines(token.lines);
+						// Remove trailing newlines from the last line
+						if (filtered.length > 0) {
+							const lastIndex = filtered.length - 1;
+							let lastLine = filtered[lastIndex];
+							if (lastLine && lastLine.endsWith('\n')) {
+								filtered[lastIndex] = lastLine.slice(0, -1);
+							}
 						}
-					}
-					return filtered;
-				})()
+						return filtered;
+					})()
 				: token.lines;
-			
+
 			for (const line of linesToProcess) {
 				// Skip empty lines that would create a blank line before the code block
 				if (isFollowedByCodeBlock && line.trim().length === 0) {
@@ -529,7 +542,11 @@ const tokensToCommentString = (
 				const isLastLine = j === token.lines.length - 1;
 				// Remove trailing newline from the last line of a paragraph token if it's followed by a code block
 				// to avoid an extra blank line before the code block
-				if (isLastLine && isFollowedByCodeBlock && line.endsWith('\n')) {
+				if (
+					isLastLine &&
+					isFollowedByCodeBlock &&
+					line.endsWith('\n')
+				) {
 					line = line.slice(0, -1);
 				}
 				if (line.trimStart().startsWith('*')) {
@@ -543,7 +560,11 @@ const tokensToCommentString = (
 			// to avoid an extra blank line before the code block
 			// Keep at least one line (the opening /**)
 			// Check up to the last 2 lines (in case there are multiple empty lines)
-			for (let checkIndex = lines.length - 1; checkIndex > 0 && lines.length > 1; checkIndex--) {
+			for (
+				let checkIndex = lines.length - 1;
+				checkIndex > 0 && lines.length > 1;
+				checkIndex--
+			) {
 				const lineToCheck = lines[checkIndex];
 				if (lineToCheck && lineToCheck.trim().length === 0) {
 					lines.splice(checkIndex, 1);
@@ -551,7 +572,7 @@ const tokensToCommentString = (
 					break; // Stop when we find a non-empty line
 				}
 			}
-			
+
 			// Use formatted code if available, otherwise use raw code
 			const codeToUse = token.formattedCode ?? token.rawCode;
 			// Handle empty code blocks - render {@code} even if content is empty
@@ -658,9 +679,6 @@ const wrapParagraphTokens = (
 	return wrappedTokens;
 };
 
-
-
-
 /**
  * Custom printComment function that preserves our wrapped lines.
  * The original printApexDocComment trims each line, which removes our carefully
@@ -736,11 +754,7 @@ const customPrintComment = (
 		return middleLines.length > ARRAY_START_INDEX;
 	};
 
-	if (
-		node !== null &&
-		'value' in node &&
-		typeof node['value'] === 'string'
-	) {
+	if (node !== null && 'value' in node && typeof node['value'] === 'string') {
 		const commentNode = node as unknown as { value: string };
 		const commentValue = commentNode.value;
 		if (commentValue === '') return '';
@@ -749,12 +763,21 @@ const customPrintComment = (
 			// Check if there's a pre-formatted version from embed processing
 			// Use the same cache key calculation as embed function
 			const codeTagPos = commentValue.indexOf('{@code');
-			const commentKey = codeTagPos !== -1 ? `${String(commentValue.length)}-${String(codeTagPos)}` : null;
-			const embedFormattedComment = commentKey ? _getFormattedCodeBlock(commentKey) : null;
+			const commentKey =
+				codeTagPos !== -1
+					? `${String(commentValue.length)}-${String(codeTagPos)}`
+					: null;
+			const embedFormattedComment = commentKey
+				? _getFormattedCodeBlock(commentKey)
+				: null;
 			// Use embed-formatted comment if available, otherwise normalize the original comment
 			// Normalize the embed-formatted comment to match Prettier's indentation (single space before *)
 			const commentToUse = embedFormattedComment
-				? normalizeSingleApexDocComment(embedFormattedComment, 0, options)
+				? normalizeSingleApexDocComment(
+						embedFormattedComment,
+						0,
+						options,
+					)
 				: normalizeSingleApexDocComment(commentValue, 0, options);
 
 			// Return the comment as Prettier documents
@@ -774,10 +797,14 @@ const customPrintComment = (
 			// Parse to tokens, normalize annotations, then convert back
 			const tokens = parseCommentToTokens(commentValue);
 			const normalizedTokens = normalizeAnnotationTokens(tokens);
-			const normalizedComment = tokensToCommentString(normalizedTokens, 0, {
-				tabWidth: options.tabWidth,
-				useTabs: options.useTabs,
-			});
+			const normalizedComment = tokensToCommentString(
+				normalizedTokens,
+				0,
+				{
+					tabWidth: options.tabWidth,
+					useTabs: options.useTabs,
+				},
+			);
 
 			// Return the normalized comment as Prettier documents
 			const lines = normalizedComment.split('\n');
