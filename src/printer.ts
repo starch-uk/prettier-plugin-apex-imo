@@ -30,7 +30,6 @@ import {
 	CODE_TAG,
 	CODE_TAG_LENGTH,
 } from './apexdoc-code.js';
-import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 // Access modifiers for checking formatted code strings (use Set for O(1) lookup)
 const ACCESS_MODIFIERS_SET = new Set([
@@ -290,8 +289,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 									},
 								);
 							} catch {
-								// Add prefix for completely unparseable text
-								formattedCode = `${FORMAT_FAILED_PREFIX}${codeContent}`;
+								// When parsing fails, preserve the original code as-is
+								formattedCode = codeContent;
 							}
 						}
 

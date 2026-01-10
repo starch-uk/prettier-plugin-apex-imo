@@ -58,7 +58,6 @@ import {
 	normalizeAnnotationNamesInTextExcludingApexDoc,
 } from './annotations.js';
 
-const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
 const NOT_FOUND_INDEX = -1;
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -1451,7 +1450,6 @@ const wrapAnnotationTokens = (
 
 export {
 	findApexDocComments,
-	FORMAT_FAILED_PREFIX,
 	EMPTY_CODE_TAG,
 	normalizeSingleApexDocComment,
 	parseApexDocTokens,

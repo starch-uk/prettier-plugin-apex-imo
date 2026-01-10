@@ -1,4 +1,4 @@
-__FORMAT_FAILED__@InvocableMethod(
+@InvocableMethod(
 label="Test",
 description="Test description"
 )

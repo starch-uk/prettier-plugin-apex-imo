@@ -476,12 +476,12 @@ describe('prettier-plugin-apex-imo integration', () => {
 			},
 			{
 				description:
-					'should preserve invalid Apex code in {@code} blocks with __FORMAT_FAILED__ prefix',
+					'should preserve invalid code in {@code} blocks',
 				fixture: 'formatcodeblock-invalid-apex',
 			},
 			{
 				description:
-					'should preserve multiline @InvocableMethod in {@code} blocks with __FORMAT_FAILED__ prefix',
+					'should preserve multiline @InvocableMethod in {@code} blocks',
 				fixture: 'formatcodeblock-invocable-multiline',
 			},
 			{
@@ -498,7 +498,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 			},
 			{
 				description:
-					'should preserve @TestAnnotation with value in {@code} blocks with __FORMAT_FAILED__ prefix',
+					'should preserve @TestAnnotation with value in {@code} blocks',
 				fixture: 'formatcodeblock-test-annotation-value',
 			},
 		])(
