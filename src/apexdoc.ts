@@ -1384,6 +1384,7 @@ export {
 	normalizeAnnotationTokens,
 	wrapAnnotationTokens,
 	normalizeSingleApexDocCommentWithTokens,
+	removeTrailingEmptyLines,
 };
 
 /**

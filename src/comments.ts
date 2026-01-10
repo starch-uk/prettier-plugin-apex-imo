@@ -6,7 +6,7 @@ import type { ApexNode } from './types.js';
 import type { ParserOptions } from 'prettier';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
-import { normalizeSingleApexDocComment, processApexDocComment, normalizeAnnotationTokens } from './apexdoc.js';
+import { normalizeSingleApexDocComment, processApexDocComment, normalizeAnnotationTokens, removeTrailingEmptyLines } from './apexdoc.js';
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -14,9 +14,6 @@ const ARRAY_START_INDEX = 0;
 const STRING_OFFSET = 1;
 const INDEX_ONE = 1;
 const INDEX_TWO = 2;
-
-
-
 
 const getIndentLevel = (
 	line: Readonly<string>,
@@ -489,11 +486,7 @@ const tokensToCommentString = (
 			// Filter out empty trailing lines if followed by a code block
 			const linesToProcess = isFollowedByCodeBlock
 				? (() => {
-					const filtered = [...token.lines];
-					// Remove trailing empty lines
-					while (filtered.length > 0 && filtered[filtered.length - 1]?.trim().length === 0) {
-						filtered.pop();
-					}
+					const filtered = removeTrailingEmptyLines(token.lines);
 					// Remove trailing newlines from the last line
 					if (filtered.length > 0) {
 						const lastIndex = filtered.length - 1;
