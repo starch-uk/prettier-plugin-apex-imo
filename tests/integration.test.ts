@@ -575,7 +575,8 @@ describe('prettier-plugin-apex-imo integration', () => {
 				// Multiline format: find the closing } that's on a line with just whitespace, asterisk, space, and } (no semicolon)
 				// This distinguishes the closing } of {@code} from the }; in the code
 				// Look for pattern: \n   * } (newline, spaces, asterisk, space, }, but NOT };)
-				for (let i = EMPTY_LINE_LENGTH; i < lines.length; i++) {
+				// Find the LAST occurrence, not the first, since there may be multiple } in the code
+				for (let i = lines.length - 1; i >= EMPTY_LINE_LENGTH; i--) {
 					const line = lines[i];
 					// Match line with just whitespace, asterisk, space, and } (not };)
 					if (/^\s*\*\s*\}$/.test(line)) {
