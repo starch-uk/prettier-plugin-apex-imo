@@ -21,28 +21,169 @@ const INDEX_ONE = 1;
 const INDEX_TWO = 2;
 
 /**
- * Wraps text content using Prettier's fill builder.
- * Uses fill to create a doc, then converts it back to wrapped lines using printDocToString.
- * @param text - The text content to wrap.
- * @param printWidth - The maximum line width.
- * @returns Array of wrapped lines.
+ * Checks if a comment node is an Apex comment.
+ * This identifies comments that can have ApexDoc annotations and formatting.
+ * @param comment - The comment node to check.
+ * @returns True if the comment is an Apex comment, false otherwise.
  */
-const createFillDoc = (text: string, printWidth: number): string[] => {
+const isApexComment = (comment: unknown): boolean => {
+	if (
+		comment === null ||
+		comment === undefined ||
+		typeof comment !== 'object' ||
+		!('value' in comment) ||
+		typeof (comment as { value?: unknown }).value !== 'string'
+	) {
+		return false;
+	}
+	const commentValue = (comment as { value: string }).value;
+	// Must start with /** and end with */ (ApexDoc style)
+	if (
+		!commentValue.trimStart().startsWith('/**') ||
+		!commentValue.trimEnd().endsWith('*/')
+	) {
+		return false;
+	}
+	return true;
+};
+
+/**
+ * Safely extracts a comment node from an unknown type.
+ * This is used by comment handling functions to ensure type safety.
+ * @param comment - The unknown comment to extract.
+ * @returns The comment node if valid, null otherwise.
+ */
+const getCommentNode = (
+	comment: unknown,
+): { value: string; '@class'?: string } | null => {
+	if (!isApexComment(comment)) {
+		return null;
+	}
+	return comment as { value: string; '@class'?: string };
+};
+
+// Apex AST node types that allow dangling comments
+const ALLOW_DANGLING_COMMENTS = [
+	'apex.jorje.data.ast.ClassDeclaration',
+	'apex.jorje.data.ast.InterfaceDeclaration',
+	'apex.jorje.data.ast.EnumDeclaration',
+	'apex.jorje.data.ast.TriggerDeclarationUnit',
+	'apex.jorje.data.ast.Stmnt$BlockStmnt',
+];
+
+/**
+ * Handles dangling comments in empty blocks and declarations.
+ * Attaches comments that would otherwise be dangling to appropriate parent nodes.
+ * @param comment - The comment node to handle.
+ * @returns True if the comment was handled, false otherwise.
+ */
+const handleDanglingComment = (comment: unknown): boolean => {
+	if (!comment || typeof comment !== 'object') return false;
+
+	const commentWithContext = comment as {
+		enclosingNode?: ApexNode;
+		'@class'?: string;
+	};
+
+	const { enclosingNode } = commentWithContext;
+	if (
+		enclosingNode &&
+		enclosingNode['@class'] &&
+		ALLOW_DANGLING_COMMENTS.includes(enclosingNode['@class']) &&
+		((enclosingNode as { stmnts?: unknown[] }).stmnts?.length === 0 ||
+			(enclosingNode as { members?: unknown[] }).members?.length === 0)
+	) {
+		const { addDanglingComment } = prettier.util;
+		addDanglingComment(enclosingNode, comment, null);
+		return true;
+	}
+	return false;
+};
+
+/**
+ * Handles leading comments before block statements.
+ * Moves leading comments before block statements into the block itself for better formatting.
+ * @param comment - The comment node to handle.
+ * @returns True if the comment was handled, false otherwise.
+ */
+const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
+	if (!comment || typeof comment !== 'object') return false;
+
+	const commentWithContext = comment as {
+		followingNode?: ApexNode;
+		'@class'?: string;
+	};
+
+	const { followingNode } = commentWithContext;
+	if (
+		!followingNode ||
+		followingNode['@class'] !== 'apex.jorje.data.ast.Stmnt$BlockStmnt'
+	) {
+		return false;
+	}
+
+	const blockStatement = followingNode as { stmnts?: unknown[] };
+	const { addLeadingComment, addDanglingComment } = prettier.util;
+
+	if (blockStatement.stmnts && blockStatement.stmnts.length > 0) {
+		// Add as leading comment to first statement in block
+		addLeadingComment(blockStatement.stmnts[0], comment);
+	} else {
+		// Add as dangling comment to empty block
+		addDanglingComment(followingNode, comment, null);
+	}
+	return true;
+};
+
+/**
+ * Handles end-of-line comments in binary expressions.
+ * Attaches trailing comments to the right child of binary expressions instead of the entire expression.
+ * @param comment - The comment node to handle.
+ * @returns True if the comment was handled, false otherwise.
+ */
+const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
+	if (!comment || typeof comment !== 'object') return false;
+
+	const commentWithContext = comment as {
+		precedingNode?: ApexNode;
+		placement?: string;
+		'@class'?: string;
+	};
+
+	const { precedingNode, placement } = commentWithContext;
+	if (
+		placement !== 'endOfLine' ||
+		!precedingNode ||
+		(precedingNode['@class'] !== 'apex.jorje.data.ast.Expr$BinaryExpr' &&
+			precedingNode['@class'] !== 'apex.jorje.data.ast.Expr$BooleanExpr')
+	) {
+		return false;
+	}
+
+	const binaryExpr = precedingNode as { right?: unknown };
+	if (!binaryExpr.right) return false;
+
+	const { addTrailingComment } = prettier.util;
+	addTrailingComment(binaryExpr.right, comment);
+	return true;
+};
+
+/**
+ * Wraps text content using Prettier's fill builder and returns a Doc.
+ * This allows direct integration with Prettier's doc composition system.
+ * @param text - The text content to wrap.
+ * @returns A Prettier Doc that can be used in doc composition.
+ */
+const wrapTextWithFill = (text: string): Doc => {
 	if (!text || text.trim().length === 0) {
-		return [];
+		return '';
 	}
 	const words = text.split(/\s+/).filter((word) => word.length > 0);
 	if (words.length === 0) {
-		return [];
+		return '';
 	}
 	const { fill, join, line } = prettier.doc.builders;
-	const fillDoc = fill(join(line, words));
-	const wrappedText = prettier.doc.printer.printDocToString(fillDoc, {
-		printWidth,
-		tabWidth: 2,
-		useTabs: false,
-	}).formatted;
-	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
+	return fill(join(line, words));
 };
 
 const getIndentLevel = (
@@ -351,6 +492,21 @@ function isMalformedCommentBlock(commentValue: string): boolean {
 }
 
 // Token type definitions for comment processing
+//
+// ANALYSIS: Token Type Usage
+// - TextToken: Fallback token when no paragraphs detected in comment
+// - ParagraphToken: Main token type for paragraph content with wrapping
+// - CodeBlockToken: Specialized for {@code} blocks
+// - AnnotationToken: Specialized for ApexDoc annotations (@param, @return, etc.)
+//
+// POTENTIAL SIMPLIFICATIONS:
+// 1. TextToken vs ParagraphToken: TextToken could be merged into ParagraphToken
+//    since both have content (string) and lines (string[]) fields. However,
+//    this would require updating ~20+ usages across apexdoc.ts and extensive testing.
+//    Left for future major refactoring.
+// 2. CodeBlockToken: Necessary for {@code} block processing
+// 3. AnnotationToken: Necessary for ApexDoc annotation handling
+//
 interface TextToken {
 	readonly type: 'text';
 	readonly content: string;
@@ -425,15 +581,23 @@ const parseCommentToTokens = (
 	const codeBlockPattern = /\/\*(?!\*)([\s\S]*?)\*\//g;
 	const codeBlocks: Array<{ start: number; end: number; content: string }> =
 		[];
+	// Create a Map for O(1) lookups during line processing
+	const codeBlockMap = new Map<
+		number,
+		{ start: number; end: number; content: string }
+	>();
 	let match;
 	// Reset regex lastIndex to ensure we start from the beginning
 	codeBlockPattern.lastIndex = ARRAY_START_INDEX;
+	let blockIndex = 0;
 	while ((match = codeBlockPattern.exec(fullContent)) !== null) {
 		const start = match.index ?? ARRAY_START_INDEX;
 		const end =
 			(match.index ?? ARRAY_START_INDEX) + (match[0]?.length ?? 0);
 		const content = match[1] ?? '';
-		codeBlocks.push({ start, end, content });
+		const block = { start, end, content };
+		codeBlocks.push(block);
+		codeBlockMap.set(blockIndex++, block);
 	}
 
 	// Detect paragraphs based on empty lines and sentence boundaries
@@ -449,11 +613,15 @@ const parseCommentToTokens = (
 		const lineEndPos = currentPos + line.length;
 		currentPos = lineEndPos + INDEX_ONE; // +1 for newline
 
-		// Check if this line is inside a code block - use simple loop instead of .some()
+		// Check if this line is inside a code block - use Map for O(1) lookups
 		let isInCodeBlock = false;
+		let currentCodeBlock:
+			| { start: number; end: number; content: string }
+			| undefined;
 		for (const cb of codeBlocks) {
 			if (lineStartPos >= cb.start && lineEndPos <= cb.end) {
 				isInCodeBlock = true;
+				currentCodeBlock = cb;
 				break;
 			}
 		}
@@ -470,21 +638,18 @@ const parseCommentToTokens = (
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
-			// Find the code block this line belongs to
-			const codeBlock = codeBlocks.find(
-				(cb) => lineStartPos >= cb.start && lineEndPos <= cb.end,
-			);
-			if (codeBlock) {
+			// Use cached code block from earlier check
+			if (currentCodeBlock) {
 				// Only add code block token once (on first line)
 				const codeBlockStartLine = fullContent
-					.substring(ARRAY_START_INDEX, codeBlock.start)
+					.substring(ARRAY_START_INDEX, currentCodeBlock.start)
 					.split('\n').length;
 				if (i === codeBlockStartLine) {
 					tokens.push({
 						type: 'code',
-						startPos: codeBlock.start,
-						endPos: codeBlock.end,
-						rawCode: codeBlock.content,
+						startPos: currentCodeBlock.start,
+						endPos: currentCodeBlock.end,
+						rawCode: currentCodeBlock.content,
 					} satisfies CodeBlockToken);
 				}
 			}
@@ -513,6 +678,7 @@ const parseCommentToTokens = (
 
 			// Track code block state using token state instead of regex counting
 			// Count {@code openings and } closings in current paragraph content
+			// Cache current content to avoid repeated joins
 			let codeBlockOpenCount = 0;
 			let codeBlockCloseCount = 0;
 			const currentContent = currentParagraph.join(' ');
@@ -614,6 +780,9 @@ const parseCommentToTokens = (
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
  * @returns The formatted comment string.
+ *
+ * Note: Currently handles string-based tokens. Future enhancement may support
+ * Doc-based tokens using prettier.doc.printer.printDocToString for conversion.
  */
 const tokensToCommentString = (
 	tokens: readonly CommentToken[],
@@ -760,8 +929,18 @@ const wrapParagraphTokens = (
 			continue;
 		}
 
-		// Use fill builder to wrap the paragraph content
-		const wrappedLines = createFillDoc(token.content, effectiveWidth);
+		// Use fill builder directly to get a Doc
+		const fillDoc = wrapTextWithFill(token.content);
+
+		// Convert the fill Doc to string lines for compatibility with existing token structure
+		const wrappedText = prettier.doc.printer.printDocToString(fillDoc, {
+			printWidth: effectiveWidth,
+			tabWidth: options.tabWidth,
+			useTabs: options.useTabs,
+		}).formatted;
+		const wrappedLines = wrappedText
+			.split('\n')
+			.filter((line) => line.trim().length > 0);
 
 		// Create new paragraph token with wrapped lines
 		// Need to reconstruct lines with comment prefix
@@ -929,10 +1108,13 @@ const customPrintComment = (
  * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleOwnLineComment = (
-	_comment: unknown,
+	comment: unknown,
 	_sourceCode: string,
 ): boolean => {
-	return false;
+	return (
+		handleDanglingComment(comment) ||
+		handleBlockStatementLeadingComment(comment)
+	);
 };
 
 /**
@@ -943,10 +1125,14 @@ const handleOwnLineComment = (
  * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleEndOfLineComment = (
-	_comment: unknown,
+	comment: unknown,
 	_sourceCode: string,
 ): boolean => {
-	return false;
+	return (
+		handleDanglingComment(comment) ||
+		handleBinaryExpressionTrailingComment(comment) ||
+		handleBlockStatementLeadingComment(comment)
+	);
 };
 
 /**
@@ -957,10 +1143,13 @@ const handleEndOfLineComment = (
  * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleRemainingComment = (
-	_comment: unknown,
+	comment: unknown,
 	_sourceCode: string,
 ): boolean => {
-	return false;
+	return (
+		handleDanglingComment(comment) ||
+		handleBlockStatementLeadingComment(comment)
+	);
 };
 
 export {
@@ -977,7 +1166,7 @@ export {
 	handleOwnLineComment,
 	handleEndOfLineComment,
 	handleRemainingComment,
-	createFillDoc,
+	wrapTextWithFill,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,

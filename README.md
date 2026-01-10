@@ -37,8 +37,25 @@ This plugin wraps `prettier-plugin-apex` and modifies the printing behaviour:
 - **Map literals** with 2+ entries → Always multiline
 - **Set literals** with 2+ entries → Always multiline
 - **ApexDoc `{@code}` blocks** → Code inside is formatted using Prettier
+- **Enhanced comment handling** → Better comment placement and attachment using
+  Prettier's comment system
 
 This is **non-configurable** behaviour. Once installed, it just works.
+
+## Comment Handling Improvements
+
+This plugin includes enhanced comment handling that leverages Prettier's
+built-in comment attachment system:
+
+- **Smart comment placement** for Apex-specific constructs (classes, interfaces,
+  block statements)
+- **Dangling comment support** for empty code blocks
+- **Binary expression comments** properly attached to right operands
+- **Block statement leading comments** moved into block bodies for better
+  formatting
+
+These improvements ensure comments are placed more intelligently and
+consistently with Prettier's standards.
 
 ## Installation
 

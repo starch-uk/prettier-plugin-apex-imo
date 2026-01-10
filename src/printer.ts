@@ -169,7 +169,8 @@ const clearFormattedCodeBlocks = (): void => {
 };
 
 const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
-const INLINE_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$InlineComment';
+const INLINE_COMMENT_CLASS =
+	'apex.jorje.parser.impl.HiddenTokens$InlineComment';
 const NOT_FOUND_INDEX = -1;
 const ZERO = 0;
 const ONE = 1;

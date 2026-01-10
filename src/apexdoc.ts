@@ -5,9 +5,10 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { ParserOptions } from 'prettier';
+import * as prettier from 'prettier';
 import { processCodeBlockLines } from './apexdoc-code.js';
 import {
-	createFillDoc,
+	wrapTextWithFill,
 	createIndent,
 	normalizeBlockComment,
 	parseCommentToTokens,
@@ -137,8 +138,8 @@ const normalizeSingleApexDocComment = (
 		useTabs: options.useTabs,
 	});
 
-	// Parse to tokens and get effective width
-	const { tokens: initialTokens, effectiveWidth } = parseApexDocTokens(
+	// Parse to tokens
+	const { tokens: initialTokens } = parseApexDocTokens(
 		normalizedComment,
 		commentIndent,
 		printWidth ?? 80,
@@ -551,7 +552,13 @@ const wrapTextContent = (
 	}
 
 	// Use fill builder to wrap content
-	return createFillDoc(textContent, effectiveWidth);
+	const fillDoc = wrapTextWithFill(textContent);
+	const wrappedText = prettier.doc.printer.printDocToString(fillDoc, {
+		printWidth: effectiveWidth,
+		tabWidth: 2,
+		useTabs: false,
+	}).formatted;
+	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
 };
 
 /**

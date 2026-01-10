@@ -36,6 +36,8 @@ This plugin wraps `prettier-plugin-apex` and modifies the printing behavior for:
 - **Set literals** with 2+ entries → Always multiline
 - **Map literals** with 2+ entries → Always multiline
 - **ApexDoc `{@code}` blocks** → Code inside is formatted using Prettier
+- **Enhanced comment handling** → Better comment placement and attachment using
+  Prettier's comment system
 
 **Important:** This is non-configurable behavior. Once installed, it just works.
 

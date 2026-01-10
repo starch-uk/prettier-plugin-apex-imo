@@ -9,6 +9,9 @@ import {
 	createIndent,
 	getCommentIndent,
 	normalizeBlockComment,
+	handleOwnLineComment,
+	handleEndOfLineComment,
+	handleRemainingComment,
 } from '../src/comments.js';
 import { findApexDocComments } from '../src/apexdoc.js';
 import { loadFixture } from './test-utils.js';
@@ -461,5 +464,65 @@ describe('comments', () => {
 				expect(result).toBe(expectedComment);
 			},
 		);
+	});
+
+	describe('comment attachment handlers', () => {
+		describe('handleOwnLineComment', () => {
+			it('should return false for invalid input', () => {
+				const result = handleOwnLineComment(null, '');
+				expect(result).toBe(false);
+			});
+
+			it('should handle comments that can be attached to own line', () => {
+				// Test with a comment that has an enclosing node that allows dangling comments
+				const comment = {
+					enclosingNode: {
+						'@class': 'apex.jorje.data.ast.ClassDeclaration',
+						stmnts: [],
+					},
+				};
+				const result = handleOwnLineComment(comment, '');
+				expect(result).toBe(true);
+			});
+		});
+
+		describe('handleEndOfLineComment', () => {
+			it('should return false for invalid input', () => {
+				const result = handleEndOfLineComment(null, '');
+				expect(result).toBe(false);
+			});
+
+			it('should handle end-of-line comments', () => {
+				// Test with a binary expression comment
+				const comment = {
+					precedingNode: {
+						'@class': 'apex.jorje.data.ast.Expr$BinaryExpr',
+						right: { type: 'expression' },
+					},
+					placement: 'endOfLine',
+				};
+				const result = handleEndOfLineComment(comment, '');
+				expect(result).toBe(true);
+			});
+		});
+
+		describe('handleRemainingComment', () => {
+			it('should return false for invalid input', () => {
+				const result = handleRemainingComment(null, '');
+				expect(result).toBe(false);
+			});
+
+			it('should handle remaining comments', () => {
+				// Test with a block statement comment
+				const comment = {
+					followingNode: {
+						'@class': 'apex.jorje.data.ast.Stmnt$BlockStmnt',
+						stmnts: [{ type: 'statement' }],
+					},
+				};
+				const result = handleRemainingComment(comment, '');
+				expect(result).toBe(true);
+			});
+		});
 	});
 });
