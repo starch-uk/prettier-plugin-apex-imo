@@ -1278,110 +1278,6 @@ const wrapAnnotationTokens = (
 	return newTokens;
 };
 
-/**
- * Token-based normalization of ApexDoc comment (experimental).
- * This function uses the new token system for comment processing.
- * @param commentValue - The comment text.
- * @param commentIndent - The indentation level.
- * @param options - Parser options.
- * @returns The normalized comment.
- */
-const normalizeSingleApexDocCommentWithTokens = async (
-	commentValue: Readonly<string>,
-	commentIndent: number,
-	options: Readonly<ParserOptions>,
-): Promise<string> => {
-	const { printWidth, tabWidth } = options;
-	const tabWidthValue = tabWidth;
-
-	// First normalize basic structure
-	let normalizedComment = normalizeBlockComment(commentValue, commentIndent, {
-		tabWidth: tabWidthValue,
-		useTabs: options.useTabs,
-	});
-
-	// Parse to tokens and get effective width
-	const { tokens: initialTokens, effectiveWidth } = parseApexDocTokens(
-		normalizedComment,
-		commentIndent,
-		printWidth ?? 80,
-		{
-			tabWidth: tabWidthValue,
-			useTabs: options.useTabs,
-		},
-	);
-
-	// Merge paragraph tokens that contain split {@code} blocks
-	let tokens = mergeCodeBlockTokens(initialTokens);
-
-	// Apply common token processing pipeline (normalizedComment may be undefined in async version)
-	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
-
-	// Format code blocks (async)
-	const { formatCodeBlockToken } = await import('./apexdoc-code.js');
-	const { getCurrentPluginInstance } = await import('./printer.js');
-	const formattedTokens: CommentToken[] = [];
-	for (const token of tokens) {
-		if (token.type === 'code' && token.rawCode.length > EMPTY) {
-			const formattedToken = await formatCodeBlockToken({
-				token,
-				effectiveWidth,
-				embedOptions: options,
-				currentPluginInstance: getCurrentPluginInstance(),
-			});
-			formattedTokens.push(formattedToken);
-		} else {
-			formattedTokens.push(token);
-		}
-	}
-
-	// Wrap annotations
-	// Calculate actual prefix length for annotation wrapping
-	const baseIndent = createIndent(
-		commentIndent,
-		tabWidthValue,
-		options.useTabs,
-	);
-	const commentPrefix = `${baseIndent} * `;
-	const bodyIndent = commentIndent === 0 ? 2 : 0;
-	const actualPrefixLength = commentPrefix.length + bodyIndent;
-	
-	tokens = wrapAnnotationTokens(
-		formattedTokens,
-		effectiveWidth,
-		commentIndent,
-		actualPrefixLength,
-		{
-			tabWidth: tabWidthValue,
-			useTabs: options.useTabs,
-		},
-	);
-
-	// Convert tokens back to string
-	const { tokensToCommentString, wrapParagraphTokens } = await import(
-		'./comments.js'
-	);
-
-	// Wrap paragraphs if needed
-	const finalTokens = printWidth
-		? wrapParagraphTokens(
-				tokens,
-				printWidth,
-				commentIndent,
-				{
-					tabWidth: tabWidthValue,
-					useTabs: options.useTabs,
-				},
-			)
-		: tokens;
-
-	return tokensToApexDocString(finalTokens, commentIndent, {
-		tabWidth: tabWidthValue,
-		useTabs: options.useTabs,
-		printWidth: printWidth,
-	});
-};
-
 export {
 	findApexDocComments,
 	FORMAT_FAILED_PREFIX,
@@ -1392,7 +1288,6 @@ export {
 	detectCodeBlockTokens,
 	normalizeAnnotationTokens,
 	wrapAnnotationTokens,
-	normalizeSingleApexDocCommentWithTokens,
 	removeTrailingEmptyLines,
 };
 
@@ -1408,14 +1303,6 @@ export function processParagraphToken(
 ): string[] {
 	// Since this is called from processApexDocCommentLines, all tokens are ApexDoc
 	return processApexDocParagraph(token, options, getFormattedCodeBlock, commentKey, embedOptions);
-}
-
-/**
- * Processes a regular (non-ApexDoc) paragraph.
- */
-function processRegularParagraph(token: import('./comments.js').ParagraphToken): string[] {
-	// For regular paragraphs, just return the content as-is
-	return token.content.split('\n');
 }
 
 /**

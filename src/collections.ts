@@ -13,12 +13,6 @@ const MIN_ENTRIES_FOR_MULTILINE = 2;
 const LIST_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewListLiteral';
 const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
-const COLLECTION_CLASSES = [
-	LIST_LITERAL_CLASS,
-	SET_LITERAL_CLASS,
-	MAP_LITERAL_CLASS,
-] as const;
-
 const isListInit = (
 	node: Readonly<ApexNode>,
 ): node is Readonly<ApexListInitNode> => {
@@ -46,16 +40,13 @@ const isNestedInCollection = (
 	const { stack } = path;
 	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array length check
 	if (!Array.isArray(stack) || stack.length === 0) return false;
-	// Check if any parent in the stack is a collection
+	// Check if any parent in the stack is a collection using AST type guards
 	for (const parent of stack) {
-		if (typeof parent === 'object' && '@class' in parent) {
-			const parentClass = (parent as { '@class': string })['@class'];
-			if (
-				COLLECTION_CLASSES.includes(
-					parentClass as (typeof COLLECTION_CLASSES)[number],
-				)
-			)
+		if (typeof parent === 'object' && parent !== null && '@class' in parent) {
+			// Use AST type guards instead of array check
+			if (isListInit(parent as ApexNode) || isMapInit(parent as ApexNode)) {
 				return true;
+			}
 		}
 	}
 	return false;

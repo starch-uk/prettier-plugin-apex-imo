@@ -26,7 +26,6 @@ import { isListInit, isMapInit, printCollection } from './collections.js';
 import { getNodeClassOptional, createNodeClassGuard } from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
 import { extractCodeFromBlock, CODE_TAG, CODE_TAG_LENGTH } from './apexdoc-code.js';
-import { normalizeTypeNamesInCode } from './casing.js';
 import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
@@ -710,102 +709,6 @@ const createWrappedPrinter = (
  * @param options - Parser options
  * @returns Promise resolving to processed comment
  */
-const processCodeBlocksWithApexParser = async (
-	commentValue: string,
-	options: ParserOptions
-): Promise<string> => {
-	const codeTag = '{@code';
-	const codeTagEnd = '}';
-	const codeTagLength = codeTag.length;
-
-	let result = commentValue;
-	let startIndex = 0;
-
-	while ((startIndex = result.indexOf(codeTag, startIndex)) !== -1) {
-		const endIndex = result.indexOf(codeTagEnd, startIndex + codeTagLength);
-		if (endIndex === -1) break;
-
-		// Extract the code content
-		const codeContent = result.substring(startIndex + codeTagLength, endIndex).trim();
-
-		try {
-			// Extract the code content and clean it
-			let cleanedCode = codeContent;
-
-			// Remove comment markers from each line (ApexDoc format: " * code")
-			cleanedCode = cleanedCode.split('\n').map(line => {
-				const trimmed = line.trim();
-				// Remove leading " * " or "*" from comment lines
-				if (trimmed.startsWith('* ')) {
-					return trimmed.substring(2);
-				} else if (trimmed.startsWith('*')) {
-					return trimmed.substring(1);
-				}
-				return trimmed;
-			}).join('\n').trim();
-
-			// Calculate comment indentation - assume 1 level of tabWidth indentation
-			// This is a simplification; in a real implementation, we'd parse the AST to get exact indentation
-			const commentIndent = options.tabWidth || 2;
-
-			// Format the code block using prettier with our plugin and reduced printWidth
-			// Calculate effective width: account for comment indentation dynamically
-			const baseIndent = ' '.repeat(commentIndent); // Use spaces for indentation calculation
-			const commentPrefixLength = baseIndent.length + ' * '.length;
-			const effectiveWidth = (options.printWidth || 80) - commentPrefixLength;
-
-			let formattedCode;
-			try {
-				formattedCode = await prettier.format(cleanedCode, {
-					...options,
-					printWidth: effectiveWidth,
-					parser: 'apex-anonymous',
-					plugins: [getCurrentPluginInstance()?.default ?? (await import('./index.js')).default],
-				});
-				formattedCode = formattedCode.trim();
-			} catch {
-				try {
-					formattedCode = await prettier.format(cleanedCode, {
-						...options,
-						printWidth: effectiveWidth,
-						parser: 'apex',
-						plugins: [getCurrentPluginInstance()?.default ?? (await import('./index.js')).default],
-					});
-					formattedCode = formattedCode.trim();
-				} catch {
-					// Only add FORMAT_FAILED_PREFIX for completely unparseable text
-					// Code that looks like Apex (has types, keywords, etc.) but has syntax errors
-					// should be preserved as-is without the prefix
-					// Check if the code is just a simple standalone annotation (e.g., "@Deprecated")
-					// Simple annotations should be preserved as-is, but complex annotations or other code should get the prefix
-					const isSimpleAnnotation = /^@[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(cleanedCode.trim());
-					const hasApexLikePatterns = /(?:List|Set|Map|String|Integer|Boolean|Object|void|public|private|protected|static|final|new|\{|\}|\(|\)|;|=)/.test(cleanedCode);
-					if (isSimpleAnnotation || (hasApexLikePatterns && !cleanedCode.trim().startsWith('@'))) {
-						// Preserve simple annotations or Apex-like code with syntax errors as-is
-						formattedCode = cleanedCode;
-					} else {
-						// Add prefix for complex annotations or completely unparseable text
-						formattedCode = `${FORMAT_FAILED_PREFIX}${cleanedCode}`;
-					}
-				}
-			}
-
-			// Replace the code block with formatted version
-			result = result.substring(0, startIndex + codeTagLength) + '\n' + formattedCode + '\n' + result.substring(endIndex);
-		} catch (error) {
-			console.log('Embed: Failed to format code block, keeping original:', error);
-			// Keep original if formatting fails
-		}
-
-		// Move past this code block
-		startIndex = endIndex + 1;
-	}
-
-	return result;
-};
-
-
-
 export {
 	clearFormattedCodeBlocks,
 	createWrappedPrinter,
@@ -813,6 +716,5 @@ export {
 	getCurrentPrintOptions,
 	getCurrentPluginInstance,
 	getFormattedCodeBlock,
-	processCodeBlocksWithApexParser,
 	setCurrentPluginInstance,
 };
