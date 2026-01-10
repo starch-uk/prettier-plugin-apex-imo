@@ -1,5 +1,5 @@
 public class TestClass {
-  @Future(callout=true)
+  @Future(Callout=true)
   public static void myMethod() {
   }
 }

@@ -1,8 +1,8 @@
 public class TestClass {
   @InvocableMethod(
-    label='Test Label'
-    description='Test Description'
-    category='Custom'
+    Label='Test Label'
+    Description='Test Description'
+    Category='Custom'
   )
   public static void myMethod() {
   }

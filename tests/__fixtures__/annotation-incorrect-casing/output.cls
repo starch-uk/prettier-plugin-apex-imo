@@ -1,5 +1,5 @@
 public class TestClass {
-  @AuraEnabled(cacheable=true continuation=false)
+  @AuraEnabled(Cacheable=true Continuation=false)
   public static void myMethod() {
   }
 }

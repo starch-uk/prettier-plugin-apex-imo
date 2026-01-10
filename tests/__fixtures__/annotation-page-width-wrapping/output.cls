@@ -1,6 +1,6 @@
 public class TestClass {
   @RestResource(
-    urlMapping='/services/apexrest/MyVeryLongServiceNameThatExceedsPrintWidth'
+    UrlMapping='/services/apexrest/MyVeryLongServiceNameThatExceedsPrintWidth'
   )
   public class MyService {
   }
