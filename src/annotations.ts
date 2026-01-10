@@ -24,7 +24,6 @@ import { findApexDocComments } from './apexdoc.js';
 const ANNOTATION_REGEX =
 	/@([a-zA-Z_][a-zA-Z0-9_]*)(\s*\(([^)]*)\)|(?![a-zA-Z0-9_(]))/g;
 const ANNOTATION_OPTION_REGEX = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
-const ZERO_LENGTH = 0;
 const INDEX_ONE = 1;
 
 const { group, indent, hardline, softline, join } = doc.builders;
@@ -38,7 +37,6 @@ const ANNOTATION_KEY_VALUE_CLASS =
 	'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue';
 const MIN_PARAM_LENGTH_FOR_MULTILINE = 40;
 const MIN_PARAMS_FOR_MULTILINE = 1;
-const EMPTY_PARAMETERS_LENGTH = 0;
 
 const isAnnotation = createNodeClassGuard<ApexAnnotationNode>(ANNOTATION_CLASS);
 
@@ -133,8 +131,7 @@ const printAnnotation = (
 	const originalName = node.name.value;
 	const normalizedName = normalizeAnnotationName(originalName);
 	const parametersLength = node.parameters.length;
-	if (parametersLength === EMPTY_PARAMETERS_LENGTH)
-		return ['@', normalizedName, hardline];
+	if (parametersLength === 0) return ['@', normalizedName, hardline];
 	const formattedParams: Doc[] = node.parameters.map((param) =>
 		formatAnnotationParam(param, originalName),
 	);
@@ -163,7 +160,7 @@ const createAnnotationReplacer =
 	() =>
 	(_match: string, name: string, params?: string): string => {
 		const normalizedName = normalizeAnnotationName(name);
-		if (params === undefined || params.length === ZERO_LENGTH)
+		if (params === undefined || params.length === 0)
 			return `@${normalizedName}`;
 		return `@${normalizedName}${params.replace(
 			ANNOTATION_OPTION_REGEX,
@@ -195,13 +192,13 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 	const apexDocComments = findApexDocComments(text);
 	const replacer = createAnnotationReplacer();
 	// If no ApexDoc comments, process entire text
-	if (apexDocComments.length === ZERO_LENGTH) {
+	if (apexDocComments.length === 0) {
 		return text.replace(ANNOTATION_REGEX, replacer);
 	}
 
 	// Process text in segments, skipping ApexDoc comments
 	let result = text;
-	let lastIndex = ZERO_LENGTH;
+	let lastIndex = 0;
 	const segments: { start: number; end: number; isComment: boolean }[] = [];
 
 	// Build segments
@@ -225,7 +222,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 	}
 
 	// Process non-comment segments
-	for (let i = segments.length - INDEX_ONE; i >= ZERO_LENGTH; i--) {
+	for (let i = segments.length - INDEX_ONE; i >= 0; i--) {
 		const segment = segments[i];
 		if (!segment || segment.isComment) continue;
 
@@ -234,7 +231,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 
 		if (normalized !== segmentText) {
 			result =
-				result.substring(ZERO_LENGTH, segment.start) +
+				result.substring(0, segment.start) +
 				normalized +
 				result.substring(segment.end);
 		}
@@ -283,7 +280,7 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (
 				lowerName as (typeof APEXDOC_ANNOTATIONS)[number],
 			)
 		) {
-			if (params === undefined || params.length === ZERO_LENGTH) {
+			if (params === undefined || params.length === 0) {
 				return `@${lowerName}`;
 			}
 			return `@${lowerName}${params}`;

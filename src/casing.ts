@@ -74,13 +74,12 @@ const isIdentifier = (
 ): node is Readonly<ApexIdentifier> => {
 	if (!node || typeof node !== 'object') return false;
 	const nodeClass = getNodeClassOptional(node);
-	if (
+	return (
 		nodeClass === IDENTIFIER_CLASS ||
-		(nodeClass?.includes('Identifier') ?? false)
-	) {
-		return true;
-	}
-	return 'value' in node && typeof node['value'] === 'string';
+		(nodeClass?.includes('Identifier') ?? false) ||
+		('value' in node &&
+			typeof (node as { value?: unknown }).value === 'string')
+	);
 };
 
 const TYPE_CONTEXT_KEYS = ['type', 'typeref', 'returntype', 'table'] as const;
@@ -137,20 +136,19 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const { key, stack } = path;
 	if (key === 'types') return true;
 	if (!Array.isArray(stack)) return false;
-
-	if (typeof key === 'string') {
-		if (isTypeRelatedKey(key)) return true;
-		if (key.toLowerCase() === 'field' && hasFromExprInStack(stack))
-			return true;
-	}
-
+	if (typeof key === 'string' && isTypeRelatedKey(key)) return true;
+	if (
+		typeof key === 'string' &&
+		key.toLowerCase() === 'field' &&
+		hasFromExprInStack(stack)
+	)
+		return true;
 	if (stack.length < STACK_PARENT_OFFSET) return false;
-	const stackLength = stack.length;
+
 	const parent = stack[
-		stackLength - STACK_PARENT_OFFSET
+		stack.length - STACK_PARENT_OFFSET
 	] as Readonly<ApexNode>;
 	const parentClass = getNodeClassOptional(parent);
-
 	const hasTypesArray =
 		typeof parent === 'object' &&
 		'types' in parent &&
@@ -158,11 +156,8 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 			(parent as Readonly<ApexNode & { types?: unknown }>).types,
 		);
 
-	if (isTypeRelatedParentClass(parentClass) || hasTypesArray) {
-		return key !== 'name' || !parentClass?.includes('Variable');
-	}
-
-	return false;
+	if (!isTypeRelatedParentClass(parentClass) && !hasTypesArray) return false;
+	return key !== 'name' || !parentClass?.includes('Variable');
 };
 
 interface ShouldNormalizeTypeParams {
@@ -209,8 +204,6 @@ function shouldNormalizeType(
 	);
 }
 
-const EMPTY_STRING_LENGTH = 0;
-
 /**
  * Normalizes a single identifier node's value and prints it.
  * @param node - The identifier node to normalize.
@@ -231,7 +224,7 @@ function normalizeSingleIdentifier(
 	subPath: Readonly<AstPath<ApexNode>>,
 ): Doc {
 	const nodeValue = node.value;
-	if (nodeValue.length === EMPTY_STRING_LENGTH) return originalPrint(subPath);
+	if (nodeValue.length === 0) return originalPrint(subPath);
 	const normalizedValue = normalizeTypeName(nodeValue);
 	if (normalizedValue === nodeValue) return originalPrint(subPath);
 	// Check if we're processing an identifier in a TypeRef names array

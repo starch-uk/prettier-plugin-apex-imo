@@ -98,10 +98,7 @@ const printList = (
 ): Doc => {
 	const node = path.node;
 	const isSet = nodeClass === SET_LITERAL_CLASS;
-	const EMPTY_COLLECTION_LENGTH = 0;
-	const isEmpty =
-		!Array.isArray(node.values) ||
-		node.values.length === EMPTY_COLLECTION_LENGTH;
+	const isEmpty = !Array.isArray(node.values) || node.values.length === 0;
 
 	if (isEmpty) {
 		return printEmptyList(printedTypes, isSet, isNested);
@@ -136,10 +133,7 @@ const printMap = (
 	isNested: boolean,
 ): Doc => {
 	const node = path.node;
-	const EMPTY_COLLECTION_LENGTH = 0;
-	const isEmpty =
-		!Array.isArray(node.pairs) ||
-		node.pairs.length === EMPTY_COLLECTION_LENGTH;
+	const isEmpty = !Array.isArray(node.pairs) || node.pairs.length === 0;
 
 	if (isEmpty) {
 		return printEmptyMap(printedTypes, isNested);
