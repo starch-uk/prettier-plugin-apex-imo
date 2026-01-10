@@ -1390,7 +1390,7 @@ const wrapAnnotationTokens = (
 				const availableWidth = isFirstLine
 					? firstLineAvailableWidth
 					: continuationLineAvailableWidth;
-				if (testLine.length <= availableWidth) {
+				if (prettier.util.getStringWidth(testLine) <= availableWidth) {
 					currentLine = testLine;
 				} else {
 					if (currentLine !== '') {
