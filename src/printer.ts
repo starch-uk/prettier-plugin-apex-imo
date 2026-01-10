@@ -169,6 +169,7 @@ const clearFormattedCodeBlocks = (): void => {
 };
 
 const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
+const INLINE_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$InlineComment';
 const NOT_FOUND_INDEX = -1;
 const ZERO = 0;
 const ONE = 1;
@@ -181,6 +182,35 @@ const isCommentNode = createNodeClassGuard<ApexNode>(
 			cls.includes('BlockComment') ||
 			cls.includes('InlineComment')),
 );
+
+/**
+ * Checks if a comment can be attached to a node.
+ * This is called by Prettier's comment handling code.
+ * @param node - The node to check.
+ * @returns True if a comment can be attached to this node.
+ */
+const canAttachComment = (node: unknown): boolean => {
+	if (!node || typeof node !== 'object') return false;
+	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
+	return (
+		!!nodeWithClass.loc &&
+		!!nodeWithClass['@class'] &&
+		nodeWithClass['@class'] !== INLINE_COMMENT_CLASS &&
+		nodeWithClass['@class'] !== BLOCK_COMMENT_CLASS
+	);
+};
+
+/**
+ * Checks if a comment is a block comment.
+ * This is called by Prettier's comment handling code.
+ * @param comment - The comment node to check.
+ * @returns True if the comment is a block comment.
+ */
+const isBlockComment = (comment: unknown): boolean => {
+	if (!comment || typeof comment !== 'object') return false;
+	const commentWithClass = comment as { '@class'?: unknown };
+	return commentWithClass['@class'] === BLOCK_COMMENT_CLASS;
+};
 
 const createWrappedPrinter = (originalPrinter: any): any => {
 	const result = { ...originalPrinter };
@@ -790,11 +820,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
  * @returns Promise resolving to processed comment
  */
 export {
+	canAttachComment,
 	clearFormattedCodeBlocks,
 	createWrappedPrinter,
 	getCurrentOriginalText,
 	getCurrentPrintOptions,
 	getCurrentPluginInstance,
 	getFormattedCodeBlock,
+	isBlockComment,
 	setCurrentPluginInstance,
 };

@@ -7,6 +7,7 @@
 import type { ParserOptions } from 'prettier';
 import { processCodeBlockLines } from './apexdoc-code.js';
 import {
+	createFillDoc,
 	createIndent,
 	normalizeBlockComment,
 	parseCommentToTokens,
@@ -549,28 +550,8 @@ const wrapTextContent = (
 		return [textContent];
 	}
 
-	// Wrap content by words
-	const words = textContent.split(/\s+/);
-	const wrappedLines: string[] = [];
-	let currentLine = '';
-
-	for (const word of words) {
-		const testLine = currentLine === '' ? word : `${currentLine} ${word}`;
-		// Allow lines up to effectiveWidth (inclusive) to fit within printWidth
-		if (testLine.length <= effectiveWidth) {
-			currentLine = testLine;
-		} else {
-			if (currentLine !== '') {
-				wrappedLines.push(currentLine);
-			}
-			currentLine = word;
-		}
-	}
-	if (currentLine !== '') {
-		wrappedLines.push(currentLine);
-	}
-
-	return wrappedLines;
+	// Use fill builder to wrap content
+	return createFillDoc(textContent, effectiveWidth);
 };
 
 /**
@@ -1386,6 +1367,10 @@ const wrapAnnotationTokens = (
 				continue;
 			}
 
+			// Manual word-splitting logic for annotations
+			// Annotations need special handling: first line has less width (includes @annotationName)
+			// while continuation lines have full effectiveWidth
+			// Fill builder doesn't support different widths for different lines, so we use manual logic
 			const words = annotationContent.split(/\s+/);
 			let currentLine = '';
 			const wrappedLines: string[] = [];

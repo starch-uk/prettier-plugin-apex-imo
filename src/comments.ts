@@ -20,6 +20,31 @@ const STRING_OFFSET = 1;
 const INDEX_ONE = 1;
 const INDEX_TWO = 2;
 
+/**
+ * Wraps text content using Prettier's fill builder.
+ * Uses fill to create a doc, then converts it back to wrapped lines using printDocToString.
+ * @param text - The text content to wrap.
+ * @param printWidth - The maximum line width.
+ * @returns Array of wrapped lines.
+ */
+const createFillDoc = (text: string, printWidth: number): string[] => {
+	if (!text || text.trim().length === 0) {
+		return [];
+	}
+	const words = text.split(/\s+/).filter((word) => word.length > 0);
+	if (words.length === 0) {
+		return [];
+	}
+	const { fill, join, line } = prettier.doc.builders;
+	const fillDoc = fill(join(line, words));
+	const wrappedText = prettier.doc.printer.printDocToString(fillDoc, {
+		printWidth,
+		tabWidth: 2,
+		useTabs: false,
+	}).formatted;
+	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
+};
+
 const getIndentLevel = (
 	line: Readonly<string>,
 	tabWidth: number = DEFAULT_TAB_WIDTH,
@@ -735,31 +760,8 @@ const wrapParagraphTokens = (
 			continue;
 		}
 
-		const words = token.content.split(/\s+/);
-		const wrappedLines: string[] = [];
-		let currentLine: string[] = [];
-
-		for (const word of words) {
-			const testLine =
-				currentLine.length === EMPTY
-					? word
-					: `${currentLine.join(' ')} ${word}`;
-
-			if (testLine.length <= effectiveWidth) {
-				currentLine.push(word);
-			} else {
-				// Line would exceed width, wrap it
-				if (currentLine.length > EMPTY) {
-					wrappedLines.push(currentLine.join(' '));
-				}
-				currentLine = [word];
-			}
-		}
-
-		// Add last line if any
-		if (currentLine.length > EMPTY) {
-			wrappedLines.push(currentLine.join(' '));
-		}
+		// Use fill builder to wrap the paragraph content
+		const wrappedLines = createFillDoc(token.content, effectiveWidth);
 
 		// Create new paragraph token with wrapped lines
 		// Need to reconstruct lines with comment prefix
@@ -885,7 +887,7 @@ const customPrintComment = (
 
 			// Return the comment as Prettier documents
 			const lines = commentToUse.split('\n');
-			const { join, hardline } = prettier.doc.builders;
+			const { fill, join, hardline } = prettier.doc.builders;
 			return [join(hardline, lines)];
 		} else {
 			// Check if this is an inline comment (starts with //)
@@ -911,12 +913,54 @@ const customPrintComment = (
 
 			// Return the normalized comment as Prettier documents
 			const lines = normalizedComment.split('\n');
-			const { join, hardline } = prettier.doc.builders;
+			const { fill, join, hardline } = prettier.doc.builders;
 			return [join(hardline, lines)];
 		}
 	}
 
 	return '';
+};
+
+/**
+ * Handles comments that are on their own line.
+ * This is called by Prettier's comment handling code.
+ * @param _comment - The comment node (unused in stub).
+ * @param _sourceCode - The entire source code (unused in stub).
+ * @returns False to let Prettier handle the comment with its default logic.
+ */
+const handleOwnLineComment = (
+	_comment: unknown,
+	_sourceCode: string,
+): boolean => {
+	return false;
+};
+
+/**
+ * Handles comments that have preceding text but no trailing text on a line.
+ * This is called by Prettier's comment handling code.
+ * @param _comment - The comment node (unused in stub).
+ * @param _sourceCode - The entire source code (unused in stub).
+ * @returns False to let Prettier handle the comment with its default logic.
+ */
+const handleEndOfLineComment = (
+	_comment: unknown,
+	_sourceCode: string,
+): boolean => {
+	return false;
+};
+
+/**
+ * Handles comments that have both preceding text and trailing text on a line.
+ * This is called by Prettier's comment handling code.
+ * @param _comment - The comment node (unused in stub).
+ * @param _sourceCode - The entire source code (unused in stub).
+ * @returns False to let Prettier handle the comment with its default logic.
+ */
+const handleRemainingComment = (
+	_comment: unknown,
+	_sourceCode: string,
+): boolean => {
+	return false;
 };
 
 export {
@@ -930,6 +974,10 @@ export {
 	customPrintComment,
 	isMalformedCommentBlock,
 	removeCommentPrefix,
+	handleOwnLineComment,
+	handleEndOfLineComment,
+	handleRemainingComment,
+	createFillDoc,
 	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
 	INDEX_ONE,

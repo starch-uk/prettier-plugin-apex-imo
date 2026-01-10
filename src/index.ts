@@ -8,11 +8,18 @@ import type { Plugin, ParserOptions, AstPath, Doc } from 'prettier';
 import * as apexPlugin from 'prettier-plugin-apex';
 import { createWrappedPrinter } from './printer.js';
 import type { ApexNode } from './types.js';
-import { customPrintComment as customPrintCommentFn } from './comments.js';
 import {
+	customPrintComment as customPrintCommentFn,
+	handleOwnLineComment,
+	handleEndOfLineComment,
+	handleRemainingComment,
+} from './comments.js';
+import {
+	canAttachComment,
 	getCurrentPrintOptions,
 	getCurrentOriginalText,
 	getFormattedCodeBlock,
+	isBlockComment,
 	setCurrentPluginInstance,
 } from './printer.js';
 
@@ -100,6 +107,13 @@ const customPrintComment = (
 const wrappedPrinter = {
 	...createWrappedPrinter(originalApexPrinter),
 	printComment: customPrintComment,
+	canAttachComment,
+	isBlockComment,
+	handleComments: {
+		ownLine: handleOwnLineComment,
+		endOfLine: handleEndOfLineComment,
+		remaining: handleRemainingComment,
+	},
 };
 
 /**
