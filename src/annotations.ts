@@ -17,7 +17,7 @@ import {
 import { getNodeClass, createNodeClassGuard } from './utils.js';
 import { findApexDocComments } from './apexdoc.js';
 
-// Regex is used here for preprocessing text before parsing (annotation normalization).
+// Annotation normalization uses regex for preprocessing text before parsing (annotation normalization).
 // AST manipulation isn't feasible at this stage since we're normalizing annotation names
 // in the source text before it reaches the parser.
 const ANNOTATION_REGEX =
@@ -176,9 +176,124 @@ const createAnnotationReplacer =
 		)}`;
 	};
 
+
+/**
+ * Parses annotation syntax from text and normalizes it using AST-based approach.
+ * This replaces regex-based annotation normalization with character-based parsing.
+ * @param annotationText - The annotation text to parse and normalize.
+ * @returns The normalized annotation text.
+ */
+const parseAndNormalizeAnnotation = (annotationText: string): string => {
+	// Parse @name(parameters) pattern using character scanning
+	if (!annotationText.startsWith('@')) {
+		return annotationText;
+	}
+
+	let pos = 1; // Skip the @
+	let name = '';
+
+	// Parse annotation name
+	while (pos < annotationText.length && (annotationText[pos] === '_' ||
+		   (annotationText[pos] >= 'a' && annotationText[pos] <= 'z') ||
+		   (annotationText[pos] >= 'A' && annotationText[pos] <= 'Z') ||
+		   (annotationText[pos] >= '0' && annotationText[pos] <= '9'))) {
+		name += annotationText[pos];
+		pos++;
+	}
+
+	if (name.length === 0) {
+		return annotationText; // Invalid annotation
+	}
+
+	const normalizedName = normalizeAnnotationName(name);
+
+	// Check if there are parameters
+	if (pos >= annotationText.length || annotationText[pos] !== '(') {
+		// No parameters
+		return `@${normalizedName}`;
+	}
+
+	// Parse parameters by copying the text as-is and normalizing parameter names
+	let result = `@${normalizedName}(`;
+	pos++; // Skip opening (
+
+	// Find the end of parameters
+	const paramEnd = annotationText.indexOf(')', pos);
+	if (paramEnd === -1) {
+		return annotationText; // Invalid
+	}
+
+	const paramText = annotationText.substring(pos, paramEnd);
+
+	// Process parameter text, normalizing parameter names but preserving spacing
+	let processedParams = '';
+	let paramNameStart = -1;
+	let inParamName = false;
+
+	for (let i = 0; i < paramText.length; i++) {
+		const char = paramText[i];
+
+		if (!inParamName && /\w/.test(char)) {
+			// Start of parameter name
+			inParamName = true;
+			paramNameStart = i;
+		} else if (inParamName && char === '=') {
+			// End of parameter name
+			const paramName = paramText.substring(paramNameStart, i);
+			const normalizedParam = normalizeAnnotationOptionName(normalizedName, paramName);
+			if (normalizedParam !== paramName) {
+				processedParams += normalizedParam;
+			} else {
+				processedParams += paramName;
+			}
+			processedParams += '=';
+			inParamName = false;
+			paramNameStart = -1;
+		} else if (inParamName && !/\w/.test(char)) {
+			// End of parameter name (non-word character)
+			if (paramNameStart !== -1) {
+				const paramName = paramText.substring(paramNameStart, i);
+				const normalizedParam = normalizeAnnotationOptionName(normalizedName, paramName);
+				if (normalizedParam !== paramName) {
+					processedParams += normalizedParam;
+				} else {
+					processedParams += paramName;
+				}
+				paramNameStart = -1;
+			}
+			inParamName = false;
+			processedParams += char;
+		} else if (!inParamName) {
+			processedParams += char;
+		}
+	}
+
+	// Handle case where parameter name goes to end
+	if (inParamName && paramNameStart !== -1) {
+		const paramName = paramText.substring(paramNameStart);
+		const normalizedParam = normalizeAnnotationOptionName(normalizedName, paramName);
+		if (normalizedParam !== paramName) {
+			processedParams += normalizedParam;
+		} else {
+			processedParams += paramName;
+		}
+	}
+
+	result += processedParams + ')';
+
+	if (pos < annotationText.length && annotationText[pos] === ')') {
+		result += ')';
+	} else {
+		// Unclosed parentheses, return as-is
+		return annotationText;
+	}
+
+	return result;
+};
+
 /**
  * Normalizes annotation names in source text before parsing.
- * Regex is used here for preprocessing text before parsing (annotation normalization).
+ * Uses character-based parsing instead of regex for annotation normalization.
  * AST manipulation isn't feasible at this stage since we're normalizing annotation names
  * in the source text before it reaches the parser.
  * Skips ApexDoc comments to avoid interfering with ApexDoc annotation normalization.

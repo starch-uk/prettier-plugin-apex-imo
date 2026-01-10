@@ -501,6 +501,62 @@ const removeCommentPrefix = (
 };
 
 /**
+ * Detects code blocks (slash-asterisk ... asterisk-slash) within comment text using character scanning.
+ * This replaces regex-based detection for better control and performance.
+ * @param text - The comment text content to scan.
+ * @returns Array of code block objects with start, end, and content positions.
+ */
+const detectCodeBlocks = (
+	text: string,
+): Array<{ start: number; end: number; content: string }> => {
+	const codeBlocks: Array<{ start: number; end: number; content: string }> = [];
+	let i = 0;
+
+	while (i < text.length - 1) {
+		// Look for /* but not /**
+		if (text[i] === '/' && text[i + 1] === '*' && (i + 2 >= text.length || text[i + 2] !== '*')) {
+			const start = i;
+			i += 2; // Skip past /*
+
+			// Find matching */
+			let depth = 1;
+			let contentStart = i;
+			let foundEnd = false;
+
+			while (i < text.length - 1 && !foundEnd) {
+				if (text[i] === '/' && text[i + 1] === '*') {
+					// Nested /* - increase depth
+					depth++;
+					i += 2;
+				} else if (text[i] === '*' && text[i + 1] === '/') {
+					// Found */
+					depth--;
+					if (depth === 0) {
+						// This closes our code block
+						const end = i + 2; // Include */
+						const content = text.substring(contentStart, i);
+						codeBlocks.push({ start, end, content });
+						foundEnd = true;
+					}
+					i += 2;
+				} else {
+					i++;
+				}
+			}
+
+			// If we didn't find a closing */, skip to next potential start
+			if (!foundEnd) {
+				i = start + 1;
+			}
+		} else {
+			i++;
+		}
+	}
+
+	return codeBlocks;
+};
+
+/**
  * Parses a normalized comment string into basic tokens.
  * Detects paragraphs based on empty lines and continuation logic.
  * Also detects code blocks (pattern: slash-asterisk ... asterisk-slash).
@@ -520,29 +576,8 @@ const parseCommentToTokens = (
 	// Join content for code block detection
 	const fullContent = contentLines.join('\n');
 
-	// First detect /* ... */ code blocks (simple detection)
-	// Scan for /* and */ patterns, but avoid matching /** or */
-	const codeBlockPattern = /\/\*(?!\*)([\s\S]*?)\*\//g;
-	const codeBlocks: Array<{ start: number; end: number; content: string }> =
-		[];
-	// Create a Map for O(1) lookups during line processing
-	const codeBlockMap = new Map<
-		number,
-		{ start: number; end: number; content: string }
-	>();
-	let match;
-	// Reset regex lastIndex to ensure we start from the beginning
-	codeBlockPattern.lastIndex = ARRAY_START_INDEX;
-	let blockIndex = 0;
-	while ((match = codeBlockPattern.exec(fullContent)) !== null) {
-		const start = match.index ?? ARRAY_START_INDEX;
-		const end =
-			(match.index ?? ARRAY_START_INDEX) + (match[0]?.length ?? 0);
-		const content = match[1] ?? '';
-		const block = { start, end, content };
-		codeBlocks.push(block);
-		codeBlockMap.set(blockIndex++, block);
-	}
+	// First detect /* ... */ code blocks using character scanning
+	const codeBlocks = detectCodeBlocks(fullContent);
 
 	// Detect paragraphs based on empty lines and sentence boundaries
 	// Skip code blocks when detecting paragraphs
@@ -873,8 +908,23 @@ const wrapParagraphTokens = (
 			continue;
 		}
 
-		// Use fill builder directly to get a Doc
-		const words = token.content.split(/\s+/).filter((word) => word.length > 0);
+		// Use fill builder directly to get a Doc - split on whitespace characters manually
+		const words: string[] = [];
+		let currentWord = '';
+		for (let i = 0; i < token.content.length; i++) {
+			const char = token.content[i];
+			if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+				if (currentWord.length > 0) {
+					words.push(currentWord);
+					currentWord = '';
+				}
+			} else {
+				currentWord += char;
+			}
+		}
+		if (currentWord.length > 0) {
+			words.push(currentWord);
+		}
 		const fillDoc = words.length > 0 ? prettier.doc.builders.fill(prettier.doc.builders.join(prettier.doc.builders.line, words)) : '';
 
 		// Convert the fill Doc to string lines for compatibility with existing token structure

@@ -42,6 +42,22 @@ This plugin wraps `prettier-plugin-apex` and modifies the printing behaviour:
 
 This is **non-configurable** behaviour. Once installed, it just works.
 
+## Architecture
+
+This plugin has been architected with **AST-based processing** as the primary approach, minimizing regex usage and maximizing leverage of Prettier's infrastructure:
+
+- **AST-First Processing**: Works with comment AST nodes and token structures rather than raw text parsing
+- **Prettier Integration**: Uses Prettier's doc builders (`fill`, `join`) for text formatting instead of regex-based word splitting
+- **Minimal Regex**: Only uses regex where absolutely necessary (complex annotation parsing, preprocessing)
+- **Character-Based Fallbacks**: Uses simple character scanning only for text content within AST nodes (like code blocks in comments)
+
+### Benefits
+
+- **Better Performance**: Reduced regex compilation overhead
+- **Improved Reliability**: AST operations are more predictable than complex regex patterns
+- **Enhanced Maintainability**: Structured processing is easier to understand and modify
+- **Future Compatibility**: Leverages Prettier's AST infrastructure for better long-term compatibility
+
 ## Comment Handling Improvements
 
 This plugin includes enhanced comment handling that leverages Prettier's

@@ -557,8 +557,23 @@ const wrapTextContent = (
 		return [textContent];
 	}
 
-	// Use fill builder to wrap content
-	const words = textContent.split(/\s+/).filter((word) => word.length > 0);
+	// Use fill builder to wrap content - split on whitespace characters manually
+	const words: string[] = [];
+	let currentWord = '';
+	for (let i = 0; i < textContent.length; i++) {
+		const char = textContent[i];
+		if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+			if (currentWord.length > 0) {
+				words.push(currentWord);
+				currentWord = '';
+			}
+		} else {
+			currentWord += char;
+		}
+	}
+	if (currentWord.length > 0) {
+		words.push(currentWord);
+	}
 	const fillDoc = words.length > 0 ? prettier.doc.builders.fill(prettier.doc.builders.join(prettier.doc.builders.line, words)) : '';
 	const wrappedText = fillDoc ? prettier.doc.printer.printDocToString(fillDoc, {
 		printWidth: effectiveWidth,
@@ -774,6 +789,7 @@ const extractBeforeText = (line: string, matchIndex: number): string => {
 	return beforeText;
 };
 
+
 /**
  * Collects continuation lines for an annotation from normalizedComment.
  * @param annotationName - The annotation name.
@@ -858,6 +874,7 @@ const collectContinuationFromTokenLines = (
 	return { annotationContent, nextIndex: continuationIndex - 1 };
 };
 
+
 /**
  * Detects annotations in tokens and converts TextTokens/ParagraphTokens to AnnotationTokens.
  * Scans tokens for @param, @return, etc. patterns.
@@ -871,11 +888,7 @@ const detectAnnotationsInTokens = (
 	const newTokens: CommentToken[] = [];
 	// Track content that has been extracted as annotation continuation to avoid duplicating it as text tokens
 	const consumedContent = new Set<string>();
-	// Annotation pattern: @ followed by identifier, possibly with content
-	// After detectCodeBlockTokens, lines have their " * " prefix stripped, so we need to match lines with or without prefix
-	// Pattern matches: (optional prefix) @ (name) (content)
-	const annotationPattern =
-		/(?:^\s*\*\s*|\s+(?!\{)|\s*\*\s*\.\s*\*\s*|^|\s+)@([a-zA-Z_][a-zA-Z0-9_]*)(\s*[^\n@]*?)(?=\s*@|\s*\*|\s*$)/g;
+	// Detect annotations using regex (annotation parsing in comment text is inherently text-based)
 
 	for (const token of tokens) {
 		if (token.type === 'text' || token.type === 'paragraph') {
@@ -894,6 +907,12 @@ const detectAnnotationsInTokens = (
 				lineIndex++
 			) {
 				const line = tokenLines[lineIndex] ?? '';
+				// Annotation pattern: @ followed by identifier, possibly with content
+				// After detectCodeBlockTokens, lines have their " * " prefix stripped, so we need to match lines with or without prefix
+				// Pattern matches: (optional prefix) @ (name) (content)
+				const annotationPattern =
+					/(?:^\s*\*\s*|\s+(?!\{)|\s*\*\s*\.\s*\*\s*|^|\s+)@([a-zA-Z_][a-zA-Z0-9_]*)(\s*[^\n@]*?)(?=\s*@|\s*\*|\s*$)/g;
+
 				const matches = [...line.matchAll(annotationPattern)];
 				if (matches.length > EMPTY) {
 					hasAnnotations = true;
@@ -1384,7 +1403,23 @@ const wrapAnnotationTokens = (
 			// Adapt fill approach for annotations with different widths per line
 			// First line has less width due to @annotationName prefix
 			// Continuation lines have full effectiveWidth
-			const words = annotationContent.split(/\s+/).filter((word) => word.length > 0);
+			// Split on whitespace characters manually
+			const words: string[] = [];
+			let currentWord = '';
+			for (let i = 0; i < annotationContent.length; i++) {
+				const char = annotationContent[i];
+				if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+					if (currentWord.length > 0) {
+						words.push(currentWord);
+						currentWord = '';
+					}
+				} else {
+					currentWord += char;
+				}
+			}
+			if (currentWord.length > 0) {
+				words.push(currentWord);
+			}
 
 			if (words.length === 0) {
 				newTokens.push(token);
