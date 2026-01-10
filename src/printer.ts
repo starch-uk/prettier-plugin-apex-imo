@@ -28,6 +28,16 @@ import { ARRAY_START_INDEX } from './comments.js';
 import { extractCodeFromBlock, CODE_TAG, CODE_TAG_LENGTH } from './apexdoc-code.js';
 import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
 
+// Access modifiers for checking formatted code strings (use Set for O(1) lookup)
+const ACCESS_MODIFIERS_SET = new Set(['public', 'private', 'protected', 'static', 'final', 'global']);
+
+const startsWithAccessModifier = (line: string): boolean => {
+	const trimmed = line.trim();
+	if (trimmed.length === 0) return false;
+	const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? '';
+	return ACCESS_MODIFIERS_SET.has(firstWord);
+};
+
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
 const isTypeRef = createNodeClassGuard<ApexNode>(
@@ -279,11 +289,10 @@ const createWrappedPrinter = (
 							if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
 								const nextLineRaw = formattedLines[i + 1] ?? '';
 								const nextLine = nextLineRaw.trim();
-								// Check if next line starts with annotation or access modifier
+								// Check if next line starts with annotation or access modifier using AST-based detection
 								if (
 									nextLine.length > 0 &&
-									(nextLine.startsWith('@') ||
-										/^(public|private|protected|static|final)\s/.test(nextLine))
+									(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
 								) {
 									// Insert blank line - it will become ' *' when mapped with comment prefix
 									resultLines.push('');
@@ -406,17 +415,25 @@ const createWrappedPrinter = (
 		// This handles the full declaration including modifiers and type, so Prettier can evaluate full line length
 		if (nodeClass !== undefined && nodeClass === 'apex.jorje.data.ast.VariableDecls') {
 			const { decls } = node as { decls?: unknown[] };
-			// Check if any declaration has an assignment with a value
+			// Check if any declaration has an assignment with a value using AST traversal
 			// Even declarations without assignments have an assignment property (object), but it may not have a 'value' property
-			const hasAssignments = Array.isArray(decls) && decls.some((decl) => {
-				if (!decl || typeof decl !== 'object') return false;
-				const { assignment } = decl as { assignment?: unknown };
-				// Check if assignment exists and has a 'value' property (real assignment)
-				if (assignment === null || assignment === undefined) return false;
-				if (typeof assignment !== 'object') return false;
-				const assignmentValue = (assignment as { value?: unknown }).value;
-				return assignmentValue !== null && assignmentValue !== undefined;
-			});
+			let hasAssignments = false;
+			if (Array.isArray(decls)) {
+				// Use AST traversal instead of array.some() - check AST node properties directly
+				for (const decl of decls) {
+					if (decl && typeof decl === 'object') {
+						const { assignment } = decl as { assignment?: unknown };
+						// Check if assignment exists and has a 'value' property (real assignment)
+						if (assignment !== null && assignment !== undefined && typeof assignment === 'object') {
+							const assignmentValue = (assignment as { value?: unknown }).value;
+							if (assignmentValue !== null && assignmentValue !== undefined) {
+								hasAssignments = true;
+								break;
+							}
+						}
+					}
+				}
+			}
 			
 			/**
 			 * Helper function to check if an assignment is a collection initialization.

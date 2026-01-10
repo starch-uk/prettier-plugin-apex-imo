@@ -98,15 +98,11 @@ const formatAnnotationParam = (
 	return "''";
 };
 
-const INVOCABLE_ANNOTATIONS = ['invocablemethod', 'invocablevariable'] as const;
+// Use Set for O(1) lookup instead of array.includes() O(n)
+const INVOCABLE_ANNOTATIONS_SET = new Set(['invocablemethod', 'invocablevariable']);
 
-const isInvocableAnnotation = (
-	name: string,
-): name is (typeof INVOCABLE_ANNOTATIONS)[number] =>
-	INVOCABLE_ANNOTATIONS.includes(
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- readonly tuple requires assertion for includes
-		name as (typeof INVOCABLE_ANNOTATIONS)[number],
-	);
+const isInvocableAnnotation = (name: string): boolean =>
+	INVOCABLE_ANNOTATIONS_SET.has(name.toLowerCase());
 
 const shouldForceMultiline = (
 	normalizedName: string,

@@ -28,7 +28,20 @@ import {
 	APEXDOC_ANNOTATIONS,
 	APEXDOC_GROUP_NAMES,
 } from './refs/apexdoc-annotations.js';
+
+// Use Set for O(1) lookup instead of array.includes() O(n)
+const APEXDOC_ANNOTATIONS_SET = new Set(APEXDOC_ANNOTATIONS);
 import { extractCodeFromBlock, EMPTY_CODE_TAG, CODE_TAG } from './apexdoc-code.js';
+
+// Access modifiers for checking formatted code strings (use Set for O(1) lookup)
+const ACCESS_MODIFIERS_SET = new Set(['public', 'private', 'protected', 'static', 'final', 'global']);
+
+const startsWithAccessModifier = (line: string): boolean => {
+	const trimmed = line.trim();
+	if (trimmed.length === 0) return false;
+	const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? '';
+	return ACCESS_MODIFIERS_SET.has(firstWord);
+};
 import { normalizeAnnotationNamesInText, normalizeAnnotationNamesInTextExcludingApexDoc } from './annotations.js';
 
 const FORMAT_FAILED_PREFIX = '__FORMAT_FAILED__';
@@ -363,10 +376,10 @@ const tokensToApexDocString = (
 				// Insert blank line after } when followed by annotations or access modifiers
 				if (trimmedLine.endsWith('}') && i < codeLines.length - 1) {
 					const nextLine = codeLines[i + 1]?.trim() ?? '';
+					// Check if next line starts with annotation or access modifier using Set-based detection
 					if (
 						nextLine.length > 0 &&
-						(nextLine.startsWith('@') ||
-							/^(public|private|protected|static|final)\s/.test(nextLine))
+						(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
 					) {
 						resultLines.push('');
 					}
@@ -1083,7 +1096,8 @@ const normalizeAnnotationTokens = (
 	return tokens.map((token) => {
 		if (token.type === 'annotation') {
 			const lowerName = token.name.toLowerCase();
-			if (APEXDOC_ANNOTATIONS.includes(lowerName as never)) {
+			// Use Set lookup instead of array.includes() for better performance
+			if (APEXDOC_ANNOTATIONS_SET.has(lowerName)) {
 				let normalizedContent = token.content;
 				// Special handling for @group annotations - normalize the group name
 				if (lowerName === 'group' && token.content) {

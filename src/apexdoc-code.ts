@@ -12,6 +12,16 @@ import {
 } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
 import { FORMAT_FAILED_PREFIX } from './apexdoc.js';
+
+// Access modifiers for checking formatted code strings (use Set for O(1) lookup)
+const ACCESS_MODIFIERS_SET = new Set(['public', 'private', 'protected', 'static', 'final', 'global']);
+
+const startsWithAccessModifier = (line: string): boolean => {
+	const trimmed = line.trim();
+	if (trimmed.length === 0) return false;
+	const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? '';
+	return ACCESS_MODIFIERS_SET.has(firstWord);
+};
 import type { CodeBlockToken } from './comments.js';
 
 const CODE_TAG = '{@code';
@@ -208,10 +218,10 @@ const preserveBlankLinesAfterBraces = (formatted: string): string => {
 		// Insert blank line after } when followed by annotations or access modifiers
 		if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
 			const nextLine = formattedLines[i + 1]?.trim() ?? '';
+			// Check if next line starts with annotation or access modifier using Set-based detection
 			if (
 				nextLine.length > 0 &&
-				(nextLine.startsWith('@') ||
-					/^(public|private|protected|static|final)\s/.test(nextLine))
+				(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
 			) {
 				// Insert blank line to preserve structure from original
 				resultLines.push('');

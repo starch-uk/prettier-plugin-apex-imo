@@ -87,13 +87,20 @@ const isIdentifier = (
 const TYPE_CONTEXT_KEYS = ['type', 'typeref', 'returntype', 'table'] as const;
 const STACK_PARENT_OFFSET = 2;
 
-const hasFromExprInStack = (stack: readonly unknown[]): boolean =>
-	stack.some((a) => {
-		if (typeof a !== 'object' || a === null) return false;
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Need to assert unknown to ApexNode for type checking
-		const aClass = getNodeClassOptional(a as Readonly<ApexNode>);
-		return aClass?.includes('FromExpr') ?? false;
-	});
+const FROM_EXPR_CLASS_PATTERN = 'FromExpr';
+
+const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
+	// Use AST traversal instead of array.some() - check node @class property directly
+	for (const item of stack) {
+		if (typeof item === 'object' && item !== null && '@class' in item) {
+			const nodeClass = getNodeClassOptional(item as Readonly<ApexNode>);
+			if (nodeClass?.includes(FROM_EXPR_CLASS_PATTERN)) {
+				return true;
+			}
+		}
+	}
+	return false;
+};
 
 const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const { key, stack } = path;
