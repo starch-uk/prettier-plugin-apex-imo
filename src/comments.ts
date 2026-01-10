@@ -435,6 +435,7 @@ const normalizeBlockComment = (
 };
 
 const EMPTY = 0;
+const NOT_FOUND_INDEX = -1;
 
 /**
  * Detects if a block comment is malformed.
@@ -1147,6 +1148,7 @@ export {
 	STRING_OFFSET,
 	MIN_INDENT_LEVEL,
 	EMPTY,
+	NOT_FOUND_INDEX,
 };
 export type {
 	TextToken,

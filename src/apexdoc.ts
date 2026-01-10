@@ -17,6 +17,7 @@ import {
 	INDEX_TWO,
 	STRING_OFFSET,
 	EMPTY,
+	NOT_FOUND_INDEX,
 } from './comments.js';
 import type {
 	CommentToken,
@@ -44,7 +45,6 @@ import {
 	normalizeAnnotationNamesInTextExcludingApexDoc,
 } from './annotations.js';
 
-const NOT_FOUND_INDEX = -1;
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
 const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;

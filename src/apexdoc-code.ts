@@ -9,6 +9,7 @@ import type { ParserOptions } from 'prettier';
 import {
 	ARRAY_START_INDEX,
 	STRING_OFFSET,
+	NOT_FOUND_INDEX,
 	removeCommentPrefix,
 } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
@@ -20,7 +21,6 @@ const CODE_TAG_LENGTH = CODE_TAG.length;
 const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
 const LAST_INDEX_OFFSET = 1;
-const NOT_FOUND_INDEX = -1;
 
 /**
  * Extracts code from a code block by counting braces.
