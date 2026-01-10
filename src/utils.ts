@@ -34,7 +34,6 @@ const createNodeClassGuard = <T extends ApexNode>(
 	};
 };
 
-
 const startsWithAccessModifier = (line: string): boolean => {
 	const trimmed = line.trim();
 	if (trimmed.length === 0) return false;
@@ -42,4 +41,9 @@ const startsWithAccessModifier = (line: string): boolean => {
 	return DECLARATION_MODIFIERS_SET.has(firstWord);
 };
 
-export { getNodeClass, getNodeClassOptional, createNodeClassGuard, startsWithAccessModifier };
+export {
+	getNodeClass,
+	getNodeClassOptional,
+	createNodeClassGuard,
+	startsWithAccessModifier,
+};

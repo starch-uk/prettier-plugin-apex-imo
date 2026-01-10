@@ -95,7 +95,10 @@ const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	for (const item of stack) {
 		if (typeof item === 'object' && item !== null && '@class' in item) {
 			const nodeClass = getNodeClassOptional(item as Readonly<ApexNode>);
-			if (nodeClass === FROM_EXPR_CLASS || nodeClass?.includes('FromExpr')) {
+			if (
+				nodeClass === FROM_EXPR_CLASS ||
+				nodeClass?.includes('FromExpr')
+			) {
 				return true;
 			}
 		}

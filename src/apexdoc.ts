@@ -524,7 +524,6 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 	return cleaned;
 };
 
-
 /**
  * Wraps text content to fit within effective width.
  * @param content - The text content to wrap.

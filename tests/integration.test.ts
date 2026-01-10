@@ -475,8 +475,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 				fixture: 'formatcodeblock-deprecated',
 			},
 			{
-				description:
-					'should preserve invalid code in {@code} blocks',
+				description: 'should preserve invalid code in {@code} blocks',
 				fixture: 'formatcodeblock-invalid-apex',
 			},
 			{

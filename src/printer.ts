@@ -23,7 +23,11 @@ import {
 	normalizeTypeName,
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
-import { getNodeClassOptional, createNodeClassGuard, startsWithAccessModifier } from './utils.js';
+import {
+	getNodeClassOptional,
+	createNodeClassGuard,
+	startsWithAccessModifier,
+} from './utils.js';
 import { ARRAY_START_INDEX } from './comments.js';
 import {
 	extractCodeFromBlock,

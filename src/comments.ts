@@ -72,7 +72,10 @@ const getCommentIndent = (
 const normalizeCommentStart = (comment: string): string => {
 	// Find first non-whitespace character
 	let start = 0;
-	while (start < comment.length && (comment[start] === ' ' || comment[start] === '\t')) {
+	while (
+		start < comment.length &&
+		(comment[start] === ' ' || comment[start] === '\t')
+	) {
 		start++;
 	}
 	// If we find /*, normalize multiple asterisks
@@ -109,7 +112,7 @@ const normalizeCommentEnd = (comment: string): string => {
 		// Look for */ pattern
 		const slashPos = result.indexOf('/', pos);
 		if (slashPos === -1) break;
-		
+
 		// Count asterisks before /
 		let asteriskCount = 0;
 		let checkPos = slashPos - 1;
@@ -117,11 +120,14 @@ const normalizeCommentEnd = (comment: string): string => {
 			asteriskCount++;
 			checkPos--;
 		}
-		
+
 		// If we have 2+ asterisks before /, normalize to */
 		if (asteriskCount >= 2) {
 			const replaceStart = checkPos + 1;
-			result = result.substring(0, replaceStart) + '*/' + result.substring(slashPos + 1);
+			result =
+				result.substring(0, replaceStart) +
+				'*/' +
+				result.substring(slashPos + 1);
 			pos = replaceStart + 2;
 		} else {
 			pos = slashPos + 1;
@@ -219,7 +225,9 @@ const normalizeBlockCommentBasic = (
 		const line = lines[i] ?? '';
 		const isFirstOrLast =
 			i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
-		normalizedLines.push(normalizeCommentLine(line, baseIndent, isFirstOrLast));
+		normalizedLines.push(
+			normalizeCommentLine(line, baseIndent, isFirstOrLast),
+		);
 	}
 	return normalizedLines.join('\n');
 };

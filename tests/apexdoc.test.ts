@@ -14,5 +14,4 @@ describe('apexdoc', () => {
 			expect(EMPTY_CODE_TAG).toBe('{@code}');
 		});
 	});
-
 });
