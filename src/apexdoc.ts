@@ -103,7 +103,6 @@ interface CodeBlock {
 // eslint-disable-next-line @typescript-eslint/no-type-alias -- Using utility type Readonly<T> per optimization plan to reduce duplication
 type ReadonlyCodeBlock = Readonly<CodeBlock>;
 
-
 /**
  * Normalizes a single ApexDoc comment value.
  * This function handles all normalization including annotation casing, spacing, and wrapping.
@@ -333,10 +332,7 @@ const tokensToApexDocString = (
 
 			// Remove trailing empty lines from annotation tokens to avoid extra blank lines
 			// when followed by code blocks in tokensToCommentString
-			const cleanedLines = [...lines];
-			while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
-				cleanedLines.pop();
-			}
+			const cleanedLines = removeTrailingEmptyLines(lines);
 			
 			if (cleanedLines.length > EMPTY) {
 				apexDocTokens.push({
@@ -447,17 +443,13 @@ const tokensToApexDocString = (
 				token.lines,
 				effectiveWidth,
 			);
-			// Remove trailing empty lines to avoid extra blank lines before code blocks
 			// Split wrapped lines by newlines first (in case wrapTextContent returned multi-line strings)
 			const allLines: string[] = [];
 			for (const wrappedLine of wrappedLines) {
 				allLines.push(...wrappedLine.split('\n'));
 			}
-			const cleanedLines = [...allLines];
-			while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
-				cleanedLines.pop();
-			}
-			// Add prefixes back to wrapped lines using commentPrefix (no need to extract from token.lines)
+			const cleanedLines = removeTrailingEmptyLines(allLines);
+			// Add prefixes back to wrapped lines using commentPrefix
 			const linesWithPrefix = cleanedLines.map((line: string) => `${commentPrefix}${line.trim()}`);
 			apexDocTokens.push({
 				...token,
@@ -472,10 +464,7 @@ const tokensToApexDocString = (
 				effectiveWidth,
 			);
 			// Remove trailing empty lines to avoid extra blank lines before code blocks
-			const cleanedLines = [...wrappedLines];
-			while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
-				cleanedLines.pop();
-			}
+			const cleanedLines = removeTrailingEmptyLines(wrappedLines);
 			apexDocTokens.push({
 				...token,
 				content: cleanedLines.join('\n'),
@@ -490,6 +479,19 @@ const tokensToApexDocString = (
 		tabWidth: options.tabWidth,
 		useTabs: options.useTabs,
 	});
+};
+
+/**
+ * Removes trailing empty lines from an array of strings.
+ * @param lines - Array of lines to clean.
+ * @returns Array with trailing empty lines removed.
+ */
+const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
+	const cleaned = [...lines];
+	while (cleaned.length > 0 && cleaned[cleaned.length - 1]?.trim().length === 0) {
+		cleaned.pop();
+	}
+	return cleaned;
 };
 
 /**
@@ -972,10 +974,7 @@ const detectCodeBlockTokens = (
 								} else {
 									// For text tokens, content now preserves prefixes from token.lines
 									const splitLines = cleanedText.split('\n');
-									const cleanedLines = [...splitLines];
-									while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
-										cleanedLines.pop();
-									}
+									const cleanedLines = removeTrailingEmptyLines(splitLines);
 									if (cleanedLines.length > 0) {
 										newTokens.push({
 											type: 'text',
@@ -1027,10 +1026,7 @@ const detectCodeBlockTokens = (
 								// For text tokens, content now preserves prefixes from token.lines
 								// Split and filter out empty trailing lines while preserving prefixes
 								const splitLines = cleanedText.split('\n');
-								const cleanedLines = [...splitLines];
-								while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1]?.trim().length === 0) {
-									cleanedLines.pop();
-								}
+								const cleanedLines = removeTrailingEmptyLines(splitLines);
 								if (cleanedLines.length > 0) {
 									newTokens.push({
 										type: 'text',
