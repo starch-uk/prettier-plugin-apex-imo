@@ -12,6 +12,9 @@ import {
 	normalizeAnnotationTokens,
 	removeTrailingEmptyLines,
 } from './apexdoc.js';
+import { wrapTextWithFill } from './utils/text-utils.js';
+import { isApexComment, getCommentNode } from './utils/comment-utils.js';
+import { getNodeClassOptional } from './utils.js';
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -20,47 +23,6 @@ const STRING_OFFSET = 1;
 const INDEX_ONE = 1;
 const INDEX_TWO = 2;
 
-/**
- * Checks if a comment node is an Apex comment.
- * This identifies comments that can have ApexDoc annotations and formatting.
- * @param comment - The comment node to check.
- * @returns True if the comment is an Apex comment, false otherwise.
- */
-const isApexComment = (comment: unknown): boolean => {
-	if (
-		comment === null ||
-		comment === undefined ||
-		typeof comment !== 'object' ||
-		!('value' in comment) ||
-		typeof (comment as { value?: unknown }).value !== 'string'
-	) {
-		return false;
-	}
-	const commentValue = (comment as { value: string }).value;
-	// Must start with /** and end with */ (ApexDoc style)
-	if (
-		!commentValue.trimStart().startsWith('/**') ||
-		!commentValue.trimEnd().endsWith('*/')
-	) {
-		return false;
-	}
-	return true;
-};
-
-/**
- * Safely extracts a comment node from an unknown type.
- * This is used by comment handling functions to ensure type safety.
- * @param comment - The unknown comment to extract.
- * @returns The comment node if valid, null otherwise.
- */
-const getCommentNode = (
-	comment: unknown,
-): { value: string; '@class'?: string } | null => {
-	if (!isApexComment(comment)) {
-		return null;
-	}
-	return comment as { value: string; '@class'?: string };
-};
 
 // Apex AST node types that allow dangling comments
 const ALLOW_DANGLING_COMMENTS = [
@@ -74,6 +36,7 @@ const ALLOW_DANGLING_COMMENTS = [
 /**
  * Handles dangling comments in empty blocks and declarations.
  * Attaches comments that would otherwise be dangling to appropriate parent nodes.
+ * Uses Prettier utilities with improved error handling.
  * @param comment - The comment node to handle.
  * @returns True if the comment was handled, false otherwise.
  */
@@ -103,6 +66,7 @@ const handleDanglingComment = (comment: unknown): boolean => {
 /**
  * Handles leading comments before block statements.
  * Moves leading comments before block statements into the block itself for better formatting.
+ * Uses Prettier utilities with improved error handling.
  * @param comment - The comment node to handle.
  * @returns True if the comment was handled, false otherwise.
  */
@@ -138,6 +102,7 @@ const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
 /**
  * Handles end-of-line comments in binary expressions.
  * Attaches trailing comments to the right child of binary expressions instead of the entire expression.
+ * Uses enhanced type checking and Prettier utilities.
  * @param comment - The comment node to handle.
  * @returns True if the comment was handled, false otherwise.
  */
@@ -151,11 +116,19 @@ const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
 	};
 
 	const { precedingNode, placement } = commentWithContext;
+
+	// Must be an end-of-line comment
+	if (placement !== 'endOfLine') {
+		return false;
+	}
+
+	if (!precedingNode) return false;
+
+	// Enhanced validation using our utilities
+	const nodeClass = getNodeClassOptional(precedingNode);
 	if (
-		placement !== 'endOfLine' ||
-		!precedingNode ||
-		(precedingNode['@class'] !== 'apex.jorje.data.ast.Expr$BinaryExpr' &&
-			precedingNode['@class'] !== 'apex.jorje.data.ast.Expr$BooleanExpr')
+		nodeClass !== 'apex.jorje.data.ast.Expr$BinaryExpr' &&
+		nodeClass !== 'apex.jorje.data.ast.Expr$BooleanExpr'
 	) {
 		return false;
 	}
@@ -168,23 +141,6 @@ const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
 	return true;
 };
 
-/**
- * Wraps text content using Prettier's fill builder and returns a Doc.
- * This allows direct integration with Prettier's doc composition system.
- * @param text - The text content to wrap.
- * @returns A Prettier Doc that can be used in doc composition.
- */
-const wrapTextWithFill = (text: string): Doc => {
-	if (!text || text.trim().length === 0) {
-		return '';
-	}
-	const words = text.split(/\s+/).filter((word) => word.length > 0);
-	if (words.length === 0) {
-		return '';
-	}
-	const { fill, join, line } = prettier.doc.builders;
-	return fill(join(line, words));
-};
 
 const getIndentLevel = (
 	line: Readonly<string>,
@@ -1138,9 +1094,10 @@ const handleEndOfLineComment = (
 /**
  * Handles comments that have both preceding text and trailing text on a line.
  * This is called by Prettier's comment handling code.
- * @param _comment - The comment node (unused in stub).
- * @param _sourceCode - The entire source code (unused in stub).
- * @returns False to let Prettier handle the comment with its default logic.
+ * Uses Prettier utilities to attach comments to appropriate nodes.
+ * @param comment - The comment node to handle.
+ * @param _sourceCode - The entire source code (unused).
+ * @returns True if the comment was handled, false otherwise.
  */
 const handleRemainingComment = (
 	comment: unknown,

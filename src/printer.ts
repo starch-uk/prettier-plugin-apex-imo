@@ -34,6 +34,12 @@ import {
 	CODE_TAG,
 	CODE_TAG_LENGTH,
 } from './apexdoc-code.js';
+import { hasCommentLocation } from './utils/comment-utils.js';
+import {
+	createGroup,
+	createIfBreakGroup,
+	createIndent,
+} from './utils/doc-utils.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
@@ -56,7 +62,7 @@ const processTypeParams = (params: unknown[]): Doc[] => {
 			if (j + 1 < params.length) {
 				const remainingParams = params.slice(j + 1) as Doc[];
 				processedParams.push(
-					group(indent([softline, ...remainingParams])),
+					createGroup(createIndent([softline, ...remainingParams])),
 				);
 				break;
 			}
@@ -187,30 +193,48 @@ const isCommentNode = createNodeClassGuard<ApexNode>(
 /**
  * Checks if a comment can be attached to a node.
  * This is called by Prettier's comment handling code.
+ * Uses enhanced type checking and follows Prettier patterns.
  * @param node - The node to check.
  * @returns True if a comment can be attached to this node.
  */
 const canAttachComment = (node: unknown): boolean => {
-	if (!node || typeof node !== 'object') return false;
-	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
-	return (
-		!!nodeWithClass.loc &&
-		!!nodeWithClass['@class'] &&
-		nodeWithClass['@class'] !== INLINE_COMMENT_CLASS &&
-		nodeWithClass['@class'] !== BLOCK_COMMENT_CLASS
-	);
+	// First check if node has location data for attachment
+	if (!hasCommentLocation(node)) {
+		return false;
+	}
+
+	// Enhanced type checking using our utilities
+	const nodeWithClass = node as { '@class'?: unknown };
+
+	// Don't attach comments to comment nodes themselves
+	if (
+		nodeWithClass['@class'] === INLINE_COMMENT_CLASS ||
+		nodeWithClass['@class'] === BLOCK_COMMENT_CLASS
+	) {
+		return false;
+	}
+
+	// Additional validation: ensure node has a valid class
+	const nodeClass = getNodeClassOptional(node as ApexNode);
+	if (!nodeClass) {
+		return false;
+	}
+
+	// Only allow attachment to nodes that have meaningful AST structure
+	return nodeClass.includes('apex.jorje.data.ast');
 };
 
 /**
  * Checks if a comment is a block comment.
  * This is called by Prettier's comment handling code.
+ * Uses createNodeClassGuard for better type safety and consistency.
  * @param comment - The comment node to check.
  * @returns True if the comment is a block comment.
  */
 const isBlockComment = (comment: unknown): boolean => {
-	if (!comment || typeof comment !== 'object') return false;
-	const commentWithClass = comment as { '@class'?: unknown };
-	return commentWithClass['@class'] === BLOCK_COMMENT_CLASS;
+	// Use createNodeClassGuard for consistent type checking
+	const isBlockCommentNode = createNodeClassGuard<ApexNode>((cls) => cls === BLOCK_COMMENT_CLASS);
+	return isBlockCommentNode(comment);
 };
 
 const createWrappedPrinter = (originalPrinter: any): any => {
@@ -554,7 +578,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				' ',
 				'=',
 				' ',
-				group(indent([softline, assignmentDoc])),
+				createGroup(createIndent([softline, assignmentDoc])),
 			];
 		}, 'decls' as never) as unknown as Doc[];
 
@@ -616,12 +640,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				const nameDoc = declDoc[0] as Doc;
 				const assignmentDoc = declDoc[4] as Doc;
 				if (isComplexMapType(typeDoc)) {
-					resultParts.push(' ', group([nameDoc, ' ', '=']));
+					resultParts.push(' ', createGroup([nameDoc, ' ', '=']));
 					resultParts.push(
-						ifBreak(indent([line, assignmentDoc]), [
-							' ',
-							assignmentDoc,
-						]),
+						createIfBreakGroup([' ', assignmentDoc], createIndent([line, assignmentDoc])),
 					);
 					resultParts.push(';');
 				} else {
@@ -632,7 +653,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			}
 		}
 
-		return group(resultParts);
+		return createGroup(resultParts);
 	};
 
 	/**
@@ -673,23 +694,17 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const typeAndNames = nameDocs
 				.filter((nameDoc): nameDoc is Doc => nameDoc !== undefined)
 				.map((nameDoc) => {
-					const wrappedName = ifBreak(indent([line, nameDoc]), [
-						' ',
-						nameDoc,
-					]);
-					return group([breakableTypeDoc, wrappedName]);
+					const wrappedName = createIfBreakGroup([' ', nameDoc], createIndent([line, nameDoc]));
+					return createGroup([breakableTypeDoc, wrappedName]);
 				});
 			resultParts.push(joinDocs([', ', softline], typeAndNames), ';');
-			return group(resultParts);
+			return createGroup(resultParts);
 		}
 
 		if (nameDocs[0] !== undefined) {
-			const wrappedName = ifBreak(indent([line, nameDocs[0]]), [
-				' ',
-				nameDocs[0],
-			]);
+			const wrappedName = createIfBreakGroup([' ', nameDocs[0]], createIndent([line, nameDocs[0]]));
 			resultParts.push(wrappedName, ';');
-			return group(resultParts);
+			return createGroup(resultParts);
 		}
 
 		return null;
@@ -735,11 +750,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		if (!leftPath || !rightPath) return null;
 
-		const wrappedAssignment = ifBreak(indent([line, rightPath]), [
-			' ',
-			rightPath,
-		]);
-		return group([leftPath, ' ', '=', wrappedAssignment, ';']);
+		const wrappedAssignment = createIfBreakGroup([' ', rightPath], createIndent([line, rightPath]));
+		return createGroup([leftPath, ' ', '=', wrappedAssignment, ';']);
 	};
 
 	const customPrint = (
