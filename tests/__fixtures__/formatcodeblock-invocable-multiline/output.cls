@@ -1,5 +1,4 @@
 @InvocableMethod(
-label="Test",
-description="Test description"
+  Label="Test",
+  Description="Test description"
 )
-

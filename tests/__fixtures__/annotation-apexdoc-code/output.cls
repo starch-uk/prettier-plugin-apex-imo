@@ -3,14 +3,14 @@
  * Example usage:
  * {@code
  * public class TestClass {
- *   @AuraEnabled(cacheable=true)
+ *   @AuraEnabled(Cacheable=true)
  *   public static void myMethod() {
  *   }
  * }
  * }
  */
 public class TestClass {
-  @AuraEnabled(cacheable=true)
+  @AuraEnabled(Cacheable=true)
   public static void myMethod() {
   }
 }

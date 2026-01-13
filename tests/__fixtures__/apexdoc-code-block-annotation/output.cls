@@ -2,7 +2,7 @@ public class Test {
   /**
    * Example method.
    * {@code
-   * @AuraEnabled(cacheable=true)
+   * @AuraEnabled(Cacheable=true)
    * public class TestAnnotation {
    * }
    * }

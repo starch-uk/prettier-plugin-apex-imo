@@ -1,3 +1,3 @@
-@AuraEnabled(cacheable=true)
+@AuraEnabled(Cacheable=true)
 public class TestAnnotation {
 }

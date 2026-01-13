@@ -13,7 +13,7 @@ public class DocumentationExample {
    * various scenarios including positive test cases, negative test cases, and
    * bulk data processing scenarios.
    * {@code
-   * @IsTest(isParallel=true)
+   * @IsTest(IsParallel=true)
    * public class ComplexIntegrationTest {
    *   public class TestDataHelper {
    *     public static List<Account> createAccounts(Integer count) {

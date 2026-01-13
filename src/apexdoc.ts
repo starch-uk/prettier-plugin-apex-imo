@@ -482,12 +482,39 @@ const wrapTextContent = (
 	}>,
 ): string[] => {
 	// Extract content from lines (remove comment prefixes)
-	const textContent =
-		content ||
-		originalLines
-			.map(removeCommentPrefix)
-			.filter((line) => line.length > EMPTY)
-			.join(' ');
+	if (content) {
+		// Use unified wrapping function
+		return wrapTextToWidth(content, effectiveWidth, options);
+	}
+
+	// Join lines intelligently: join unless:
+	// 1. Current line ends with '.' (sentence boundary)
+	// 2. Next line starts with capital letter (new sentence/paragraph)
+	// 3. Next line is empty, annotation, or code block
+	const cleanedLines = originalLines
+		.map(removeCommentPrefix)
+		.filter((line) => line.length > EMPTY);
+	
+	const joinedParts: string[] = [];
+	for (let i = 0; i < cleanedLines.length; i++) {
+		const currentLine = cleanedLines[i]?.trim() ?? '';
+		const nextLine = cleanedLines[i + 1]?.trim() ?? '';
+		
+		// Check if we should join with next line
+		const currentEndsWithPeriod = currentLine.endsWith('.');
+		const nextStartsWithCapital = nextLine && /^[A-Z]/.test(nextLine);
+		const shouldJoin = !currentEndsWithPeriod && !nextStartsWithCapital && nextLine.length > 0;
+		
+		if (shouldJoin && i < cleanedLines.length - 1) {
+			// Join current and next line
+			joinedParts.push(`${currentLine} ${nextLine}`);
+			i++; // Skip next line since we joined it
+		} else {
+			joinedParts.push(currentLine);
+		}
+	}
+	
+	const textContent = joinedParts.join(' ');
 
 	// Use unified wrapping function
 	return wrapTextToWidth(textContent, effectiveWidth, options);
