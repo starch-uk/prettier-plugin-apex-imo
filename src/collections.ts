@@ -10,7 +10,6 @@ import { getNodeClass, isEmpty } from './utils.js';
 import { createTypeNormalizingPrint } from './casing.js';
 
 const MIN_ENTRIES_FOR_MULTILINE = 2;
-const EMPTY_ARRAY_LENGTH = 0;
 const LIST_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewListLiteral';
 const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
@@ -85,10 +84,7 @@ const printEmptyList = (
 	'{}',
 ];
 
-const printEmptyMap = (
-	printedTypes: readonly Doc[],
-	isNested: boolean,
-): Doc => {
+const printEmptyMap = (printedTypes: readonly Doc[]): Doc => {
 	const typeDoc: Doc = group([
 		'Map<',
 		join([', ', softline], printedTypes),
@@ -147,19 +143,17 @@ const printMap = ({
 	print,
 	originalPrint,
 	printedTypes,
-	isNested,
 }: {
 	readonly path: Readonly<AstPath<ApexMapInitNode>>;
 	readonly print: (path: Readonly<AstPath<ApexNode>>) => Doc;
 	readonly originalPrint: () => Doc;
 	readonly printedTypes: readonly Doc[];
-	readonly isNested: boolean;
 }): Doc => {
 	const node = path.node;
 	const isEmptyPairs = !Array.isArray(node.pairs) || isEmpty(node.pairs);
 
 	if (isEmptyPairs) {
-		return printEmptyMap(printedTypes, isNested);
+		return printEmptyMap(printedTypes);
 	}
 
 	if (!hasMultipleMapEntries(node)) {
@@ -226,7 +220,6 @@ const printCollection = (
 		print,
 		originalPrint,
 		printedTypes,
-		isNested,
 	});
 };
 

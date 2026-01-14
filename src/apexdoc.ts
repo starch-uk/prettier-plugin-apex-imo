@@ -61,7 +61,6 @@ const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
 const ZERO_INDENT = 0;
 const BODY_INDENT_WHEN_ZERO = 2;
 const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
-const DEFAULT_PRINT_WIDTH = 80;
 
 /**
  * Calculates comment prefix and effective width for ApexDoc formatting.

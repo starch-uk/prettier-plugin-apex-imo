@@ -262,7 +262,6 @@ function normalizeNamesArray(
 	const namesArray = node.names;
 	if (!Array.isArray(namesArray)) return originalPrint(subPath);
 	// Normalize each identifier in the names array
-	let hasChanges = false;
 	for (let i = 0; i < namesArray.length; i++) {
 		const nameNode = namesArray[i];
 		if (
@@ -275,7 +274,6 @@ function normalizeNamesArray(
 		}
 		const normalizedValue = normalizeTypeName(nameNode.value);
 		if (normalizedValue !== nameNode.value) {
-			hasChanges = true;
 			nameNode.value = normalizedValue;
 		}
 	}

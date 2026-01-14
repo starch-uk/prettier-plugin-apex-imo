@@ -116,10 +116,7 @@ const wrappedPrinter = {
 const isApexParser = (
 	parser: string | undefined,
 ): parser is (typeof APEX_PARSERS)[number] =>
-	typeof parser === 'string' &&
-	(APEX_PARSERS_SET.has(parser) ||
-		parser === 'apex' ||
-		parser === 'apex-anonymous');
+	typeof parser === 'string' && APEX_PARSERS_SET.has(parser);
 
 const wrapParsers = (
 	parsers: Readonly<Plugin<ApexNode>['parsers']>,

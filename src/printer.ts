@@ -33,7 +33,6 @@ import {
 	getNodeClassOptional,
 	createNodeClassGuard,
 	preserveBlankLineAfterClosingBrace,
-	startsWithAccessModifier,
 } from './utils.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
 
