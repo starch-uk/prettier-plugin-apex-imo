@@ -89,17 +89,20 @@ const handleDanglingComment = (comment: unknown): boolean => {
 	const { enclosingNode } = commentWithContext;
 	if (!enclosingNode) return false;
 	const enclosingNodeClass = getNodeClassOptional(enclosingNode);
-	if (
-		enclosingNodeClass &&
-		ALLOW_DANGLING_COMMENTS.includes(enclosingNodeClass) &&
-		((enclosingNode as { stmnts?: unknown[] }).stmnts?.length === 0 ||
-			(enclosingNode as { members?: unknown[] }).members?.length === 0)
-	) {
-		const { addDanglingComment } = prettier.util;
-		addDanglingComment(enclosingNode, comment, null);
-		return true;
+	if (!enclosingNodeClass || !ALLOW_DANGLING_COMMENTS.includes(enclosingNodeClass)) {
+		return false;
 	}
-	return false;
+	const enclosingNodeWithMembers = enclosingNode as {
+		stmnts?: unknown[];
+		members?: unknown[];
+	};
+	const isEmpty =
+		enclosingNodeWithMembers.stmnts?.length === 0 ||
+		enclosingNodeWithMembers.members?.length === 0;
+	if (!isEmpty) return false;
+	const { addDanglingComment } = prettier.util;
+	addDanglingComment(enclosingNode, comment, null);
+	return true;
 };
 
 /**
@@ -154,9 +157,11 @@ const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
 	const { precedingNode, placement } = commentWithContext;
 	if (placement !== 'endOfLine' || !precedingNode) return false;
 	const precedingNodeClass = getNodeClassOptional(precedingNode);
+	const BINARY_EXPR_CLASS = 'apex.jorje.data.ast.Expr$BinaryExpr';
+	const BOOLEAN_EXPR_CLASS = 'apex.jorje.data.ast.Expr$BooleanExpr';
 	if (
-		precedingNodeClass !== 'apex.jorje.data.ast.Expr$BinaryExpr' &&
-		precedingNodeClass !== 'apex.jorje.data.ast.Expr$BooleanExpr'
+		precedingNodeClass !== BINARY_EXPR_CLASS &&
+		precedingNodeClass !== BOOLEAN_EXPR_CLASS
 	) {
 		return false;
 	}
@@ -589,10 +594,8 @@ const parseCommentToTokens = (
 	let currentPos = ARRAY_START_INDEX;
 
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
-		if (i < 0 || i >= contentLines.length) {
-			continue;
-		}
 		const line = contentLines[i];
+		if (line === undefined) continue;
 		const lineStartPos = currentPos;
 		const lineEndPos = currentPos + line.length;
 		currentPos = lineEndPos + INDEX_ONE; // +1 for newline

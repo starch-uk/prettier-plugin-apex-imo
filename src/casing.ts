@@ -72,12 +72,14 @@ const isIdentifier = (
 ): node is Readonly<ApexIdentifier> => {
 	if (!node || typeof node !== 'object') return false;
 	const nodeClass = getNodeClassOptional(node);
-	return (
+	if (
 		nodeClass === IDENTIFIER_CLASS ||
-		(nodeClass !== undefined && nodeClass.includes('Identifier')) ||
-		('value' in node &&
-			typeof (node as Record<string, unknown>).value === 'string')
-	);
+		(nodeClass !== undefined && nodeClass.includes('Identifier'))
+	) {
+		return true;
+	}
+	const nodeValue = (node as Record<string, unknown>).value;
+	return typeof nodeValue === 'string';
 };
 
 const TYPE_CONTEXT_KEYS = ['type', 'typeref', 'returntype', 'table'] as const;
@@ -267,13 +269,14 @@ function normalizeNamesArray(
 		if (
 			typeof nameNode !== 'object' ||
 			!('value' in nameNode) ||
-			typeof nameNode.value !== 'string' ||
-			!nameNode.value
+			typeof nameNode.value !== 'string'
 		) {
 			continue;
 		}
-		const normalizedValue = normalizeTypeName(nameNode.value);
-		if (normalizedValue !== nameNode.value) {
+		const nodeValue = nameNode.value;
+		if (!nodeValue) continue;
+		const normalizedValue = normalizeTypeName(nodeValue);
+		if (normalizedValue !== nodeValue) {
 			nameNode.value = normalizedValue;
 		}
 	}

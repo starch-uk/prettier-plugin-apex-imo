@@ -267,7 +267,7 @@ const renderAnnotationToken = (
 
 	// Add followingText before annotation if it exists
 	const trimmedFollowingText = token.followingText?.trim();
-	if (trimmedFollowingText && isNotEmpty(trimmedFollowingText)) {
+	if (trimmedFollowingText !== undefined && isNotEmpty(trimmedFollowingText)) {
 		const followingLines = token.followingText
 			.split('\n')
 			.map((line: string) => line.trim())
@@ -278,7 +278,10 @@ const renderAnnotationToken = (
 	}
 
 	// First line includes the @annotation name
-	const firstContent = contentLines.length > ARRAY_START_INDEX ? contentLines[ARRAY_START_INDEX] : '';
+	const firstContent =
+		contentLines.length > ARRAY_START_INDEX
+			? contentLines[ARRAY_START_INDEX] ?? ''
+			: '';
 	const firstLine = isNotEmpty(firstContent)
 		? `${commentPrefix}@${annotationName} ${firstContent}`
 		: `${commentPrefix}@${annotationName}`;
@@ -286,10 +289,8 @@ const renderAnnotationToken = (
 
 	// Subsequent lines are continuation of the annotation content
 	for (let i = INDEX_ONE; i < contentLines.length; i++) {
-		if (i < 0 || i >= contentLines.length) {
-			continue;
-		}
 		const lineContent = contentLines[i];
+		if (lineContent === undefined) continue;
 		if (isNotEmpty(lineContent)) {
 			lines.push(`${commentPrefix}${lineContent}`);
 		} else {
@@ -541,15 +542,17 @@ const wrapTextContent = (
 
 	const joinedParts: string[] = [];
 	for (let i = 0; i < cleanedLines.length; i++) {
-		if (i < 0 || i >= cleanedLines.length) {
-			continue;
-		}
-		const currentLine = cleanedLines[i].trim();
-		const nextLine = i + 1 < cleanedLines.length ? cleanedLines[i + 1].trim() : '';
+		const currentLine = cleanedLines[i]?.trim();
+		if (currentLine === undefined) continue;
+		const nextLine =
+			i + INDEX_ONE < cleanedLines.length
+				? cleanedLines[i + INDEX_ONE]?.trim() ?? ''
+				: '';
 
 		// Check if we should join with next line
 		const currentEndsWithPeriod = currentLine.endsWith('.');
-		const nextStartsWithCapital = nextLine && /^[A-Z]/.test(nextLine);
+		const nextStartsWithCapital =
+			nextLine.length > 0 && /^[A-Z]/.test(nextLine);
 		const shouldJoin =
 			!currentEndsWithPeriod &&
 			!nextStartsWithCapital &&
@@ -849,10 +852,8 @@ const collectContinuationFromTokenLines = (
 	let annotationContent = content;
 	let continuationIndex = startIndex;
 	while (continuationIndex < tokenLines.length) {
-		if (continuationIndex < 0 || continuationIndex >= tokenLines.length) {
-			break;
-		}
 		const continuationLine = tokenLines[continuationIndex];
+		if (continuationLine === undefined) break;
 		const trimmedLine = continuationLine.replace(/^\s*\*\s*/, '').trim();
 		if (
 			trimmedLine.length === EMPTY ||
@@ -893,15 +894,9 @@ const detectAnnotationsInTokens = (
 			let processedLines: string[] = [];
 			let hasAnnotations = false;
 
-			for (
-				let lineIndex = 0;
-				lineIndex < tokenLines.length;
-				lineIndex++
-			) {
-				if (lineIndex < 0 || lineIndex >= tokenLines.length) {
-					continue;
-				}
+			for (let lineIndex = 0; lineIndex < tokenLines.length; lineIndex++) {
 				const line = tokenLines[lineIndex];
+				if (line === undefined) continue;
 				// Annotation pattern: @ followed by identifier, possibly with content
 				// After detectCodeBlockTokens, lines have their " * " prefix stripped, so we need to match lines with or without prefix
 				// Pattern matches: (optional prefix) @ (name) (content)

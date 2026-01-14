@@ -140,10 +140,9 @@ const parseAndReformatAnnotationString = (
 	// Collect parameter lines until closing paren
 	const paramLines: string[] = [];
 	for (let i = startLineIndex + NEXT_LINE_OFFSET; i < lines.length; i++) {
-		if (i < 0 || i >= lines.length) {
-			continue;
-		}
-		const trimmed = lines[i].trim();
+		const line = lines[i];
+		if (line === undefined) continue;
+		const trimmed = line.trim();
 		paramLines.push(trimmed);
 		if (trimmed.startsWith(')') || trimmed.endsWith(')')) break;
 	}

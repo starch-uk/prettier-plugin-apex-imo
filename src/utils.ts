@@ -94,25 +94,24 @@ const preserveBlankLineAfterClosingBrace = (
 	formattedLines: readonly string[],
 	index: number,
 ): boolean => {
-	if (index < 0 || index >= formattedLines.length) {
+	if (
+		index < 0 ||
+		index >= formattedLines.length ||
+		index + 1 >= formattedLines.length
+	) {
 		return false;
 	}
 	const currentLine = formattedLines[index];
 	const trimmedLine = currentLine.trim();
-	const nextIndex = index + 1;
-
-	if (
-		!trimmedLine.endsWith('}') ||
-		nextIndex >= formattedLines.length
-	) {
+	if (!trimmedLine.endsWith('}')) {
 		return false;
 	}
 
-	const nextLine = formattedLines[nextIndex].trim();
-	return (
-		isNotEmpty(nextLine) &&
-		(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
-	);
+	const nextLine = formattedLines[index + 1]?.trim();
+	if (!nextLine || !isNotEmpty(nextLine)) {
+		return false;
+	}
+	return nextLine.startsWith('@') || startsWithAccessModifier(nextLine);
 };
 
 /**

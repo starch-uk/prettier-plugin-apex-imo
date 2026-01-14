@@ -171,9 +171,9 @@ const isCommentNode = createNodeClassGuard<ApexNode>(
 const canAttachComment = (node: unknown): boolean => {
 	if (!node || typeof node !== 'object') return false;
 	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
-	if (!nodeWithClass.loc) return false;
 	const nodeClass = nodeWithClass['@class'];
 	return (
+		!!nodeWithClass.loc &&
 		!!nodeClass &&
 		nodeClass !== INLINE_COMMENT_CLASS &&
 		nodeClass !== BLOCK_COMMENT_CLASS
@@ -188,8 +188,7 @@ const canAttachComment = (node: unknown): boolean => {
  */
 const isBlockComment = (comment: unknown): boolean => {
 	if (!comment || typeof comment !== 'object') return false;
-	const commentWithClass = comment as { '@class'?: unknown };
-	return commentWithClass['@class'] === BLOCK_COMMENT_CLASS;
+	return (comment as { '@class'?: unknown })['@class'] === BLOCK_COMMENT_CLASS;
 };
 
 const createWrappedPrinter = (originalPrinter: any): any => {
@@ -220,6 +219,37 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					options: ParserOptions,
 				) => Promise<Doc>,
 			): Promise<Doc | undefined> => {
+				// Cache options values early
+				if (options.plugins === undefined) {
+					throw new Error(
+						'prettier-plugin-apex-imo: options.plugins is required',
+					);
+				}
+				if (options.tabWidth === undefined) {
+					throw new Error(
+						'prettier-plugin-apex-imo: options.tabWidth is required',
+					);
+				}
+				const tabWidthValue = options.tabWidth;
+				const printWidthValue = options.printWidth;
+				const basePlugins = options.plugins;
+				const pluginInstance = getCurrentPluginInstance();
+				const plugins: (
+					| string
+					| URL
+					| prettier.Plugin<ApexNode>
+				)[] = pluginInstance
+					? [
+							// Keep any existing plugins except our own instance
+							...basePlugins.filter(
+								(p) => p !== pluginInstance.default,
+							),
+							// Append our wrapped plugin last so its printers win
+							pluginInstance.default as prettier.Plugin<ApexNode>,
+						]
+					: basePlugins;
+				const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
+
 				const codeTag = '{@code';
 				let result = commentText;
 				let startIndex = 0;
@@ -235,178 +265,134 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						continue;
 					}
 
-				const codeContent = extraction.code;
+					const codeContent = extraction.code;
 
-				// Format code using prettier.format to get a formatted string
-						// Ensure our plugin is LAST in the plugins array so our wrapped printer
-						// takes precedence over the base apex printers for shared parser names.
-					const pluginInstance = getCurrentPluginInstance();
-					if (options.plugins === undefined) {
-						throw new Error(
-							'prettier-plugin-apex-imo: options.plugins is required',
-						);
-					}
-					const basePlugins = options.plugins;
-					const plugins: (
-						| string
-						| URL
-						| prettier.Plugin<ApexNode>
-					)[] = pluginInstance
-						? [
-								// Keep any existing plugins except our own instance
-								...basePlugins.filter(
-									(p) => p !== pluginInstance.default,
-								),
-								// Append our wrapped plugin last so its printers win
-								pluginInstance.default as prettier.Plugin<ApexNode>,
-							]
-						: basePlugins;
+					// Format code using prettier.format to get a formatted string
+					// Ensure our plugin is LAST in the plugins array so our wrapped printer
+					// takes precedence over the base apex printers for shared parser names.
+					const effectiveWidth = calculateEffectiveWidth(
+						printWidthValue,
+						commentPrefixLength,
+					);
 
-					// Calculate effective width: account for comment prefix
-					// In class context, comments are typically indented by tabWidth (usually 2 spaces)
-					// So the full prefix is "  * " (tabWidth + 3 for " * ")
-					// For safety, we use a conservative estimate: tabWidth + 3
-					if (options.tabWidth === undefined) {
-						throw new Error(
-							'prettier-plugin-apex-imo: options.tabWidth is required',
-						);
-					}
-					const tabWidthValue = options.tabWidth;
-					const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
-						const effectiveWidth = calculateEffectiveWidth(
-							options.printWidth,
-							commentPrefixLength,
-						);
+					// Format with prettier, trying apex-anonymous first, then apex
+					let formattedCode = await formatApexCodeWithFallback(
+						codeContent,
+						{
+							...options,
+							printWidth: effectiveWidth,
+							plugins,
+						},
+					);
 
-						// Format with prettier, trying apex-anonymous first, then apex
-						let formattedCode = await formatApexCodeWithFallback(
-							codeContent,
-							{
-								...options,
-								printWidth: effectiveWidth,
-								plugins,
-							},
-						);
+					// Normalize multiline annotations (2+ parameters) to use the same formatting
+					// as our AST-based printAnnotation logic. This ensures consistency between
+					// regular Apex files and {@code} blocks (which are formatted via string-based path).
+					if (typeof formattedCode === 'string') {
+						const lines = formattedCode.split('\n');
+						let modified = false;
 
-						// Normalize multiline annotations (2+ parameters) to use the same formatting
-						// as our AST-based printAnnotation logic. This ensures consistency between
-						// regular Apex files and {@code} blocks (which are formatted via string-based path).
-						if (typeof formattedCode === 'string') {
-							const lines = formattedCode.split('\n');
-							let modified = false;
+						for (let i = 0; i < lines.length; i++) {
+							const line = lines[i];
+							if (line === undefined) continue;
+							const trimmed = line.trim();
 
-							for (let i = 0; i < lines.length; i++) {
-								if (i < 0 || i >= lines.length) {
-									continue;
-								}
-								const line = lines[i];
-								const trimmed = line.trim();
+							// Check if this line starts a multiline annotation (any annotation with parameters)
+							if (trimmed.startsWith('@') && trimmed.includes('(')) {
+								const reformatted =
+									parseAndReformatAnnotationString(
+										trimmed,
+										lines,
+										i,
+									);
 
-								// Check if this line starts a multiline annotation (any annotation with parameters)
-								if (
-									trimmed.startsWith('@') &&
-									trimmed.includes('(')
-								) {
-									const reformatted =
-										parseAndReformatAnnotationString(
-											trimmed,
-											lines,
-											i,
-										);
-
-									if (reformatted) {
+								if (reformatted) {
 									// Count how many lines the original annotation occupied
 									let originalLineCount = 1;
-									for (
-										let j = i + 1;
-										j < lines.length;
-										j++
-									) {
-										if (j < 0 || j >= lines.length) {
-											continue;
-										}
+									for (let j = i + 1; j < lines.length; j++) {
 										const nextLine = lines[j];
+										if (nextLine === undefined) continue;
 										const nextTrimmed = nextLine.trim();
-											originalLineCount++;
-											if (
-												nextTrimmed.startsWith(')') ||
-												nextTrimmed.endsWith(')')
-											) {
-												break;
-											}
+										originalLineCount++;
+										if (
+											nextTrimmed.startsWith(')') ||
+											nextTrimmed.endsWith(')')
+										) {
+											break;
 										}
-
-										// Replace original annotation with reformatted version
-										lines.splice(
-											i,
-											originalLineCount,
-											...reformatted,
-										);
-										modified = true;
-										// Skip past the reformatted annotation
-										i += reformatted.length - 1;
 									}
+
+									// Replace original annotation with reformatted version
+									lines.splice(
+										i,
+										originalLineCount,
+										...reformatted,
+									);
+									modified = true;
+									// Skip past the reformatted annotation
+									i += reformatted.length - 1;
 								}
 							}
-
-							if (modified) {
-								formattedCode = lines.join('\n');
-							}
 						}
 
-						// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
-						// This preserves the structure from original code (blank lines after } before annotations/methods)
-						const formattedLines = formattedCode.trim().split('\n');
-						const resultLines: string[] = [];
-
-						for (let i = 0; i < formattedLines.length; i++) {
-							if (i < 0 || i >= formattedLines.length) {
-								continue;
-							}
-							const formattedLine = formattedLines[i];
-							resultLines.push(formattedLine);
-
-							// Insert blank line after } when followed by annotations or access modifiers
-							// This preserves the structure from original code
-							if (preserveBlankLineAfterClosingBrace(formattedLines, i)) {
-								// Insert blank line - it will become ' *' when mapped with comment prefix
-								resultLines.push('');
-							}
+						if (modified) {
+							formattedCode = lines.join('\n');
 						}
+					}
 
-						formattedCode = resultLines.join('\n');
+					// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
+					// This preserves the structure from original code (blank lines after } before annotations/methods)
+					const formattedLines = formattedCode.trim().split('\n');
+					const resultLines: string[] = [];
 
-						// Replace the code block with formatted version
-						// Add comment prefix (* ) to each code line to preserve comment structure
-						// beforeCode should include everything BEFORE {@code, not including {@code itself
-						// This ensures we can properly replace {@code ... } with the formatted code block
-						const beforeCode = result.substring(0, startIndex);
-						const afterCode = result.substring(extraction.endPos);
-						// Add * prefix to each formatted code line
-						// Prettier normalizes comment indentation to a single space before *
-						const formattedCodeLines = formattedCode
-							.trim()
-							.split('\n');
-						const prefixedCodeLines = formattedCodeLines.map(
-							(line) => (line ? ` * ${line}` : ' *'),
-						);
-						// Add {@code tag with * prefix and closing } tag with * prefix to match comment structure
-						// Check if beforeCode already ends with a newline to avoid extra blank lines
-						const needsLeadingNewline = !beforeCode.endsWith('\n');
-						// For empty code blocks, output {@code} on a single line (no content between braces)
-						const isEmptyBlock = codeContent.trim().length === 0;
-						const newCodeBlock = isEmptyBlock
-							? (needsLeadingNewline ? '\n' : '') +
-								` * ${codeTag}}\n`
-							: (needsLeadingNewline ? '\n' : '') +
-								` * ${codeTag}\n` +
-								prefixedCodeLines.join('\n') +
-								'\n * }\n';
-						result = beforeCode + newCodeBlock + afterCode;
-						hasChanges = true;
+					for (let i = 0; i < formattedLines.length; i++) {
+						const formattedLine = formattedLines[i];
+						if (formattedLine === undefined) continue;
+						resultLines.push(formattedLine);
 
-				// Move past this code block
-				startIndex = beforeCode.length + newCodeBlock.length;
+						// Insert blank line after } when followed by annotations or access modifiers
+						// This preserves the structure from original code
+						if (
+							preserveBlankLineAfterClosingBrace(
+								formattedLines as readonly string[],
+								i,
+							)
+						) {
+							// Insert blank line - it will become ' *' when mapped with comment prefix
+							resultLines.push('');
+						}
+					}
+
+					formattedCode = resultLines.join('\n');
+
+					// Replace the code block with formatted version
+					// Add comment prefix (* ) to each code line to preserve comment structure
+					// beforeCode should include everything BEFORE {@code, not including {@code itself
+					// This ensures we can properly replace {@code ... } with the formatted code block
+					const beforeCode = result.substring(0, startIndex);
+					const afterCode = result.substring(extraction.endPos);
+					// Add * prefix to each formatted code line
+					// Prettier normalizes comment indentation to a single space before *
+					const formattedCodeLines = formattedCode.trim().split('\n');
+					const prefixedCodeLines = formattedCodeLines.map(
+						(line) => (line ? ` * ${line}` : ' *'),
+					);
+					// Add {@code tag with * prefix and closing } tag with * prefix to match comment structure
+					// Check if beforeCode already ends with a newline to avoid extra blank lines
+					const needsLeadingNewline = !beforeCode.endsWith('\n');
+					// For empty code blocks, output {@code} on a single line (no content between braces)
+					const isEmptyBlock = codeContent.trim().length === 0;
+					const newCodeBlock = isEmptyBlock
+						? (needsLeadingNewline ? '\n' : '') + ` * ${codeTag}}\n`
+						: (needsLeadingNewline ? '\n' : '') +
+							` * ${codeTag}\n` +
+							prefixedCodeLines.join('\n') +
+							'\n * }\n';
+					result = beforeCode + newCodeBlock + afterCode;
+					hasChanges = true;
+
+					// Move past this code block
+					startIndex = beforeCode.length + newCodeBlock.length;
 				}
 
 				if (!hasChanges) {
@@ -483,17 +469,16 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	 */
 	const hasVariableAssignments = (decls: unknown[]): boolean => {
 		for (const decl of decls) {
-			if (decl && typeof decl === 'object') {
-				const assignment = (decl as { assignment?: unknown })
-					.assignment;
-				if (
-					assignment !== null &&
-					assignment !== undefined &&
-					typeof assignment === 'object' &&
-					'value' in assignment &&
-					(assignment as { value?: unknown }).value !== null &&
-					(assignment as { value?: unknown }).value !== undefined
-				) {
+			if (!decl || typeof decl !== 'object') continue;
+			const assignment = (decl as { assignment?: unknown }).assignment;
+			if (
+				assignment !== null &&
+				assignment !== undefined &&
+				typeof assignment === 'object' &&
+				'value' in assignment
+			) {
+				const assignmentValue = (assignment as { value?: unknown }).value;
+				if (assignmentValue !== null && assignmentValue !== undefined) {
 					return true;
 				}
 			}
@@ -513,16 +498,17 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const { decls } = node as { decls?: unknown[] };
 		if (!Array.isArray(decls)) return null;
 
+		// Cache these values as they're used in both branches
+		const modifierDocs = path.map(
+			print,
+			'modifiers' as never,
+		) as unknown as Doc[];
+		const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
+		const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
 		const hasAssignments = hasVariableAssignments(decls);
 
 		if (!hasAssignments) {
 			// Handle case without assignments
-			const modifierDocs = path.map(
-				print,
-				'modifiers' as never,
-			) as unknown as Doc[];
-			const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
-			const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
 			const { join: joinDocs } = doc.builders;
 			const nameDocs = path.map(
 				(declPath: Readonly<AstPath<ApexNode>>) => {
@@ -572,12 +558,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		}
 
 		// Handle case with assignments
-		const modifierDocs = path.map(
-			print,
-			'modifiers' as never,
-		) as unknown as Doc[];
-		const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
-		const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
 
 		const isCollectionAssignment = (assignment: unknown): boolean => {
 			if (
@@ -599,12 +579,16 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			)
 				return false;
 			const creatorClass = getNodeClassOptional(creator as ApexNode);
+			const LIST_LITERAL_CLASS =
+				'apex.jorje.data.ast.NewObject$NewListLiteral';
+			const SET_LITERAL_CLASS =
+				'apex.jorje.data.ast.NewObject$NewSetLiteral';
+			const MAP_LITERAL_CLASS =
+				'apex.jorje.data.ast.NewObject$NewMapLiteral';
 			return (
-				creatorClass ===
-					'apex.jorje.data.ast.NewObject$NewListLiteral' ||
-				creatorClass ===
-					'apex.jorje.data.ast.NewObject$NewSetLiteral' ||
-				creatorClass === 'apex.jorje.data.ast.NewObject$NewMapLiteral'
+				creatorClass === LIST_LITERAL_CLASS ||
+				creatorClass === SET_LITERAL_CLASS ||
+				creatorClass === MAP_LITERAL_CLASS
 			);
 		};
 
@@ -663,25 +647,26 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					first[0] === 'Map');
 			if (!isMap) return false;
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-			if (typeDocToCheck.length > 2 && Array.isArray(typeDocToCheck[2])) {
+			const paramsIndex = 2;
+			if (
+				typeDocToCheck.length > paramsIndex &&
+				Array.isArray(typeDocToCheck[paramsIndex])
+			) {
 				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-				const params = typeDocToCheck[2] as unknown[];
+				const params = typeDocToCheck[paramsIndex] as unknown[];
 				const hasNestedMap = (param: unknown): boolean => {
-					if (typeof param === 'string')
-						return param.includes('Map<');
-					if (Array.isArray(param)) {
+					if (typeof param === 'string') return param.includes('Map<');
+					if (!Array.isArray(param)) return false;
+					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+					const paramFirst = param[0];
+					if (paramFirst === 'Map') return true;
+					if (
+						Array.isArray(paramFirst) &&
 						// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-						const paramFirst = param[0];
-						if (paramFirst === 'Map') return true;
-						if (
-							Array.isArray(paramFirst) &&
-							// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-							paramFirst[0] === 'Map'
-						)
-							return true;
-						return param.some((item) => hasNestedMap(item));
-					}
-					return false;
+						paramFirst[0] === 'Map'
+					)
+						return true;
+					return param.some((item) => hasNestedMap(item));
 				};
 				return params.some((param) => hasNestedMap(param));
 			}

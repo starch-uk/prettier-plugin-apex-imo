@@ -39,17 +39,13 @@ const isNestedInCollection = (
 ): boolean => {
 	const { stack } = path;
 	if (!Array.isArray(stack) || stack.length === 0) return false;
-	for (const parent of stack) {
-		if (
+	return stack.some(
+		(parent) =>
 			typeof parent === 'object' &&
 			parent !== null &&
 			'@class' in parent &&
-			(isListInit(parent as ApexNode) || isMapInit(parent as ApexNode))
-		) {
-			return true;
-		}
-	}
-	return false;
+			(isListInit(parent as ApexNode) || isMapInit(parent as ApexNode)),
+	);
 };
 
 /**
