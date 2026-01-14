@@ -13,81 +13,9 @@ import {
 	handleEndOfLineComment,
 	handleRemainingComment,
 } from '../src/comments.js';
-import { findApexDocComments } from '../src/apexdoc.js';
 import { loadFixture } from './test-utils.js';
 
 describe('comments', () => {
-	describe('findApexDocComments', () => {
-		it.concurrent.each([
-			{
-				description: 'should find single ApexDoc comment',
-				expectedEnd: 14,
-				expectedLength: 1,
-				expectedStart: 0,
-				text: '/** Comment */',
-			},
-			{
-				description: 'should find multiple ApexDoc comments',
-				expectedEnd: 12,
-				expectedLength: 2,
-				expectedStart: 0,
-				secondEnd: 31,
-				secondStart: 18,
-				text: '/** First */ code /** Second */',
-			},
-			{
-				description: 'should return empty array when no comments found',
-				expectedLength: 0,
-				text: 'No comments here',
-			},
-			{
-				description: 'should handle comment at start of string',
-				expectedLength: 1,
-				expectedStart: 0,
-				text: '/** Start */',
-			},
-			{
-				description: 'should handle comment at end of string',
-				expectedLength: 1,
-				expectedStart: 5,
-				text: 'code /** End */',
-			},
-		])(
-			'$description',
-			({
-				expectedEnd,
-				expectedLength,
-				expectedStart,
-				secondEnd,
-				secondStart,
-				text,
-			}: Readonly<{
-				description: string;
-				expectedEnd?: number;
-				expectedLength: number;
-				expectedStart?: number;
-				secondEnd?: number;
-				secondStart?: number;
-				text: string;
-			}>) => {
-				const comments = findApexDocComments(text);
-				expect(comments).toHaveLength(expectedLength);
-				if (expectedStart !== undefined) {
-					expect(comments[0]?.start).toBe(expectedStart);
-				}
-				if (expectedEnd !== undefined) {
-					expect(comments[0]?.end).toBe(expectedEnd);
-				}
-				if (secondStart !== undefined) {
-					expect(comments[1]?.start).toBe(secondStart);
-				}
-				if (secondEnd !== undefined) {
-					expect(comments[1]?.end).toBe(secondEnd);
-				}
-			},
-		);
-	});
-
 	describe('getIndentLevel', () => {
 		it.concurrent.each([
 			{

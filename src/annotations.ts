@@ -14,8 +14,7 @@ import {
 	APEX_ANNOTATIONS,
 	APEX_ANNOTATION_OPTION_NAMES,
 } from './refs/annotations.js';
-import { EMPTY, INDEX_ONE, getNodeClass, createNodeClassGuard } from './utils.js';
-import { findApexDocComments } from './apexdoc.js';
+import { EMPTY, getNodeClass, createNodeClassGuard } from './utils.js';
 
 // Annotation normalization uses regex for preprocessing text before parsing (annotation normalization).
 // AST manipulation isn't feasible at this stage since we're normalizing annotation names
@@ -33,34 +32,19 @@ const FALSE_ANNOTATION_VALUE_CLASS =
 	'apex.jorje.data.ast.AnnotationValue$FalseAnnotationValue';
 const ANNOTATION_KEY_VALUE_CLASS =
 	'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue';
-const MIN_PARAMS_FOR_MULTILINE = 1;
-const STRING_START_INDEX = 0;
-const KEY_GROUP_INDEX = 1;
-const VALUE_GROUP_INDEX = 2;
-const NEXT_LINE_OFFSET = 1;
-const ANNOTATION_PARAM_INDENT = 2;
 
 const isAnnotation = createNodeClassGuard<ApexAnnotationNode>(ANNOTATION_CLASS);
 
-const normalizeAnnotationName = (name: string): string => {
-	const lowerName = name.toLowerCase();
-	const annotation = APEX_ANNOTATIONS[lowerName];
-	return annotation !== undefined ? annotation : name;
-};
+const normalizeAnnotationName = (name: string): string =>
+	APEX_ANNOTATIONS[name.toLowerCase()] ?? name;
 
 const normalizeAnnotationOptionName = (
 	annotationName: string,
 	optionName: string,
-): string => {
-	const optionMap =
-		APEX_ANNOTATION_OPTION_NAMES[annotationName.toLowerCase()];
-	if (optionMap === undefined) {
-		return optionName;
-	}
-	const lowerOptionName = optionName.toLowerCase();
-	const normalizedOption = optionMap[lowerOptionName];
-	return normalizedOption !== undefined ? normalizedOption : optionName;
-};
+): string =>
+	APEX_ANNOTATION_OPTION_NAMES[annotationName.toLowerCase()]?.[
+		optionName.toLowerCase()
+	] ?? optionName;
 
 const isAnnotationKeyValue = (
 	param: Readonly<ApexAnnotationParameter>,
@@ -78,7 +62,9 @@ const isStringAnnotationValue = (
 		return false;
 	}
 	if (!('value' in value)) return false;
-	return typeof (value as { value?: unknown })['value'] === 'string';
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AST type access
+	const valueProp = (value as { value?: unknown }).value;
+	return typeof valueProp === 'string';
 };
 
 const formatAnnotationValue = (
@@ -88,8 +74,8 @@ const formatAnnotationValue = (
 	if (cls === TRUE_ANNOTATION_VALUE_CLASS) return 'true';
 	if (cls === FALSE_ANNOTATION_VALUE_CLASS) return 'false';
 	if (isStringAnnotationValue(value)) {
-		const stringValue = (value as { value: string }).value;
-		return stringValue.length > 0 ? `'${stringValue}'` : "''";
+		const stringValue = value.value;
+		return stringValue.length > EMPTY ? `'${stringValue}'` : "''";
 	}
 	return "''";
 };
@@ -106,6 +92,7 @@ const formatAnnotationParam = (
 		];
 	}
 	if ('value' in param) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AST type access
 		const valueProp = (param as { value?: unknown }).value;
 		if (typeof valueProp === 'string') {
 			return `'${valueProp}'`;
@@ -133,56 +120,52 @@ const parseAndReformatAnnotationString = (
 	);
 	if (!nameMatch) return null;
 
-	const nameGroup = nameMatch[INDEX_ONE];
-	const normalizedName = normalizeAnnotationName(nameGroup !== undefined ? nameGroup : '');
+	const [, nameGroup] = nameMatch;
+	const normalizedName = normalizeAnnotationName(nameGroup ?? '');
 
-	// Collect parameter lines until closing paren
 	const paramLines: string[] = [];
-	for (let i = startLineIndex + NEXT_LINE_OFFSET; i < lines.length; i++) {
-		const line = lines[i];
-		if (line === undefined) continue;
-		const trimmed = line.trim();
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- offset
+	for (let i = startLineIndex + 1; i < lines.length; i++) {
+		const trimmed = lines[i]?.trim();
+		if (trimmed === undefined) continue;
 		paramLines.push(trimmed);
 		if (trimmed.startsWith(')') || trimmed.endsWith(')')) break;
 	}
 
-	// Parse parameters: key="value" or key='value'
 	const parsedParams: { key: string; value: string }[] = [];
 	const paramRegex = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']/;
 	for (const pl of paramLines) {
 		const match = paramRegex.exec(pl.replace(/,$/, ''));
 		if (match) {
-			const keyGroup = match[KEY_GROUP_INDEX];
-			const valueGroup = match[VALUE_GROUP_INDEX];
+			const [, keyGroup, valueGroup] = match;
 			parsedParams.push({
-				key: keyGroup !== undefined ? keyGroup : '',
-				value: valueGroup !== undefined ? valueGroup : '',
+				key: keyGroup ?? '',
+				value: valueGroup ?? '',
 			});
 		}
 	}
 
 	if (parsedParams.length === EMPTY) return null;
 
-	// Reformat with normalization (consistent with AST-based formatAnnotationValue)
-	const indentSpaces = ' '.repeat(ANNOTATION_PARAM_INDENT);
 	const formattedParams = parsedParams.map((param, idx) => {
 		const normalizedKey = normalizeAnnotationOptionName(
 			normalizedName,
 			param.key,
 		);
-		const paramStr = `${normalizedKey}='${param.value}'`;
-		return idx < parsedParams.length - 1
-			? `${indentSpaces}${paramStr},`
-			: `${indentSpaces}${paramStr}`;
+		const paramStr = `  ${normalizedKey}='${param.value}'`;
+		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- compare with length
+		return idx < parsedParams.length - 1 ? `${paramStr},` : paramStr;
 	});
 
 	return [`@${normalizedName}(`, ...formattedParams, ')'];
 };
 
 const shouldForceMultiline = (
-	_normalizedName: string,
-	formattedParams: readonly Doc[],
-): boolean => formattedParams.length > MIN_PARAMS_FOR_MULTILINE;
+	_formattedParams: readonly Doc[],
+): boolean => {
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- minimum count
+	return _formattedParams.length > 1;
+};
 
 const printAnnotation = (
 	path: Readonly<Readonly<AstPath<ApexAnnotationNode>>>,
@@ -197,10 +180,7 @@ const printAnnotation = (
 		formatAnnotationParam(param, originalName),
 	);
 
-	const forceMultiline = shouldForceMultiline(
-		normalizedName,
-		formattedParams,
-	);
+	const forceMultiline = shouldForceMultiline(formattedParams);
 
 	// Annotations use whitespace, not commas, between parameters
 	// For multiline, ensure each parameter is a single Doc (group arrays together)
@@ -227,26 +207,16 @@ const printAnnotation = (
 			hardline,
 		]);
 	}
-	// Single-line: use group with ifBreak to allow breaking if it exceeds printWidth
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers, @typescript-eslint/prefer-destructuring -- array index, single param access
-	const singleParam = formattedParams[0];
+	const [singleParam] = formattedParams;
 	if (singleParam === undefined) {
 		return group(['@', normalizedName, '()']);
 	}
-	const singleParamDoc: Doc = Array.isArray(singleParam)
-		? singleParam
-		: singleParam;
 	return group([
 		'@',
 		normalizedName,
 		group([
 			'(',
-			ifBreak(
-				// Break: put param on its own indented line
-				indent([softline, singleParamDoc]),
-				// Flat: keep param on same line (no extra whitespace)
-				singleParamDoc,
-			),
+			ifBreak(indent([softline, singleParam]), singleParam),
 			softline,
 			')',
 		]),
@@ -254,23 +224,25 @@ const printAnnotation = (
 	]);
 };
 
-const createAnnotationReplacer =
-	() =>
-	(_match: string, name: string, params?: string): string => {
-		const normalizedName = normalizeAnnotationName(name);
-		if (params === undefined || params.length === EMPTY)
-			return `@${normalizedName}`;
-		return `@${normalizedName}${params.replace(
-			ANNOTATION_OPTION_REGEX,
-			(m: string, opt: string) => {
-				const normalizedOption = normalizeAnnotationOptionName(
-					normalizedName,
-					opt,
-				);
-				return normalizedOption === opt ? m : `${normalizedOption}=`;
-			},
-		)}`;
-	};
+const createAnnotationReplacer = () => (
+	_match: string,
+	name: string,
+	params?: string,
+): string => {
+	const normalizedName = normalizeAnnotationName(name);
+	if (params === undefined || params.length === EMPTY)
+		return `@${normalizedName}`;
+	return `@${normalizedName}${params.replace(
+		ANNOTATION_OPTION_REGEX,
+		(m: string, opt: string) => {
+			const normalizedOption = normalizeAnnotationOptionName(
+				normalizedName,
+				opt,
+			);
+			return normalizedOption === opt ? m : `${normalizedOption}=`;
+		},
+	)}`;
+};
 
 /**
  * Normalizes annotation names in source text before parsing.
@@ -299,8 +271,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 const normalizeAnnotationNamesInTextExcludingApexDoc = (
 	text: string,
 ): string => {
-	// Import APEXDOC_ANNOTATIONS dynamically to avoid circular dependency
-	const APEXDOC_ANNOTATIONS = [
+	const apexDocAnnotationsSet = new Set([
 		'param',
 		'return',
 		'throws',
@@ -311,36 +282,21 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (
 		'deprecated',
 		'group',
 		'example',
-	] as const;
-
-	const apexDocAnnotationsSet = new Set<string>([...APEXDOC_ANNOTATIONS]);
+	]);
 	const replacer = createAnnotationReplacer();
 
-	/**
-	 * Create a replacer that normalizes ApexDoc annotations to lowercase, not PascalCase.
-	 * @param match - The full regex match.
-	 * @param name - The annotation name.
-	 * @param params - Optional parameters string.
-	 * @returns The normalized annotation string.
-	 */
-	const excludingApexDocReplacer = (
-		match: string,
-		name: string,
-		params?: string,
-	): string => {
-		const lowerName = name.toLowerCase();
-		// If it's an ApexDoc annotation, normalize to lowercase (not PascalCase)
-		if (apexDocAnnotationsSet.has(lowerName)) {
-			if (params === undefined || params.length === EMPTY) {
-				return `@${lowerName}`;
+	return text.replace(
+		ANNOTATION_REGEX,
+		(match: string, name: string, params?: string): string => {
+			const lowerName = name.toLowerCase();
+			if (apexDocAnnotationsSet.has(lowerName)) {
+				return params === undefined || params.length === EMPTY
+					? `@${lowerName}`
+					: `@${lowerName}${params}`;
 			}
-			return `@${lowerName}${params}`;
-		}
-		// Otherwise, normalize it to PascalCase (Apex code annotations)
-		return replacer(match, name, params);
-	};
-
-	return text.replace(ANNOTATION_REGEX, excludingApexDocReplacer);
+			return replacer(match, name, params);
+		},
+	);
 };
 
 export {

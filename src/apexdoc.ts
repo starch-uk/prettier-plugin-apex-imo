@@ -120,30 +120,6 @@ const getCommentEndLength = (text: string, pos: number): number => {
 	return ARRAY_START_INDEX; // Not a valid comment end
 };
 
-const findApexDocComments = (
-	text: Readonly<string>,
-): { start: number; end: number }[] => {
-	const comments: { start: number; end: number }[] = [];
-	for (let i = ARRAY_START_INDEX; i < text.length; i++) {
-		if (isCommentStart(text, i)) {
-			const start = i;
-			for (
-				i += COMMENT_START_LENGTH;
-				i < text.length - STRING_OFFSET;
-				i++
-			) {
-				const endLength = getCommentEndLength(text, i);
-				if (endLength > ARRAY_START_INDEX) {
-					comments.push({ end: i + endLength, start });
-					i += endLength - STRING_OFFSET;
-					break;
-				}
-			}
-		}
-	}
-	return comments;
-};
-
 interface CodeBlock {
 	startPos: number;
 	endPos: number;
@@ -899,7 +875,6 @@ const detectCodeBlockTokens = (
 
 
 export {
-	findApexDocComments,
 	EMPTY_CODE_TAG,
 	normalizeSingleApexDocComment,
 	detectCodeBlockTokens,
