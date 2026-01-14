@@ -11,9 +11,7 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import type { ParserOptions, Doc } from 'prettier';
 import * as prettier from 'prettier';
-import { processCodeBlock } from './apexdoc-code.js';
 import {
-	createIndent,
 	normalizeBlockComment,
 	parseCommentToTokens,
 	tokensToCommentString,
@@ -58,6 +56,37 @@ const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
 const ZERO_INDENT = 0;
 const BODY_INDENT_WHEN_ZERO = 2;
 const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
+
+/**
+ * Calculates comment prefix and effective width for ApexDoc formatting.
+ * Caches these calculations to avoid repeated computation.
+ */
+const calculatePrefixAndWidth = (
+	commentIndent: number,
+	printWidth: number | undefined,
+	options: Readonly<{
+		readonly tabWidth: number;
+		readonly useTabs?: boolean | null | undefined;
+	}>,
+): {
+	commentPrefix: string;
+	bodyIndent: number;
+	actualPrefixLength: number;
+	effectiveWidth: number;
+} => {
+	const commentPrefix = CommentPrefix.create(commentIndent, options);
+	const bodyIndent =
+		commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
+	const actualPrefixLength = commentPrefix.length + bodyIndent;
+	const effectiveWidth =
+		(printWidth ?? 80) - actualPrefixLength;
+	return {
+		commentPrefix,
+		bodyIndent,
+		actualPrefixLength,
+		effectiveWidth,
+	};
+};
 
 const isCommentStart = (text: string, pos: number): boolean =>
 	text.substring(pos, pos + COMMENT_START_LENGTH) === COMMENT_START_MARKER;
@@ -169,21 +198,20 @@ const normalizeSingleApexDocComment = (
 	// Wrap annotations if printWidth is available
 	// Calculate effectiveWidth accounting for body indentation (same as tokensToApexDocString)
 	if (printWidth) {
-		const commentPrefix = CommentPrefix.create(commentIndent, {
-			tabWidth: tabWidthValue,
-			useTabs: options.useTabs,
-		});
-		// Account for body indentation when commentIndent is 0
-		const bodyIndent =
-			commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
-		const actualPrefixLength = commentPrefix.length + bodyIndent;
-		const annotationEffectiveWidth = printWidth - actualPrefixLength;
+		const { effectiveWidth, actualPrefixLength } = calculatePrefixAndWidth(
+			commentIndent,
+			printWidth,
+			{
+				tabWidth: tabWidthValue,
+				useTabs: options.useTabs,
+			},
+		);
 
 		// Pass the actual prefix length to wrapAnnotationTokens so it can calculate first line width correctly
 		// eslint-disable-next-line @typescript-eslint/no-use-before-define
 		tokens = wrapAnnotationTokens(
 			tokens,
-			annotationEffectiveWidth,
+			effectiveWidth,
 			commentIndent,
 			actualPrefixLength,
 			{
@@ -212,6 +240,179 @@ const normalizeSingleApexDocComment = (
 };
 
 /**
+ * Renders an annotation token to text token with formatted lines.
+ */
+const renderAnnotationToken = (
+	token: AnnotationToken,
+	commentPrefix: string,
+): ContentToken | null => {
+	const contentLines =
+		token.content.length > EMPTY ? token.content.split('\n') : [''];
+	const lines: string[] = [];
+	const annotationName = token.name;
+
+	// Add followingText before annotation if it exists
+	if (
+		token.followingText &&
+		token.followingText.trim().length > EMPTY
+	) {
+		const followingLines = token.followingText
+			.split('\n')
+			.filter((line: string) => line.trim().length > EMPTY);
+		for (const line of followingLines) {
+			lines.push(`${commentPrefix}${line.trim()}`);
+		}
+	}
+
+	// First line includes the @annotation name
+	const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
+	const firstLine =
+		firstContent.length > EMPTY
+			? `${commentPrefix}@${annotationName} ${firstContent}`
+			: `${commentPrefix}@${annotationName}`;
+	lines.push(firstLine);
+
+	// Subsequent lines are continuation of the annotation content
+	for (let i = INDEX_ONE; i < contentLines.length; i++) {
+		const lineContent = contentLines[i] ?? '';
+		if (lineContent.length > EMPTY) {
+			lines.push(`${commentPrefix}${lineContent}`);
+		} else {
+			lines.push(commentPrefix.trimEnd());
+		}
+	}
+
+	const cleanedLines = removeTrailingEmptyLines(lines);
+	return cleanedLines.length > EMPTY
+		? {
+				content: cleanedLines.join('\n'),
+				lines: cleanedLines,
+				type: 'text',
+			}
+		: null;
+};
+
+/**
+ * Renders a code block token to text token with formatted lines.
+ */
+const renderCodeBlockToken = (
+	token: CodeBlockToken,
+	commentPrefix: string,
+	options: Readonly<{
+		readonly printWidth?: number;
+	}>,
+): ContentToken | null => {
+	let codeToUse = token.formattedCode ?? token.rawCode;
+	if (!token.formattedCode) {
+		codeToUse = normalizeAnnotationNamesInText(codeToUse);
+	}
+
+	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
+	const codeLines = codeToUse.trim().split('\n');
+	const resultLines: string[] = [];
+
+	for (let i = 0; i < codeLines.length; i++) {
+		const codeLine = codeLines[i] ?? '';
+		const trimmedLine = codeLine.trim();
+		resultLines.push(codeLine);
+
+		if (trimmedLine.endsWith('}') && i < codeLines.length - 1) {
+			const nextLine = codeLines[i + 1]?.trim() ?? '';
+			if (
+				nextLine.length > 0 &&
+				(nextLine.startsWith('@') ||
+					startsWithAccessModifier(nextLine))
+			) {
+				resultLines.push('');
+			}
+		}
+	}
+
+	codeToUse = resultLines.join('\n');
+	const isEmptyBlock = codeToUse.trim().length === EMPTY;
+	const lines: string[] = [];
+
+	if (isEmptyBlock) {
+		lines.push(`${commentPrefix}{@code}`);
+	} else if (codeToUse.length > EMPTY) {
+		const codeLines = codeToUse.split('\n');
+		const alreadyWrapped = codeToUse.trim().startsWith('{@code');
+		let finalCodeLines: string[];
+
+		if (alreadyWrapped) {
+			finalCodeLines = codeLines;
+			if (finalCodeLines.length === 1) {
+				const line = finalCodeLines[0];
+				if (line && line.includes(';') && line.endsWith('}')) {
+					finalCodeLines[0] = line.slice(0, -1) + ' }';
+				}
+			}
+		} else {
+			const isSingleLine = codeLines.length === 1;
+			const singleLineContent = codeLines[0]?.trim() ?? '';
+			const singleLineWithBraces = `{@code ${singleLineContent} }`;
+			const printWidth = options.printWidth ?? 80;
+			const fitsOnOneLine =
+				singleLineWithBraces.length <= printWidth - commentPrefix.length;
+
+			finalCodeLines =
+				isSingleLine && fitsOnOneLine
+					? [singleLineWithBraces]
+					: [`{@code`, ...codeLines, `}`];
+		}
+
+		for (const codeLine of finalCodeLines) {
+			lines.push(
+				codeLine.trim().length === EMPTY
+					? commentPrefix.trimEnd()
+					: `${commentPrefix}${codeLine}`,
+			);
+		}
+	}
+
+	return lines.length > EMPTY
+		? {
+				type: 'text',
+				content: lines.join('\n'),
+				lines,
+			}
+		: null;
+};
+
+/**
+ * Renders a text or paragraph token with wrapping applied.
+ */
+const renderTextOrParagraphToken = (
+	token: ContentToken,
+	commentPrefix: string,
+	effectiveWidth: number,
+	options: Readonly<{
+		readonly tabWidth: number;
+		readonly useTabs?: boolean | null | undefined;
+	}>,
+): ContentToken => {
+	const wrappedLines = wrapTextContent(
+		token.content,
+		token.lines,
+		effectiveWidth,
+		options,
+	);
+	const allLines: string[] = [];
+	for (const wrappedLine of wrappedLines) {
+		allLines.push(...wrappedLine.split('\n'));
+	}
+	const cleanedLines = removeTrailingEmptyLines(allLines);
+	const linesWithPrefix = cleanedLines.map(
+		(line: string) => `${commentPrefix}${line.trim()}`,
+	);
+	return {
+		...token,
+		content: cleanedLines.join('\n'),
+		lines: linesWithPrefix,
+	};
+};
+
+/**
  * Converts ApexDoc comment tokens (including AnnotationTokens) back into a
  * normalized comment string.
  * This function is ApexDoc-aware and knows how to render annotation tokens,
@@ -232,211 +433,30 @@ const tokensToApexDocString = (
 		readonly printWidth?: number;
 	}>,
 ): string => {
-	const commentPrefix = CommentPrefix.create(commentIndent, options);
-	// Calculate the actual prefix that will be rendered by tokensToCommentString
-	// tokensToCommentString uses the same commentIndent, so it will create the same baseIndent
-	// But Prettier adds class/body indentation when rendering (typically 2 spaces for class body)
-	// We need to account for this in effectiveWidth calculation
-	// The actual rendered prefix will be: baseIndent (from commentIndent) + bodyIndent (2 for class) + " * "
-	// When commentIndent is 0, bodyIndent is 2 (class body indentation)
-	// When commentIndent > 0, bodyIndent is already included in commentIndent
-	const bodyIndent = commentIndent === 0 ? 2 : 0;
-	const actualPrefixLength = commentPrefix.length + bodyIndent;
-	const printWidth = options.printWidth ?? 80;
-	const effectiveWidth = printWidth - actualPrefixLength;
+	const { commentPrefix, effectiveWidth } = calculatePrefixAndWidth(
+		commentIndent,
+		options.printWidth,
+		options,
+	);
 
 	const apexDocTokens: CommentToken[] = [];
 
 	for (const token of tokens) {
 		if (token.type === 'annotation') {
-			// Render AnnotationTokens as text tokens with fully formatted comment lines.
-			// tokensToCommentString will preserve lines that already start with '*'.
-			const contentLines =
-				token.content.length > EMPTY ? token.content.split('\n') : [''];
-
-			const lines: string[] = [];
-			const annotationName = token.name;
-
-			// Add followingText before annotation if it exists
-			if (
-				token.followingText &&
-				token.followingText.trim().length > EMPTY
-			) {
-				// followingText doesn't have prefixes, so add them
-				const followingLines = token.followingText
-					.split('\n')
-					.filter((line: string) => line.trim().length > EMPTY);
-				for (const line of followingLines) {
-					lines.push(`${commentPrefix}${line.trim()}`);
-				}
-			}
-
-			// First line includes the @annotation name
-			const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
-			const firstLine =
-				firstContent.length > EMPTY
-					? `${commentPrefix}@${annotationName} ${firstContent}`
-					: `${commentPrefix}@${annotationName}`;
-			lines.push(firstLine);
-
-			// Subsequent lines are continuation of the annotation content
-			for (let i = INDEX_ONE; i < contentLines.length; i++) {
-				const lineContent = contentLines[i] ?? '';
-				if (lineContent.length > EMPTY) {
-					lines.push(`${commentPrefix}${lineContent}`);
-				} else {
-					// Preserve a blank annotation continuation line
-					lines.push(commentPrefix.trimEnd());
-				}
-			}
-
-			// Remove trailing empty lines from annotation tokens to avoid extra blank lines
-			// when followed by code blocks in tokensToCommentString
-			const cleanedLines = removeTrailingEmptyLines(lines);
-
-			if (cleanedLines.length > EMPTY) {
-				apexDocTokens.push({
-					content: cleanedLines.join('\n'),
-					lines: cleanedLines,
-					type: 'text',
-				} satisfies ContentToken);
-			}
+			const rendered = renderAnnotationToken(token, commentPrefix);
+			if (rendered) apexDocTokens.push(rendered);
 		} else if (token.type === 'code') {
-			// Render CodeBlockTokens as text tokens with {@code ...} format
-			let codeToUse = token.formattedCode ?? token.rawCode;
-			// In sync version, normalize annotations in the code
-			if (!token.formattedCode) {
-				codeToUse = normalizeAnnotationNamesInText(codeToUse);
-			}
-
-			// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
-			// This preserves structure from original code (blank lines after } before annotations/methods)
-			// Apply to both formattedCode and rawCode to ensure blank lines are preserved
-			const codeLines = codeToUse.trim().split('\n');
-			const resultLines: string[] = [];
-
-			for (let i = 0; i < codeLines.length; i++) {
-				const codeLine = codeLines[i] ?? '';
-				const trimmedLine = codeLine.trim();
-				resultLines.push(codeLine);
-
-				// Insert blank line after } when followed by annotations or access modifiers
-				if (trimmedLine.endsWith('}') && i < codeLines.length - 1) {
-					const nextLine = codeLines[i + 1]?.trim() ?? '';
-					// Check if next line starts with annotation or access modifier using Set-based detection
-					if (
-						nextLine.length > 0 &&
-						(nextLine.startsWith('@') ||
-							startsWithAccessModifier(nextLine))
-					) {
-						resultLines.push('');
-					}
-				}
-			}
-
-			codeToUse = resultLines.join('\n');
-
-			// Handle empty code blocks - render {@code} even if content is empty
-			const isEmptyBlock = codeToUse.trim().length === EMPTY;
-			const lines: string[] = [];
-
-			if (isEmptyBlock) {
-				// Empty code block: render as {@code} on a single line
-				lines.push(`${commentPrefix}{@code}`);
-			} else if (codeToUse.length > EMPTY) {
-				const codeLines = codeToUse.split('\n');
-
-				// Check if the code already includes {@code} wrapper (from embed)
-				const alreadyWrapped = codeToUse.trim().startsWith('{@code');
-				let finalCodeLines: string[];
-
-				if (alreadyWrapped) {
-					// Code is already wrapped, use as-is but ensure single-line format has space before }
-					finalCodeLines = codeLines;
-					if (finalCodeLines.length === 1) {
-						const line = finalCodeLines[0];
-						if (line) {
-							// For single-line {@code} blocks ending with ;}, add space before }
-							if (line.includes(';') && line.endsWith('}')) {
-								finalCodeLines[0] = line.slice(0, -1) + ' }';
-							}
-						}
-					}
-				} else {
-					// Check if this is a single-line code block that fits within the comment width
-					const isSingleLine = codeLines.length === 1;
-					const singleLineContent = codeLines[0]?.trim() ?? '';
-					const singleLineWithBraces = `{@code ${singleLineContent} }`;
-					const printWidth = options.printWidth ?? 80;
-					const fitsOnOneLine =
-						singleLineWithBraces.length <=
-						printWidth - commentPrefix.length;
-
-					if (isSingleLine && fitsOnOneLine) {
-						// Single line format: {@code content }
-						finalCodeLines = [singleLineWithBraces];
-					} else {
-						// Multi-line format
-						finalCodeLines = [`{@code`, ...codeLines, `}`];
-					}
-				}
-
-				// Add comment prefix to each line
-				for (const codeLine of finalCodeLines) {
-					if (codeLine.trim().length === EMPTY) {
-						// Empty line - just comment prefix without trailing space
-						lines.push(commentPrefix.trimEnd());
-					} else {
-						lines.push(`${commentPrefix}${codeLine}`);
-					}
-				}
-			}
-
-			if (lines.length > EMPTY) {
-				apexDocTokens.push({
-					type: 'text',
-					content: lines.join('\n'),
-					lines,
-				} satisfies ContentToken);
-			}
-		} else if (token.type === 'text') {
-			// Wrap text tokens based on effective width
-			const wrappedLines = wrapTextContent(
-				token.content,
-				token.lines,
-				effectiveWidth,
-				options,
+			const rendered = renderCodeBlockToken(token, commentPrefix, options);
+			if (rendered) apexDocTokens.push(rendered);
+		} else if (token.type === 'text' || token.type === 'paragraph') {
+			apexDocTokens.push(
+				renderTextOrParagraphToken(
+					token,
+					commentPrefix,
+					effectiveWidth,
+					options,
+				),
 			);
-			// Split wrapped lines by newlines first (in case wrapTextContent returned multi-line strings)
-			const allLines: string[] = [];
-			for (const wrappedLine of wrappedLines) {
-				allLines.push(...wrappedLine.split('\n'));
-			}
-			const cleanedLines = removeTrailingEmptyLines(allLines);
-			// Add prefixes back to wrapped lines using commentPrefix
-			const linesWithPrefix = cleanedLines.map(
-				(line: string) => `${commentPrefix}${line.trim()}`,
-			);
-			apexDocTokens.push({
-				...token,
-				content: cleanedLines.join('\n'),
-				lines: linesWithPrefix,
-			} satisfies ContentToken);
-		} else if (token.type === 'paragraph') {
-			// Wrap paragraph tokens based on effective width
-			const wrappedLines = wrapTextContent(
-				token.content,
-				token.lines,
-				effectiveWidth,
-				options,
-			);
-			// Remove trailing empty lines to avoid extra blank lines before code blocks
-			const cleanedLines = removeTrailingEmptyLines(wrappedLines);
-			apexDocTokens.push({
-				...token,
-				content: cleanedLines.join('\n'),
-				lines: cleanedLines,
-			} satisfies ContentToken);
 		} else {
 			apexDocTokens.push(token);
 		}
@@ -492,7 +512,7 @@ const wrapTextContent = (
 	// 2. Next line starts with capital letter (new sentence/paragraph)
 	// 3. Next line is empty, annotation, or code block
 	const cleanedLines = originalLines
-		.map(removeCommentPrefix)
+		.map((line) => removeCommentPrefix(line))
 		.filter((line) => line.length > EMPTY);
 
 	const joinedParts: string[] = [];
@@ -536,7 +556,7 @@ const parseApexDocTokens = (
 	normalizedComment: Readonly<string>,
 	commentIndent: number,
 	printWidth: number,
-	options: Readonly<{
+	_options: Readonly<{
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
@@ -544,11 +564,6 @@ const parseApexDocTokens = (
 	readonly tokens: readonly CommentToken[];
 	readonly effectiveWidth: number;
 } => {
-	const baseIndent = createIndent(
-		commentIndent,
-		options.tabWidth,
-		options.useTabs,
-	);
 	const commentPrefixLength = CommentPrefix.getLength(commentIndent);
 	const effectiveWidth = printWidth - commentPrefixLength;
 
@@ -640,12 +655,15 @@ const mergeCodeBlockTokens = (
 
 							if (hasCompleteBlock) {
 								// Found complete block, create merged token
-								mergedTokens.push({
+								const mergedToken: ContentToken = {
 									type: 'paragraph',
 									content: mergedContent,
 									lines: mergedLines,
-									isContinuation: token.isContinuation, // Preserve the flag from original token
-								} satisfies ContentToken);
+									...(token.isContinuation !== undefined
+										? { isContinuation: token.isContinuation }
+										: {}),
+								};
+								mergedTokens.push(mergedToken);
 								i = j; // Skip the merged tokens
 							}
 						} else {
@@ -695,13 +713,13 @@ const applyTokenProcessingPipeline = (
 	normalizedComment?: string,
 ): readonly CommentToken[] => {
 	// Detect code blocks first to separate {@code} content from regular text
-	let processedTokens = detectCodeBlockTokens(tokens, normalizedComment);
+	let processedTokens = detectCodeBlockTokens(tokens, normalizedComment ?? '');
 
 	// Detect annotations in tokens that contain ApexDoc content
 	// Code blocks are now handled as separate tokens
 	processedTokens = detectAnnotationsInTokens(
 		processedTokens,
-		normalizedComment,
+		normalizedComment ?? '',
 	);
 
 	// Normalize annotations
@@ -741,11 +759,10 @@ const extractBeforeText = (line: string, matchIndex: number): string => {
 const collectContinuationFromComment = (
 	annotationName: string,
 	content: string,
-	line: string,
+	_line: string,
 	normalizedComment: string,
 	consumedContent: Set<string>,
 ): string => {
-	const currentLineText = line.replace(/^\s*\*\s*/, '').trim();
 	const escapedAnnotationName = annotationName.replace(
 		/[.*+?^${}()|[\]\\]/g,
 		'\\$&',
@@ -767,7 +784,7 @@ const collectContinuationFromComment = (
 	}
 	const continuationLines = continuationContent
 		.split('\n')
-		.map(removeCommentPrefix)
+		.map((line) => removeCommentPrefix(line))
 		.filter(
 			(l) =>
 				l.length > EMPTY &&
@@ -904,7 +921,7 @@ const detectAnnotationsInTokens = (
 				// Check if all non-empty lines (that aren't annotations or code blocks) were consumed
 				const tokenLinesToCheck = token.content
 					.split('\n')
-					.map(removeCommentPrefix)
+					.map((line) => removeCommentPrefix(line))
 					.filter(
 						(l) =>
 							l.length > EMPTY &&
@@ -947,12 +964,12 @@ const detectAnnotationsInTokens = (
  * Detects code blocks in tokens by scanning for {@code} patterns.
  * Converts TextToken/ParagraphToken content containing {@code} to CodeBlockTokens.
  * @param tokens - Array of comment tokens.
- * @param originalComment - The original comment string for position tracking.
+ * @param _originalComment - The original comment string for position tracking (unused but kept for API compatibility).
  * @returns Array of tokens with code blocks detected.
  */
 const detectCodeBlockTokens = (
 	tokens: readonly CommentToken[],
-	originalComment: Readonly<string>,
+	_originalComment: Readonly<string>,
 ): readonly CommentToken[] => {
 	const newTokens: CommentToken[] = [];
 
@@ -1258,18 +1275,12 @@ const normalizeAnnotationTokens = (
 				// Update lines if content changed
 				if (normalizedContent !== content) {
 					const normalizedLines = normalizedContent.split('\n');
-					if (token.type === 'text') {
+					if (token.type === 'text' || token.type === 'paragraph') {
 						return {
 							...token,
 							content: normalizedContent,
 							lines: normalizedLines,
-						} satisfies TextToken;
-					} else if (token.type === 'paragraph') {
-						return {
-							...token,
-							content: normalizedContent,
-							lines: normalizedLines,
-						} satisfies ParagraphToken;
+						} satisfies ContentToken;
 					}
 				}
 			} else {
@@ -1279,18 +1290,12 @@ const normalizeAnnotationTokens = (
 					normalizeAnnotationNamesInTextExcludingApexDoc(content);
 				if (normalizedContent !== content) {
 					const normalizedLines = normalizedContent.split('\n');
-					if (token.type === 'text') {
+					if (token.type === 'text' || token.type === 'paragraph') {
 						return {
 							...token,
 							content: normalizedContent,
 							lines: normalizedLines,
-						} satisfies TextToken;
-					} else if (token.type === 'paragraph') {
-						return {
-							...token,
-							content: normalizedContent,
-							lines: normalizedLines,
-						} satisfies ParagraphToken;
+						} satisfies ContentToken;
 					}
 				}
 			}
@@ -1303,14 +1308,14 @@ const normalizeAnnotationTokens = (
  * Wraps annotation tokens based on effective page width.
  * @param tokens - Array of comment tokens.
  * @param effectiveWidth - The effective page width (printWidth - comment prefix length).
- * @param commentIndent - The indentation level of the comment.
+ * @param _commentIndent - The indentation level of the comment (unused but kept for API compatibility).
  * @param options - Options including tabWidth and useTabs.
  * @returns Array of tokens with wrapped annotations.
  */
 const wrapAnnotationTokens = (
 	tokens: readonly CommentToken[],
 	effectiveWidth: number,
-	commentIndent: number,
+	_commentIndent: number,
 	actualPrefixLength: number,
 	options: Readonly<{
 		readonly tabWidth: number;
@@ -1375,6 +1380,7 @@ const wrapAnnotationTokens = (
 
 			while (remainingWords.length > 0) {
 				const word = remainingWords[0];
+				if (!word) break;
 				const testLine =
 					currentFirstLine === ''
 						? word
@@ -1392,7 +1398,7 @@ const wrapAnnotationTokens = (
 			}
 
 			// Use fill builder for remaining content with continuation width
-			let wrappedContent = '';
+			let wrappedContent: string | Doc = '';
 			if (firstLineWords.length > 0) {
 				wrappedContent = firstLineWords.join(' ');
 			}
@@ -1410,7 +1416,9 @@ const wrapAnnotationTokens = (
 					{
 						printWidth: continuationLineAvailableWidth,
 						tabWidth: options.tabWidth,
-						useTabs: options.useTabs,
+						...(options.useTabs !== null && options.useTabs !== undefined
+							? { useTabs: options.useTabs }
+							: {}),
 					},
 				).formatted;
 
@@ -1418,7 +1426,7 @@ const wrapAnnotationTokens = (
 				const continuationLines = continuationText
 					.split('\n')
 					.filter((line) => line.trim().length > 0);
-				const allLines = [];
+				const allLines: string[] = [];
 				if (firstLineWords.length > 0) {
 					allLines.push(firstLineWords.join(' '));
 				}
@@ -1438,7 +1446,9 @@ const wrapAnnotationTokens = (
 						continuationLineAvailableWidth,
 					),
 					tabWidth: options.tabWidth,
-					useTabs: options.useTabs,
+					...(options.useTabs !== null && options.useTabs !== undefined
+						? { useTabs: options.useTabs }
+						: {}),
 				},
 			).formatted;
 			newTokens.push({
@@ -1464,98 +1474,6 @@ export {
 	removeTrailingEmptyLines,
 };
 
-/**
- * Processes a paragraph token, handling ApexDoc formatting and {@code} embeds.
- */
-export function processParagraphToken(
-	token: import('./comments.js').ContentToken,
-	options: ParserOptions,
-	getFormattedCodeBlock: (key: string) => string | undefined,
-	commentKey: string | null,
-	embedOptions: ParserOptions,
-): string[] {
-	// Since this is called from processApexDocCommentLines, all tokens are ApexDoc
-	return processApexDocParagraph(
-		token,
-		options,
-		getFormattedCodeBlock,
-		commentKey,
-		embedOptions,
-	);
-}
-
-/**
- * Processes an ApexDoc paragraph, handling {@code} blocks.
- */
-function processApexDocParagraph(
-	token: import('./comments.js').ContentToken,
-	options: ParserOptions,
-	getFormattedCodeBlock: (key: string) => string | undefined,
-	commentKey: string | null,
-	embedOptions: ParserOptions,
-): string[] {
-	const content = token.content;
-	const lines: string[] = [];
-
-	// Process content handling {@code} blocks using token structure instead of regex splitting
-	// Use character-by-character parsing to find code block boundaries
-	const parts: string[] = [];
-	let currentPart = '';
-	let i = 0;
-	while (i < content.length) {
-		if (content.slice(i).startsWith('{@code')) {
-			// Save current part if non-empty
-			if (currentPart.trim().length > 0) {
-				parts.push(currentPart);
-				currentPart = '';
-			}
-			// Find the matching closing brace
-			let braceCount = 0;
-			let codeStart = i;
-			i += '{@code'.length;
-			while (i < content.length) {
-				if (content[i] === '{') braceCount++;
-				else if (content[i] === '}') {
-					if (braceCount === 0) {
-						// Found matching closing brace
-						parts.push(content.slice(codeStart, i + 1));
-						i++;
-						break;
-					}
-					braceCount--;
-				}
-				i++;
-			}
-		} else {
-			currentPart += content[i];
-			i++;
-		}
-	}
-	// Add remaining part
-	if (currentPart.trim().length > 0) {
-		parts.push(currentPart);
-	}
-
-	for (const part of parts) {
-		if (part.startsWith('{@code')) {
-			// This is a {@code} block
-			const codeLines = processCodeBlock(
-				part,
-				options,
-				getFormattedCodeBlock,
-				commentKey,
-				embedOptions,
-			);
-			lines.push(...codeLines);
-		} else if (part.trim()) {
-			// Regular text - split into individual lines
-			const textLines = part.split('\n');
-			lines.push(...textLines);
-		}
-	}
-
-	return lines;
-}
 
 /**
  * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.
