@@ -209,14 +209,14 @@ const parseAndReformatAnnotationString = (
 
 	if (parsedParams.length === 0) return null;
 
-	// Reformat using our normalization rules
+	// Reformat using our normalization rules (consistent with AST-based formatAnnotationValue)
 	const indent = '  '; // 2 spaces
 	const formattedParams: string[] = [];
 	for (let idx = 0; idx < parsedParams.length; idx++) {
 		const { key, value } = parsedParams[idx]!;
 		const normalizedKey = normalizeAnnotationOptionName(normalizedName, key);
-		// Use double quotes to match fixture expectations
-		const paramStr = `${normalizedKey}="${value}"`;
+		// Use single quotes to match formatAnnotationValue (AST-based formatting)
+		const paramStr = `${normalizedKey}='${value}'`;
 		if (idx < parsedParams.length - 1) {
 			formattedParams.push(`${indent}${paramStr},`);
 		} else {
