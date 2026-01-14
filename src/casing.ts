@@ -340,4 +340,5 @@ export {
 	isIdentifier,
 	isInTypeContext,
 	createTypeNormalizingPrint,
+	TYPEREF_CLASS,
 };

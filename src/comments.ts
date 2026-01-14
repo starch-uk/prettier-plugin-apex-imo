@@ -7,8 +7,12 @@ import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import type { ApexNode } from './types.js';
 import {
+	ARRAY_START_INDEX,
 	calculateEffectiveWidth,
+	EMPTY,
 	getNodeClassOptional,
+	INDEX_ONE,
+	STRING_OFFSET,
 	isEmpty,
 	isNotEmpty,
 } from './utils.js';
@@ -44,9 +48,6 @@ type DocCommentToken = DocContentToken | DocCodeBlockToken | DocAnnotationToken;
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
-const ARRAY_START_INDEX = 0;
-const STRING_OFFSET = 1;
-const INDEX_ONE = 1;
 const INDEX_TWO = 2;
 
 /**
@@ -381,7 +382,6 @@ const normalizeBlockComment = (
 	return normalizedLines.join('\n');
 };
 
-const EMPTY = 0;
 const NOT_FOUND_INDEX = -1;
 
 /**
@@ -1190,13 +1190,9 @@ export {
 	handleOwnLineComment,
 	handleEndOfLineComment,
 	handleRemainingComment,
-	ARRAY_START_INDEX,
 	DEFAULT_TAB_WIDTH,
-	INDEX_ONE,
 	INDEX_TWO,
-	STRING_OFFSET,
 	MIN_INDENT_LEVEL,
-	EMPTY,
 	NOT_FOUND_INDEX,
 };
 export type {

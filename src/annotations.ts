@@ -14,7 +14,7 @@ import {
 	APEX_ANNOTATIONS,
 	APEX_ANNOTATION_OPTION_NAMES,
 } from './refs/annotations.js';
-import { getNodeClass, createNodeClassGuard } from './utils.js';
+import { EMPTY, INDEX_ONE, getNodeClass, createNodeClassGuard } from './utils.js';
 import { findApexDocComments } from './apexdoc.js';
 
 // Annotation normalization uses regex for preprocessing text before parsing (annotation normalization).
@@ -34,8 +34,6 @@ const FALSE_ANNOTATION_VALUE_CLASS =
 const ANNOTATION_KEY_VALUE_CLASS =
 	'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue';
 const MIN_PARAMS_FOR_MULTILINE = 1;
-const ZERO_LENGTH = 0;
-const ONE_INDEX = 1;
 const STRING_START_INDEX = 0;
 const KEY_GROUP_INDEX = 1;
 const VALUE_GROUP_INDEX = 2;
@@ -136,7 +134,7 @@ const parseAndReformatAnnotationString = (
 	);
 	if (!nameMatch) return null;
 
-	const nameGroup = nameMatch[ONE_INDEX];
+	const nameGroup = nameMatch[INDEX_ONE];
 	const normalizedName = normalizeAnnotationName(nameGroup !== undefined ? nameGroup : '');
 
 	// Collect parameter lines until closing paren
@@ -165,7 +163,7 @@ const parseAndReformatAnnotationString = (
 		}
 	}
 
-	if (parsedParams.length === ZERO_LENGTH) return null;
+	if (parsedParams.length === EMPTY) return null;
 
 	// Reformat with normalization (consistent with AST-based formatAnnotationValue)
 	const indentSpaces = ' '.repeat(ANNOTATION_PARAM_INDENT);
@@ -195,7 +193,7 @@ const printAnnotation = (
 	const originalName = node.name.value;
 	const normalizedName = normalizeAnnotationName(originalName);
 	const parametersLength = node.parameters.length;
-	if (parametersLength === ZERO_LENGTH)
+	if (parametersLength === EMPTY)
 		return ['@', normalizedName, hardline];
 	const formattedParams: Doc[] = node.parameters.map((param) =>
 		formatAnnotationParam(param, originalName),
@@ -262,7 +260,7 @@ const createAnnotationReplacer =
 	() =>
 	(_match: string, name: string, params?: string): string => {
 		const normalizedName = normalizeAnnotationName(name);
-		if (params === undefined || params.length === ZERO_LENGTH)
+		if (params === undefined || params.length === EMPTY)
 			return `@${normalizedName}`;
 		return `@${normalizedName}${params.replace(
 			ANNOTATION_OPTION_REGEX,
@@ -292,7 +290,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 	const apexDocComments = findApexDocComments(text);
 	const replacer = createAnnotationReplacer();
 	// If no ApexDoc comments, process entire text
-	if (apexDocComments.length === ZERO_LENGTH) {
+	if (apexDocComments.length === EMPTY) {
 		return text.replace(ANNOTATION_REGEX, replacer);
 	}
 
@@ -322,7 +320,7 @@ const normalizeAnnotationNamesInText = (text: string): string => {
 	}
 
 	// Process non-comment segments
-	for (let i = segments.length - ONE_INDEX; i >= 0; i--) {
+	for (let i = segments.length - INDEX_ONE; i >= 0; i--) {
 		const segment = segments[i];
 		if (!segment || segment.isComment) continue;
 
@@ -382,7 +380,7 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (
 		const lowerName = name.toLowerCase();
 		// If it's an ApexDoc annotation, normalize to lowercase (not PascalCase)
 		if (apexDocAnnotationsSet.has(lowerName)) {
-			if (params === undefined || params.length === ZERO_LENGTH) {
+			if (params === undefined || params.length === EMPTY) {
 				return `@${lowerName}`;
 			}
 			return `@${lowerName}${params}`;

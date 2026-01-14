@@ -25,6 +25,7 @@ import {
 	isIdentifier,
 	isInTypeContext,
 	normalizeTypeName,
+	TYPEREF_CLASS,
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import {
@@ -35,8 +36,6 @@ import {
 	preserveBlankLineAfterClosingBrace,
 } from './utils.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
-
-const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
 const isTypeRef = createNodeClassGuard<ApexNode>(
 	(cls) =>

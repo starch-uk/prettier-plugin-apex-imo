@@ -18,15 +18,15 @@ import {
 	wrapTextToWidth,
 	CommentPrefix,
 	isContentToken,
-	ARRAY_START_INDEX,
-	INDEX_ONE,
 	INDEX_TWO,
-	STRING_OFFSET,
-	EMPTY,
 	NOT_FOUND_INDEX,
 } from './comments.js';
 import {
+	ARRAY_START_INDEX,
 	calculateEffectiveWidth,
+	EMPTY,
+	INDEX_ONE,
+	STRING_OFFSET,
 	isEmpty,
 	isNotEmpty,
 } from './utils.js';

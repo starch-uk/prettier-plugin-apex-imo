@@ -47,6 +47,9 @@ const startsWithAccessModifier = (line: string): boolean => {
 };
 
 const EMPTY = 0;
+const ARRAY_START_INDEX = 0;
+const INDEX_ONE = 1;
+const STRING_OFFSET = 1;
 
 /**
  * Checks if a value is empty (string or array).
@@ -146,7 +149,10 @@ export {
 	getNodeClassOptional,
 	createNodeClassGuard,
 	startsWithAccessModifier,
+	ARRAY_START_INDEX,
 	EMPTY,
+	INDEX_ONE,
+	STRING_OFFSET,
 	isEmpty,
 	isNotEmpty,
 	calculateEffectiveWidth,

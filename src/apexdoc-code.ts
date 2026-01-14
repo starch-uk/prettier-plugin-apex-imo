@@ -9,6 +9,8 @@ import * as prettier from 'prettier';
 import { NOT_FOUND_INDEX, removeCommentPrefix } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
 import {
+	EMPTY,
+	INDEX_ONE,
 	formatApexCodeWithFallback,
 	preserveBlankLineAfterClosingBrace,
 } from './utils.js';
@@ -18,8 +20,6 @@ const CODE_TAG = '{@code';
 const CODE_TAG_LENGTH = CODE_TAG.length;
 const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
-const ZERO_LENGTH = 0;
-const ONE_INDEX = 1;
 const COMMENT_PREFIX_LENGTH = 4;
 const CLOSING_COMMENT_LENGTH = 5;
 const ALT_CLOSING_COMMENT_LENGTH = 4;
@@ -45,7 +45,7 @@ const extractCodeFromBlock = (
 	let braceCount = INITIAL_BRACE_COUNT;
 	let pos = codeStart;
 	let lastClosingBracePos = NOT_FOUND_INDEX;
-	while (pos < text.length && braceCount > ZERO_LENGTH) {
+	while (pos < text.length && braceCount > EMPTY) {
 		if (text[pos] === '{') {
 			braceCount++;
 		} else if (text[pos] === '}') {
@@ -54,7 +54,7 @@ const extractCodeFromBlock = (
 		}
 		pos++;
 	}
-	if (braceCount !== ZERO_LENGTH) {
+	if (braceCount !== EMPTY) {
 		if (lastClosingBracePos !== NOT_FOUND_INDEX) {
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- string position offset
 			pos = lastClosingBracePos + 1;
@@ -86,14 +86,14 @@ const extractCodeFromBlock = (
 	const FIRST_LINE_INDEX = 0;
 	while (
 		codeLines.length > 0 &&
-		codeLines[FIRST_LINE_INDEX]?.trim().length === ZERO_LENGTH
+		codeLines[FIRST_LINE_INDEX]?.trim().length === EMPTY
 	) {
 		codeLines.shift();
 	}
 	const LAST_LINE_INDEX = codeLines.length - 1;
 	while (
 		codeLines.length > 0 &&
-		codeLines[LAST_LINE_INDEX]?.trim().length === ZERO_LENGTH
+		codeLines[LAST_LINE_INDEX]?.trim().length === EMPTY
 	) {
 		codeLines.pop();
 	}
@@ -115,7 +115,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	let codeBlockBraceCount = 0;
 
 	return lines.map((commentLine, index) => {
-		const prefix = index > ZERO_LENGTH ? ' ' : '';
+		const prefix = index > EMPTY ? ' ' : '';
 		const trimmedLine = commentLine.trim();
 
 		if (trimmedLine.startsWith(CODE_TAG)) {
@@ -129,7 +129,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 				if (char === '{') codeBlockBraceCount++;
 				else if (char === '}') codeBlockBraceCount--;
 			}
-			willEndCodeBlock = codeBlockBraceCount === ZERO_LENGTH;
+			willEndCodeBlock = codeBlockBraceCount === EMPTY;
 		}
 
 		if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) {
@@ -263,9 +263,9 @@ const extractCodeFromEmbedResult = (embedResult: string): string[] => {
 			i > codeStart && line != null && line === '}',
 	);
 
-	if (codeStart >= ZERO_LENGTH && codeEnd > codeStart) {
+	if (codeStart >= EMPTY && codeEnd > codeStart) {
 		return processedLines
-			.slice(codeStart + ONE_INDEX, codeEnd)
+			.slice(codeStart + INDEX_ONE, codeEnd)
 			.filter((line): line is string => typeof line === 'string');
 	}
 
@@ -297,14 +297,14 @@ function processCodeBlock(
 	if (
 		codeContent === null ||
 		codeContent === undefined ||
-		codeContent.length === ZERO_LENGTH
+		codeContent.length === EMPTY
 	) {
 		return [codeBlock];
 	}
 
 	const codeLines = codeContent.split('\n');
 
-	if (codeLines.length === ONE_INDEX) {
+	if (codeLines.length === INDEX_ONE) {
 		const separator = codeContent.trim().endsWith(';') ? ' ' : '';
 		return [`{@code ${codeContent}${separator}}`];
 	}
