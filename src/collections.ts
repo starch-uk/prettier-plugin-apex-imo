@@ -39,23 +39,15 @@ const isNestedInCollection = (
 	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
 ): boolean => {
 	const { stack } = path;
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array length check
 	if (!Array.isArray(stack) || stack.length === 0) return false;
-	// Check if any parent in the stack is a collection using AST type guards
 	for (const parent of stack) {
-		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 		if (
 			typeof parent === 'object' &&
 			parent !== null &&
-			'@class' in parent
+			'@class' in parent &&
+			(isListInit(parent as ApexNode) || isMapInit(parent as ApexNode))
 		) {
-			// Use AST type guards instead of array check
-			if (
-				isListInit(parent as ApexNode) ||
-				isMapInit(parent as ApexNode)
-			) {
-				return true;
-			}
+			return true;
 		}
 	}
 	return false;
@@ -68,25 +60,24 @@ const printEmptyList = (
 ): Doc => {
 	const typeName = isSet ? 'Set' : 'List';
 	const typeSeparator: Doc = isSet ? [',', softline] : '.';
-	const typeDoc: Doc = isNested
-		? group([typeName, '<', join(typeSeparator, printedTypes), '>'])
-		: [typeName, '<', join(typeSeparator, printedTypes), '>'];
-	return [typeDoc, '{}'];
+	const typeDoc: Doc = [
+		typeName,
+		'<',
+		join(typeSeparator, printedTypes),
+		'>',
+	];
+	return [isNested ? group(typeDoc) : typeDoc, '{}'];
 };
 
 const printEmptyMap = (
 	printedTypes: readonly Doc[],
-	isNested: boolean,
+	_isNested: boolean,
 ): Doc => {
-	const typeDoc: Doc = isNested
-		? group(['Map<', join([', ', softline], printedTypes), '>'])
-		: group([
-				'Map<',
-				softline,
-				join([', ', softline], printedTypes),
-				softline,
-				'>',
-			]);
+	const typeDoc: Doc = group([
+		'Map<',
+		join([', ', softline], printedTypes),
+		'>',
+	]);
 	return [typeDoc, '{}'];
 };
 
@@ -107,7 +98,9 @@ const printList = ({
 }): Doc => {
 	const { node } = path;
 	const isSet = nodeClass === SET_LITERAL_CLASS;
-	const isEmpty = !Array.isArray(node.values) || node.values.length === EMPTY_ARRAY_LENGTH;
+	const isEmpty =
+		!Array.isArray(node.values) ||
+		node.values.length === EMPTY_ARRAY_LENGTH;
 
 	if (isEmpty) {
 		return printEmptyList(printedTypes, isSet, isNested);
@@ -119,9 +112,13 @@ const printList = ({
 
 	const typeSeparator: Doc = isSet ? [',', softline] : '.';
 	const typeName = isSet ? 'Set' : 'List';
-	const typeDoc: Doc = isNested
-		? group([typeName, '<', join(typeSeparator, printedTypes), '>'])
-		: [typeName, '<', join(typeSeparator, printedTypes), '>'];
+	const baseTypeDoc: Doc = [
+		typeName,
+		'<',
+		join(typeSeparator, printedTypes),
+		'>',
+	];
+	const typeDoc: Doc = isNested ? group(baseTypeDoc) : baseTypeDoc;
 	return [
 		typeDoc,
 		'{',
@@ -148,7 +145,8 @@ const printMap = ({
 	readonly isNested: boolean;
 }): Doc => {
 	const node = path.node;
-	const isEmpty = !Array.isArray(node.pairs) || node.pairs.length === EMPTY_ARRAY_LENGTH;
+	const isEmpty =
+		!Array.isArray(node.pairs) || node.pairs.length === EMPTY_ARRAY_LENGTH;
 
 	if (isEmpty) {
 		return printEmptyMap(printedTypes, isNested);
@@ -158,9 +156,12 @@ const printMap = ({
 		return originalPrint();
 	}
 
-	const typeDoc: Doc = isNested
-		? group(['Map<', join([', ', softline], printedTypes), '>'])
-		: ['Map<', join([', ', softline], printedTypes), '>'];
+	const baseTypeDoc: Doc = [
+		'Map<',
+		join([', ', softline], printedTypes),
+		'>',
+	];
+	const typeDoc: Doc = isNested ? group(baseTypeDoc) : baseTypeDoc;
 	return [
 		typeDoc,
 		'{',

@@ -174,7 +174,8 @@ const normalizeSingleApexDocComment = (
 			useTabs: options.useTabs,
 		});
 		// Account for body indentation when commentIndent is 0
-		const bodyIndent = commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
+		const bodyIndent =
+			commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
 		const actualPrefixLength = commentPrefix.length + bodyIndent;
 		const annotationEffectiveWidth = printWidth - actualPrefixLength;
 
@@ -209,7 +210,6 @@ const normalizeSingleApexDocComment = (
 	const { join, hardline } = prettier.doc.builders;
 	return join(hardline, lines);
 };
-
 
 /**
  * Converts ApexDoc comment tokens (including AnnotationTokens) back into a
@@ -494,17 +494,20 @@ const wrapTextContent = (
 	const cleanedLines = originalLines
 		.map(removeCommentPrefix)
 		.filter((line) => line.length > EMPTY);
-	
+
 	const joinedParts: string[] = [];
 	for (let i = 0; i < cleanedLines.length; i++) {
 		const currentLine = cleanedLines[i]?.trim() ?? '';
 		const nextLine = cleanedLines[i + 1]?.trim() ?? '';
-		
+
 		// Check if we should join with next line
 		const currentEndsWithPeriod = currentLine.endsWith('.');
 		const nextStartsWithCapital = nextLine && /^[A-Z]/.test(nextLine);
-		const shouldJoin = !currentEndsWithPeriod && !nextStartsWithCapital && nextLine.length > 0;
-		
+		const shouldJoin =
+			!currentEndsWithPeriod &&
+			!nextStartsWithCapital &&
+			nextLine.length > 0;
+
 		if (shouldJoin && i < cleanedLines.length - 1) {
 			// Join current and next line
 			joinedParts.push(`${currentLine} ${nextLine}`);
@@ -513,7 +516,7 @@ const wrapTextContent = (
 			joinedParts.push(currentLine);
 		}
 	}
-	
+
 	const textContent = joinedParts.join(' ');
 
 	// Use unified wrapping function
@@ -726,7 +729,6 @@ const extractBeforeText = (line: string, matchIndex: number): string => {
 	return beforeText;
 };
 
-
 /**
  * Collects continuation lines for an annotation from normalizedComment.
  * @param annotationName - The annotation name.
@@ -810,7 +812,6 @@ const collectContinuationFromTokenLines = (
 	}
 	return { annotationContent, nextIndex: continuationIndex - 1 };
 };
-
 
 /**
  * Detects annotations in tokens and converts TextTokens/ParagraphTokens to AnnotationTokens.
@@ -1010,14 +1011,14 @@ const detectCodeBlockTokens = (
 												line.trim().length > 0,
 										);
 									if (splitLines.length > 0) {
-									newTokens.push({
-										type: 'text',
-										content: cleanedText,
-										lines: splitLines.map(
-											(line: string) =>
-												`${prefix}${line.trim()}`,
-										),
-									} satisfies ContentToken);
+										newTokens.push({
+											type: 'text',
+											content: cleanedText,
+											lines: splitLines.map(
+												(line: string) =>
+													`${prefix}${line.trim()}`,
+											),
+										} satisfies ContentToken);
 									}
 								} else {
 									// For text tokens, content now preserves prefixes from token.lines
@@ -1344,7 +1345,12 @@ const wrapAnnotationTokens = (
 			let currentWord = '';
 			for (let i = 0; i < annotationContent.length; i++) {
 				const char = annotationContent[i];
-				if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+				if (
+					char === ' ' ||
+					char === '\t' ||
+					char === '\n' ||
+					char === '\r'
+				) {
 					if (currentWord.length > 0) {
 						words.push(currentWord);
 						currentWord = '';
@@ -1369,8 +1375,14 @@ const wrapAnnotationTokens = (
 
 			while (remainingWords.length > 0) {
 				const word = remainingWords[0];
-				const testLine = currentFirstLine === '' ? word : `${currentFirstLine} ${word}`;
-				if (prettier.util.getStringWidth(testLine) <= firstLineAvailableWidth) {
+				const testLine =
+					currentFirstLine === ''
+						? word
+						: `${currentFirstLine} ${word}`;
+				if (
+					prettier.util.getStringWidth(testLine) <=
+					firstLineAvailableWidth
+				) {
 					firstLineWords.push(word);
 					currentFirstLine = testLine;
 					remainingWords.shift();
@@ -1388,30 +1400,47 @@ const wrapAnnotationTokens = (
 			if (remainingWords.length > 0) {
 				// Use fill for continuation lines with full effectiveWidth
 				const continuationFill = prettier.doc.builders.fill(
-					prettier.doc.builders.join(prettier.doc.builders.line, remainingWords)
+					prettier.doc.builders.join(
+						prettier.doc.builders.line,
+						remainingWords,
+					),
 				);
-				const continuationText = prettier.doc.printer.printDocToString(continuationFill, {
-					printWidth: continuationLineAvailableWidth,
-					tabWidth: options.tabWidth,
-					useTabs: options.useTabs,
-				}).formatted;
+				const continuationText = prettier.doc.printer.printDocToString(
+					continuationFill,
+					{
+						printWidth: continuationLineAvailableWidth,
+						tabWidth: options.tabWidth,
+						useTabs: options.useTabs,
+					},
+				).formatted;
 
 				// Combine first line and continuation lines
-				const continuationLines = continuationText.split('\n').filter((line) => line.trim().length > 0);
+				const continuationLines = continuationText
+					.split('\n')
+					.filter((line) => line.trim().length > 0);
 				const allLines = [];
 				if (firstLineWords.length > 0) {
 					allLines.push(firstLineWords.join(' '));
 				}
 				allLines.push(...continuationLines);
 
-				wrappedContent = prettier.doc.builders.join(prettier.doc.builders.hardline, allLines);
+				wrappedContent = prettier.doc.builders.join(
+					prettier.doc.builders.hardline,
+					allLines,
+				);
 			}
 
-			const newContent = prettier.doc.printer.printDocToString(wrappedContent, {
-				printWidth: Math.max(firstLineAvailableWidth, continuationLineAvailableWidth),
-				tabWidth: options.tabWidth,
-				useTabs: options.useTabs,
-			}).formatted;
+			const newContent = prettier.doc.printer.printDocToString(
+				wrappedContent,
+				{
+					printWidth: Math.max(
+						firstLineAvailableWidth,
+						continuationLineAvailableWidth,
+					),
+					tabWidth: options.tabWidth,
+					useTabs: options.useTabs,
+				},
+			).formatted;
 			newTokens.push({
 				...token,
 				content: newContent,
@@ -1527,7 +1556,6 @@ function processApexDocParagraph(
 
 	return lines;
 }
-
 
 /**
  * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.

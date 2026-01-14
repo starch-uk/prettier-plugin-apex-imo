@@ -28,11 +28,11 @@ import {
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import {
+	getNodeClass,
 	getNodeClassOptional,
 	createNodeClassGuard,
 	startsWithAccessModifier,
 } from './utils.js';
-import { ARRAY_START_INDEX } from './comments.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
 
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
@@ -105,7 +105,6 @@ const makeTypeDocBreakable = (
 		}
 		return result;
 	}
-
 
 	return typeDoc;
 };
@@ -289,36 +288,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 							}
 						}
 
-						// #region agent log
-						// Debug: capture how code inside {@code} is formatted, especially for InvocableMethod annotations.
-						// H4: Prettier.format inside embed is not producing indented parameters even though printAnnotation uses multiline layout.
-						// eslint-disable-next-line no-void
-						void fetch(
-							'http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',
-							{
-								method: 'POST',
-								headers: { 'Content-Type': 'application/json' },
-								body: JSON.stringify({
-									sessionId: 'debug-session',
-									runId: 'invocable-codeblock',
-									hypothesisId: 'H4',
-									location: 'src/printer.ts:embed:formattedCode:before',
-									message: 'embed formattedCode for {@code} block (before InvocableMethod normalization)',
-									data: {
-										hasInvocable:
-											typeof formattedCode === 'string' &&
-											formattedCode.includes('@InvocableMethod'),
-										lines:
-											typeof formattedCode === 'string'
-												? formattedCode.split('\n')
-												: [],
-									},
-									timestamp: Date.now(),
-								}),
-							},
-						).catch(() => {});
-						// #endregion agent log
-
 						// Normalize multiline annotations (2+ parameters) to use the same formatting
 						// as our AST-based printAnnotation logic. This ensures consistency between
 						// regular Apex files and {@code} blocks (which are formatted via string-based path).
@@ -331,17 +300,25 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 								const trimmed = line.trim();
 
 								// Check if this line starts a multiline annotation (any annotation with parameters)
-								if (trimmed.startsWith('@') && trimmed.includes('(')) {
-									const reformatted = parseAndReformatAnnotationString(
-										trimmed,
-										lines,
-										i,
-									);
+								if (
+									trimmed.startsWith('@') &&
+									trimmed.includes('(')
+								) {
+									const reformatted =
+										parseAndReformatAnnotationString(
+											trimmed,
+											lines,
+											i,
+										);
 
 									if (reformatted) {
 										// Count how many lines the original annotation occupied
 										let originalLineCount = 1;
-										for (let j = i + 1; j < lines.length; j++) {
+										for (
+											let j = i + 1;
+											j < lines.length;
+											j++
+										) {
 											const nextLine = lines[j] ?? '';
 											const nextTrimmed = nextLine.trim();
 											originalLineCount++;
@@ -354,7 +331,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 										}
 
 										// Replace original annotation with reformatted version
-										lines.splice(i, originalLineCount, ...reformatted);
+										lines.splice(
+											i,
+											originalLineCount,
+											...reformatted,
+										);
 										modified = true;
 										// Skip past the reformatted annotation
 										i += reformatted.length - 1;
@@ -364,33 +345,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 							if (modified) {
 								formattedCode = lines.join('\n');
-
-								// #region agent log
-								// Debug: capture normalized annotation block after our string-level adjustment.
-								// eslint-disable-next-line no-void
-								void fetch(
-									'http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',
-									{
-										method: 'POST',
-										headers: { 'Content-Type': 'application/json' },
-										body: JSON.stringify({
-											sessionId: 'debug-session',
-											runId: 'invocable-codeblock',
-											hypothesisId: 'H5',
-											location: 'src/printer.ts:embed:formattedCode:after',
-											message:
-												'embed formattedCode for {@code} block (after annotation normalization)',
-											data: {
-												lines:
-													typeof formattedCode === 'string'
-														? formattedCode.split('\n')
-														: [],
-											},
-											timestamp: Date.now(),
-										}),
-									},
-								).catch(() => {});
-								// #endregion agent log
 							}
 						}
 
@@ -589,12 +543,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const value = (assignment as { value?: unknown }).value;
 			if (!value || typeof value !== 'object' || !('@class' in value))
 				return false;
-			const valueClass = (value as { '@class': unknown })['@class'];
-			if (
-				typeof valueClass !== 'string' ||
-				valueClass !== 'apex.jorje.data.ast.Expr$NewExpr'
-			)
-				return false;
+			const valueClass = getNodeClassOptional(value as ApexNode);
+			if (valueClass !== 'apex.jorje.data.ast.Expr$NewExpr') return false;
 			const creator = (value as { creator?: unknown }).creator;
 			if (
 				!creator ||
@@ -602,15 +552,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				!('@class' in creator)
 			)
 				return false;
-			const creatorClass = (creator as { '@class': unknown })['@class'];
+			const creatorClass = getNodeClassOptional(creator as ApexNode);
 			return (
-				typeof creatorClass === 'string' &&
-				(creatorClass ===
+				creatorClass ===
 					'apex.jorje.data.ast.NewObject$NewListLiteral' ||
-					creatorClass ===
-						'apex.jorje.data.ast.NewObject$NewSetLiteral' ||
-					creatorClass ===
-						'apex.jorje.data.ast.NewObject$NewMapLiteral')
+				creatorClass ===
+					'apex.jorje.data.ast.NewObject$NewSetLiteral' ||
+				creatorClass === 'apex.jorje.data.ast.NewObject$NewMapLiteral'
 			);
 		};
 
@@ -657,40 +605,38 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
 			if (typeof typeDocToCheck === 'string') {
-				return (
-					typeDocToCheck.startsWith('Map<') &&
-					typeDocToCheck.includes('Map<')
-				);
+				return typeDocToCheck.includes('Map<');
 			}
-			if (Array.isArray(typeDocToCheck)) {
-				const first = typeDocToCheck[ARRAY_START_INDEX];
-				const isMap =
-					first === 'Map' ||
-					(Array.isArray(first) &&
-						first[ARRAY_START_INDEX] === 'Map');
-				if (!isMap) return false;
-				if (
-					typeDocToCheck.length > 2 &&
-					Array.isArray(typeDocToCheck[2])
-				) {
-					const params = typeDocToCheck[2] as unknown[];
-					const hasNestedMap = (param: unknown): boolean => {
-						if (typeof param === 'string')
-							return param.includes('Map<');
-						if (Array.isArray(param)) {
-							const first = param[ARRAY_START_INDEX];
-							if (first === 'Map') return true;
-							if (
-								Array.isArray(first) &&
-								first[ARRAY_START_INDEX] === 'Map'
-							)
-								return true;
-							return param.some((item) => hasNestedMap(item));
-						}
-						return false;
-					};
-					return params.some((param) => hasNestedMap(param));
-				}
+			if (!Array.isArray(typeDocToCheck)) return false;
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+			const first = typeDocToCheck[0];
+			const isMap =
+				first === 'Map' ||
+				(Array.isArray(first) &&
+					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+					first[0] === 'Map');
+			if (!isMap) return false;
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+			if (typeDocToCheck.length > 2 && Array.isArray(typeDocToCheck[2])) {
+				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+				const params = typeDocToCheck[2] as unknown[];
+				const hasNestedMap = (param: unknown): boolean => {
+					if (typeof param === 'string') return param.includes('Map<');
+					if (Array.isArray(param)) {
+						// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+						const paramFirst = param[0];
+						if (paramFirst === 'Map') return true;
+						if (
+							Array.isArray(paramFirst) &&
+							// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+							paramFirst[0] === 'Map'
+						)
+							return true;
+						return param.some((item) => hasNestedMap(item));
+					}
+					return false;
+				};
+				return params.some((param) => hasNestedMap(param));
 			}
 			return false;
 		};
@@ -843,51 +789,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			.originalText;
 		const { node } = path;
 		const nodeClass = getNodeClassOptional(node);
-
-		// #region agent log
-		// Debug: trace when customPrint sees annotation nodes, especially in {@code}/apex-anonymous runs.
-		// H1: customPrint/printAnnotation is not used for annotations inside {@code} embed formatting.
-		// eslint-disable-next-line no-void
-		void fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				sessionId: 'debug-session',
-				runId: 'invocable-codeblock',
-				hypothesisId: 'H1',
-				location: 'src/printer.ts:customPrint:entry',
-				message: 'customPrint entry',
-				data: {
-					nodeClass,
-					isAnnotationNode: isAnnotation(node),
-				},
-				timestamp: Date.now(),
-			}),
-		}).catch(() => {});
-		// #endregion agent log
 		const typeNormalizingPrint = createTypeNormalizingPrint(print);
 		const fallback = (): Doc =>
 			originalPrinter.print(path, options, typeNormalizingPrint);
 
 		if (isAnnotation(node)) {
-			// #region agent log
-			// Debug: confirm annotation printing path is taken
-			// eslint-disable-next-line no-void
-			void fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					sessionId: 'debug-session',
-					runId: 'invocable-codeblock',
-					hypothesisId: 'H1',
-					location: 'src/printer.ts:customPrint:annotation',
-					message: 'customPrint is delegating to printAnnotation',
-					data: { nodeClass },
-					timestamp: Date.now(),
-				}),
-			}).catch(() => {});
-			// #endregion agent log
-
 			return printAnnotation(
 				path as Readonly<AstPath<ApexAnnotationNode>>,
 			);

@@ -36,19 +36,11 @@ const createNodeClassGuard = <T extends ApexNode>(
 
 const startsWithAccessModifier = (line: string): boolean => {
 	const trimmed = line.trim();
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers
 	if (trimmed.length === 0) return false;
-	// Find first word without regex - find first whitespace or end of string
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-	let firstWordEnd = 0;
-	while (
-		firstWordEnd < trimmed.length &&
-		trimmed[firstWordEnd] !== ' ' &&
-		trimmed[firstWordEnd] !== '\t'
-	) {
-		firstWordEnd++;
-	}
-	const firstWord = trimmed.substring(0, firstWordEnd).toLowerCase();
+	const spaceIndex = trimmed.search(/\s/);
+	const firstWord = (
+		spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex)
+	).toLowerCase();
 	return DECLARATION_MODIFIERS_SET.has(firstWord);
 };
 

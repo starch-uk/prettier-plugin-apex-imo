@@ -6,12 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import * as prettier from 'prettier';
 import type { ParserOptions } from 'prettier';
-import {
-	ARRAY_START_INDEX,
-	STRING_OFFSET,
-	NOT_FOUND_INDEX,
-	removeCommentPrefix,
-} from './comments.js';
+import { NOT_FOUND_INDEX, removeCommentPrefix } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
 import { startsWithAccessModifier } from './utils.js';
 import type { CodeBlockToken } from './comments.js';
@@ -20,19 +15,11 @@ const CODE_TAG = '{@code';
 const CODE_TAG_LENGTH = CODE_TAG.length;
 const EMPTY_CODE_TAG = '{@code}';
 const INITIAL_BRACE_COUNT = 1;
-const LAST_INDEX_OFFSET = 1;
 const ZERO_LENGTH = 0;
 const ONE_INDEX = 1;
 const COMMENT_PREFIX_LENGTH = 4;
-/** Length of closing comment with newline */
 const CLOSING_COMMENT_LENGTH = 5;
-/** Length of alternative closing comment */
 const ALT_CLOSING_COMMENT_LENGTH = 4;
-/** String start index for slice operations */
-const STRING_START_INDEX = 0;
-/** First array index */
-const FIRST_INDEX = 0;
-/** Skip first two lines in processed lines */
 const SKIP_FIRST_TWO_LINES = 2;
 
 /**
@@ -64,18 +51,16 @@ const extractCodeFromBlock = (
 		}
 		pos++;
 	}
-	// If braces don't match but we found a closing brace, use it as the end position
-	// This preserves invalid code blocks with unmatched brackets
 	if (braceCount !== ZERO_LENGTH) {
 		if (lastClosingBracePos !== NOT_FOUND_INDEX) {
-			// Use the last closing brace position as the end, preserving the invalid code
-			pos = lastClosingBracePos + STRING_OFFSET;
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- string position offset
+			pos = lastClosingBracePos + 1;
 		} else {
-			// No closing brace found, return null
 			return null;
 		}
 	}
-	const rawCode = text.substring(codeStart, pos - STRING_OFFSET);
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- string position offset
+	const rawCode = text.substring(codeStart, pos - 1);
 	const code = rawCode.includes('*')
 		? rawCode
 				.split('\n')
@@ -95,15 +80,14 @@ const extractCodeFromBlock = (
 	// Preserve blank lines: remove only leading/trailing blank lines, keep middle ones
 	// Split into lines to process leading/trailing separately
 	const codeLines = code.split('\n');
-	// Remove leading blank lines
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-	while (codeLines.length > ZERO_LENGTH && codeLines[0]?.trim().length === ZERO_LENGTH) {
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+	while (codeLines.length > 0 && codeLines[0]?.trim().length === 0) {
 		codeLines.shift();
 	}
-	// Remove trailing blank lines
 	while (
-		codeLines.length > ZERO_LENGTH &&
-		codeLines[codeLines.length - ONE_INDEX]?.trim().length === ZERO_LENGTH
+		codeLines.length > 0 &&
+		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+		codeLines[codeLines.length - 1]?.trim().length === 0
 	) {
 		codeLines.pop();
 	}
@@ -125,7 +109,8 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	let codeBlockBraceCount = 0;
 
 	return lines.map((commentLine, index) => {
-		const prefix = index > ARRAY_START_INDEX ? ' ' : '';
+		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+		const prefix = index > 0 ? ' ' : '';
 		const trimmedLine = commentLine.trim();
 
 		if (trimmedLine.startsWith(CODE_TAG)) {
@@ -137,6 +122,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 		if (inCodeBlock) {
 			for (const char of trimmedLine) {
 				if (char === '{') codeBlockBraceCount++;
+				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- brace count comparison
 				else if (char === '}') codeBlockBraceCount--;
 			}
 			willEndCodeBlock = codeBlockBraceCount === ZERO_LENGTH;
@@ -153,10 +139,12 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 		if (trimmedLine === '}') {
 			return prefix + commentLine.trimStart();
 		}
-		if (index < lines.length - LAST_INDEX_OFFSET) {
-			return prefix + commentLine.trim();
-		}
-		return prefix + commentLine.trimStart();
+		return (
+			prefix +
+			(index < lines.length - 1
+				? commentLine.trim()
+				: commentLine.trimStart())
+		);
 	});
 };
 
@@ -203,8 +191,8 @@ const preserveBlankLinesAfterBraces = (formatted: string): string => {
 		resultLines.push(formattedLine);
 
 		// Insert blank line after } when followed by annotations or access modifiers
-		if (trimmedLine.endsWith('}') && i < formattedLines.length - ONE_INDEX) {
-			const nextLine = formattedLines[i + ONE_INDEX]?.trim() ?? '';
+		if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
+			const nextLine = formattedLines[i + 1]?.trim() ?? '';
 			// Check if next line starts with annotation or access modifier using Set-based detection
 			if (
 				nextLine.length > ZERO_LENGTH &&
@@ -283,11 +271,12 @@ function processCodeBlock(
 	if (!match) return [codeBlock];
 
 	const [, codeContent] = match;
-	if (codeContent == null) return [codeBlock];
-	if (!codeContent) return [codeBlock];
+	if (codeContent === null || codeContent === undefined || !codeContent)
+		return [codeBlock];
 
 	const codeLines = codeContent.split('\n');
 
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- single line check
 	if (codeLines.length === ONE_INDEX) {
 		// Single line - add space before closing } if content ends with ;
 		const separator = codeContent.trim().endsWith(';') ? ' ' : '';
@@ -306,9 +295,12 @@ function processCodeBlock(
 				embedContent = embedContent.substring(COMMENT_PREFIX_LENGTH); // Remove '/**\n'
 			}
 			if (embedContent.endsWith('\n */\n')) {
-				embedContent = embedContent.slice(STRING_START_INDEX, -CLOSING_COMMENT_LENGTH); // Remove '\n */\n'
+				embedContent = embedContent.slice(0, -CLOSING_COMMENT_LENGTH);
 			} else if (embedContent.endsWith('\n */')) {
-				embedContent = embedContent.slice(STRING_START_INDEX, -ALT_CLOSING_COMMENT_LENGTH); // Remove '\n */'
+				embedContent = embedContent.slice(
+					0,
+					-ALT_CLOSING_COMMENT_LENGTH,
+				);
 			}
 
 			// Extract base indentation from the first code line (spaces before *)
@@ -337,14 +329,15 @@ function processCodeBlock(
 
 			// Find the {@code block
 			const codeStart = processedLines.findIndex(
-				(line: string | undefined) => line != null && line.startsWith('{@code'),
+				(line: string | undefined) =>
+					line != null && line.startsWith('{@code'),
 			);
 			const codeEnd = processedLines.findIndex(
 				(line: string | undefined, i: number) =>
 					i > codeStart && line != null && line === '}',
 			);
 
-			if (codeStart >= FIRST_INDEX && codeEnd > codeStart) {
+			if (codeStart >= 0 && codeEnd > codeStart) {
 				const extractedCodeLines = processedLines
 					.slice(codeStart + ONE_INDEX, codeEnd)
 					.filter((line): line is string => typeof line === 'string');
@@ -356,8 +349,7 @@ function processCodeBlock(
 			// Fallback
 			return [
 				`{@code`,
-				...processedLines
-					.slice(SKIP_FIRST_TWO_LINES),
+				...processedLines.slice(SKIP_FIRST_TWO_LINES),
 				`}`,
 			];
 		} else {

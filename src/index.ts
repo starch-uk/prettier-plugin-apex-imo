@@ -25,14 +25,10 @@ import {
 
 const APEX_PARSERS = ['apex', 'apex-anonymous'] as const;
 const APEX_PARSERS_SET = new Set<string>(APEX_PARSERS);
-
 const APEX_PRINTER_ERROR_MESSAGE =
 	'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. The apex printer was not found.';
 
-const getApexPrinter = (): Parameters<
-	typeof createWrappedPrinter
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- type parameter index must be literal 0
->[0] => {
+const getApexPrinter = (): Parameters<typeof createWrappedPrinter>[0] => {
 	const apexPrinter = (apexPlugin as { printers?: { apex?: unknown } })
 		.printers?.apex;
 	if (
@@ -42,10 +38,7 @@ const getApexPrinter = (): Parameters<
 	) {
 		throw new Error(APEX_PRINTER_ERROR_MESSAGE);
 	}
-	return apexPrinter as Parameters<
-		typeof createWrappedPrinter
-		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- type parameter index must be literal 0
-	>[0];
+	return apexPrinter as Parameters<typeof createWrappedPrinter>[0];
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -131,11 +124,11 @@ const wrappedPrinter = {
  */
 const isApexParser = (
 	parser: string | undefined,
-): parser is (typeof APEX_PARSERS)[number] => {
-	if (typeof parser !== 'string') return false;
-	if (parser === 'apex' || parser === 'apex-anonymous') return true;
-	return APEX_PARSERS_SET.has(parser);
-};
+): parser is (typeof APEX_PARSERS)[number] =>
+	typeof parser === 'string' &&
+	(parser === 'apex' ||
+		parser === 'apex-anonymous' ||
+		APEX_PARSERS_SET.has(parser));
 
 const wrapParsers = (
 	parsers: Readonly<Plugin<ApexNode>['parsers']>,
@@ -147,7 +140,6 @@ const wrapParsers = (
 		if (!Object.prototype.hasOwnProperty.call(parsers, parserName))
 			continue;
 		const originalParser = parsers[parserName];
-		// originalParser can be undefined even after hasOwnProperty check
 		if (
 			originalParser === undefined ||
 			typeof originalParser.parse !== 'function'
@@ -158,9 +150,7 @@ const wrapParsers = (
 			parse: async (
 				text: Readonly<string>,
 				options: Readonly<ParserOptions<ApexNode>>,
-			): Promise<ApexNode> =>
-				// Parse raw text
-				originalParser.parse(text, options),
+			): Promise<ApexNode> => originalParser.parse(text, options),
 		};
 	}
 	return wrappedParsers as Plugin<ApexNode>['parsers'];

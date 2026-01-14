@@ -21,7 +21,7 @@ import { getNodeClassOptional } from './utils.js';
 const SLICE_START_INDEX = 0;
 
 const normalizeStandardObjectType = (typeName: string): string =>
-	typeof typeName === 'string' && typeName
+	typeName
 		? (STANDARD_OBJECTS[typeName.toLowerCase()] ?? typeName)
 		: typeName;
 
@@ -89,14 +89,14 @@ const FROM_EXPR_CLASS = 'apex.jorje.data.ast.FromExpr';
 const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 
 const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
-	// Use AST traversal - check node @class property directly
 	for (const item of stack) {
 		if (typeof item === 'object' && item !== null && '@class' in item) {
-			const nodeClass = getNodeClassOptional(item as Record<string, unknown>);
-			// eslint-disable-next-line @typescript-eslint/prefer-optional-chain
+			const nodeClass = getNodeClassOptional(
+				item as Record<string, unknown>,
+			);
 			if (
 				nodeClass === FROM_EXPR_CLASS ||
-				(nodeClass != null && nodeClass.includes('FromExpr'))
+				nodeClass?.includes('FromExpr')
 			) {
 				return true;
 			}
@@ -145,9 +145,7 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	if (stack.length < STACK_PARENT_OFFSET) return false;
 
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-	const parent = stack[
-		stack.length - STACK_PARENT_OFFSET
-	];
+	const parent = stack[stack.length - STACK_PARENT_OFFSET];
 	if (typeof parent !== 'object' || parent == null) return false;
 	const parentClass = getNodeClassOptional(parent);
 	const hasTypesArray =
@@ -156,7 +154,7 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 		Array.isArray(parent.types);
 
 	if (!isTypeRelatedParentClass(parentClass) && !hasTypesArray) return false;
-	return key !== 'name' || !(parentClass != null && parentClass.includes('Variable'));
+	return key !== 'name' || !parentClass?.includes('Variable');
 };
 
 interface ShouldNormalizeTypeParams {
@@ -188,19 +186,14 @@ function shouldNormalizeType(
 	params: Readonly<ShouldNormalizeTypeParams>,
 ): boolean {
 	const { forceTypeContext, parentKey, key, path } = params;
-	// Explicitly check for type-related keys (variable declarations, constructor calls)
-	const isTypeKey =
-		typeof key === 'string' &&
-		(key.toLowerCase() === 'type' ||
-			key.toLowerCase() === 'typeref' ||
-			key === 'types');
-	return (
-		forceTypeContext ||
-		parentKey === 'types' ||
-		key === 'names' ||
-		isTypeKey ||
-		isInTypeContext(path)
-	);
+	if (forceTypeContext || parentKey === 'types' || key === 'names')
+		return true;
+	if (typeof key === 'string') {
+		const lowerKey = key.toLowerCase();
+		if (lowerKey === 'type' || lowerKey === 'typeref' || key === 'types')
+			return true;
+	}
+	return isInTypeContext(path);
 }
 
 /**

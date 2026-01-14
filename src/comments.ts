@@ -34,10 +34,7 @@ interface DocAnnotationToken {
 	readonly followingText?: Doc;
 }
 
-type DocCommentToken =
-	| DocContentToken
-	| DocCodeBlockToken
-	| DocAnnotationToken;
+type DocCommentToken = DocContentToken | DocCodeBlockToken | DocAnnotationToken;
 
 /**
  * Utility functions for converting legacy tokens to Doc-based tokens
@@ -52,7 +49,7 @@ const tokenConverters = {
 		const { join, hardline } = prettier.doc.builders;
 
 		// Convert lines to Doc - each line becomes a string, joined with hardlines
-		const docLines: Doc[] = token.lines.map(line => line);
+		const docLines: Doc[] = token.lines.map((line) => line);
 
 		return {
 			type: token.type,
@@ -105,7 +102,7 @@ const tokenConverters = {
 					hardline,
 					indentedContent,
 					hardline,
-					'}'
+					'}',
 				]),
 			};
 		}
@@ -248,7 +245,6 @@ const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
 	addTrailingComment(binaryExpr.right, comment);
 	return true;
 };
-
 
 const getIndentLevel = (
 	line: Readonly<string>,
@@ -419,7 +415,6 @@ const normalizeCommentLine = (
 	return `${baseIndent} * ${codeBlockIndent}${afterAsterisk}`;
 };
 
-
 /**
  * Normalizes a block comment to standard format.
  * Handles malformed comments by normalizing markers, asterisks, and indentation.
@@ -490,7 +485,11 @@ const CommentPrefix = {
 			readonly useTabs?: boolean | null | undefined;
 		}>,
 	): string => {
-		const baseIndent = createIndent(indentLevel, options.tabWidth, options.useTabs);
+		const baseIndent = createIndent(
+			indentLevel,
+			options.tabWidth,
+			options.useTabs,
+		);
 		return `${baseIndent} * `;
 	},
 
@@ -503,7 +502,6 @@ const CommentPrefix = {
 		return indentLevel + ' * '.length;
 	},
 };
-
 
 // Token type definitions for comment processing
 //
@@ -544,10 +542,7 @@ interface AnnotationToken {
 }
 
 /** @deprecated Use DocCommentToken instead - legacy string-based token union */
-type CommentToken =
-	| ContentToken
-	| CodeBlockToken
-	| AnnotationToken;
+type CommentToken = ContentToken | CodeBlockToken | AnnotationToken;
 
 /**
  * Removes comment prefix (asterisk and spaces) from a line.
@@ -573,12 +568,17 @@ const removeCommentPrefix = (
 const detectCodeBlocks = (
 	text: string,
 ): Array<{ start: number; end: number; content: string }> => {
-	const codeBlocks: Array<{ start: number; end: number; content: string }> = [];
+	const codeBlocks: Array<{ start: number; end: number; content: string }> =
+		[];
 	let i = 0;
 
 	while (i < text.length - 1) {
 		// Look for /* but not /**
-		if (text[i] === '/' && text[i + 1] === '*' && (i + 2 >= text.length || text[i + 2] !== '*')) {
+		if (
+			text[i] === '/' &&
+			text[i + 1] === '*' &&
+			(i + 2 >= text.length || text[i + 2] !== '*')
+		) {
 			const start = i;
 			i += 2; // Skip past /*
 
@@ -982,12 +982,22 @@ const wrapTextToWidth = (
 	if (currentWord.length > 0) {
 		words.push(currentWord);
 	}
-	const fillDoc = words.length > 0 ? prettier.doc.builders.fill(prettier.doc.builders.join(prettier.doc.builders.line, words)) : '';
-	const wrappedText = fillDoc ? prettier.doc.printer.printDocToString(fillDoc, {
-		printWidth: effectiveWidth,
-		tabWidth: options.tabWidth,
-		useTabs: options.useTabs,
-	}).formatted : '';
+	const fillDoc =
+		words.length > 0
+			? prettier.doc.builders.fill(
+					prettier.doc.builders.join(
+						prettier.doc.builders.line,
+						words,
+					),
+				)
+			: '';
+	const wrappedText = fillDoc
+		? prettier.doc.printer.printDocToString(fillDoc, {
+				printWidth: effectiveWidth,
+				tabWidth: options.tabWidth,
+				useTabs: options.useTabs,
+			}).formatted
+		: '';
 	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
 };
 
@@ -1021,7 +1031,11 @@ const wrapParagraphTokens = (
 		}
 
 		// Use unified wrapping function
-		const wrappedLines = wrapTextToWidth(token.content, effectiveWidth, options);
+		const wrappedLines = wrapTextToWidth(
+			token.content,
+			effectiveWidth,
+			options,
+		);
 
 		// Create new paragraph token with wrapped lines
 		// Need to reconstruct lines with comment prefix
