@@ -285,55 +285,8 @@ const createAnnotationReplacer =
  * // Returns '@InvocableMethod(label="Test")'
  */
 const normalizeAnnotationNamesInText = (text: string): string => {
-	const apexDocComments = findApexDocComments(text);
 	const replacer = createAnnotationReplacer();
-	// If no ApexDoc comments, process entire text
-	if (apexDocComments.length === EMPTY) {
-		return text.replace(ANNOTATION_REGEX, replacer);
-	}
-
-	// Process text in segments, skipping ApexDoc comments
-	let result = text;
-	let lastIndex = 0;
-	const segments: { start: number; end: number; isComment: boolean }[] = [];
-
-	// Build segments
-	for (const comment of apexDocComments) {
-		if (lastIndex < comment.start) {
-			segments.push({
-				end: comment.start,
-				isComment: false,
-				start: lastIndex,
-			});
-		}
-		segments.push({
-			end: comment.end,
-			isComment: true,
-			start: comment.start,
-		});
-		lastIndex = comment.end;
-	}
-	if (lastIndex < text.length) {
-		segments.push({ end: text.length, isComment: false, start: lastIndex });
-	}
-
-	// Process non-comment segments
-	for (let i = segments.length - INDEX_ONE; i >= 0; i--) {
-		const segment = segments[i];
-		if (!segment || segment.isComment) continue;
-
-		const segmentText = text.substring(segment.start, segment.end);
-		const normalized = segmentText.replace(ANNOTATION_REGEX, replacer);
-
-		if (normalized !== segmentText) {
-			result =
-				result.substring(STRING_START_INDEX, segment.start) +
-				normalized +
-				result.substring(segment.end);
-		}
-	}
-
-	return result;
+	return text.replace(ANNOTATION_REGEX, replacer);
 };
 
 /**
