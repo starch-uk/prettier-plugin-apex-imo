@@ -37,32 +37,27 @@ const normalizeStandardObjectType = (typeName: string): string =>
  * normalizeTypeName('account__c'); // Returns 'Account__c'
  * ```
  */
+// Cache sorted suffixes for performance (sorted by length descending)
+const SORTED_SUFFIXES = Object.entries(APEX_OBJECT_SUFFIXES).sort(
+	([, a], [, b]) => b.length - a.length,
+);
+
 const normalizeTypeName = (typeName: string): string => {
 	if (!typeName || typeof typeName !== 'string') return typeName;
-	// Check if it's a pure standard object (no suffix)
 	const standardNormalized = normalizeStandardObjectType(typeName);
-	// If it was normalized as a standard object, it doesn't have a suffix, so return it
 	if (standardNormalized !== typeName) return standardNormalized;
-	// Otherwise, check if it has a suffix
-	// Find the suffix and normalize prefix + suffix separately
-	const suffixes = Object.entries(APEX_OBJECT_SUFFIXES).sort(
-		([, a], [, b]) => b.length - a.length,
-	);
+
 	const lowerTypeName = typeName.toLowerCase();
-	for (const [, normalizedSuffix] of suffixes) {
+	for (const [, normalizedSuffix] of SORTED_SUFFIXES) {
 		const lowerSuffix = normalizedSuffix.toLowerCase();
 		if (lowerTypeName.endsWith(lowerSuffix)) {
 			const prefix = typeName.slice(
 				SLICE_START_INDEX,
 				typeName.length - lowerSuffix.length,
 			);
-			// Normalize the prefix as a standard object (if applicable)
-			const normalizedPrefix = normalizeStandardObjectType(prefix);
-			// Combine normalized prefix with normalized suffix
-			return normalizedPrefix + normalizedSuffix;
+			return normalizeStandardObjectType(prefix) + normalizedSuffix;
 		}
 	}
-	// No suffix found, return as-is (already checked if it's a standard object)
 	return typeName;
 };
 
@@ -153,8 +148,10 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 		'types' in parent &&
 		Array.isArray(parent.types);
 
-	if (!isTypeRelatedParentClass(parentClass) && !hasTypesArray) return false;
-	return key !== 'name' || !parentClass?.includes('Variable');
+	return (
+		(isTypeRelatedParentClass(parentClass) || hasTypesArray) &&
+		(key !== 'name' || !parentClass?.includes('Variable'))
+	);
 };
 
 interface ShouldNormalizeTypeParams {
@@ -186,14 +183,16 @@ function shouldNormalizeType(
 	params: Readonly<ShouldNormalizeTypeParams>,
 ): boolean {
 	const { forceTypeContext, parentKey, key, path } = params;
-	if (forceTypeContext || parentKey === 'types' || key === 'names')
-		return true;
-	if (typeof key === 'string') {
-		const lowerKey = key.toLowerCase();
-		if (lowerKey === 'type' || lowerKey === 'typeref' || key === 'types')
-			return true;
-	}
-	return isInTypeContext(path);
+	return (
+		forceTypeContext ||
+		parentKey === 'types' ||
+		key === 'names' ||
+		(typeof key === 'string' &&
+			(key.toLowerCase() === 'type' ||
+				key.toLowerCase() === 'typeref' ||
+				key === 'types')) ||
+		isInTypeContext(path)
+	);
 }
 
 /**

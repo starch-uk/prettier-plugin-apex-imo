@@ -684,7 +684,12 @@ const parseCommentToTokens = (
 		if (isInCodeBlock) {
 			// Finish current paragraph if any, then handle code block
 			if (currentParagraph.length > EMPTY) {
-				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
+				tokens.push(
+					createParagraphToken(
+						currentParagraph,
+						currentParagraphLines,
+					),
+				);
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -712,7 +717,12 @@ const parseCommentToTokens = (
 		if (trimmedLine.length === EMPTY) {
 			// Empty line - finish current paragraph if any
 			if (currentParagraph.length > EMPTY) {
-				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
+				tokens.push(
+					createParagraphToken(
+						currentParagraph,
+						currentParagraphLines,
+					),
+				);
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -744,7 +754,12 @@ const parseCommentToTokens = (
 				currentParagraph.length > EMPTY &&
 				!hasUnclosedCodeBlock
 			) {
-				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
+				tokens.push(
+					createParagraphToken(
+						currentParagraph,
+						currentParagraphLines,
+					),
+				);
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -776,7 +791,12 @@ const parseCommentToTokens = (
 					nextTrimmed.length > EMPTY) ||
 				isAnnotationLine
 			) {
-				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
+				tokens.push(
+					createParagraphToken(
+						currentParagraph,
+						currentParagraphLines,
+					),
+				);
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -785,7 +805,9 @@ const parseCommentToTokens = (
 
 	// Add last paragraph if any
 	if (currentParagraph.length > EMPTY) {
-		tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
+		tokens.push(
+			createParagraphToken(currentParagraph, currentParagraphLines),
+		);
 	}
 
 	// If no paragraphs were found, create a single text token
@@ -985,11 +1007,11 @@ const wrapTextToWidth = (
 	const wrappedText = fillDoc
 		? prettier.doc.printer.printDocToString(fillDoc, {
 				printWidth: effectiveWidth,
-			tabWidth: options.tabWidth,
-			...(options.useTabs !== null && options.useTabs !== undefined
-				? { useTabs: options.useTabs }
-				: {}),
-		}).formatted
+				tabWidth: options.tabWidth,
+				...(options.useTabs !== null && options.useTabs !== undefined
+					? { useTabs: options.useTabs }
+					: {}),
+			}).formatted
 		: '';
 	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
 };
@@ -1204,10 +1226,7 @@ const tryHandlers = (
  * @param _sourceCode - The entire source code (unused).
  * @returns False to let Prettier handle the comment with its default logic.
  */
-const handleOwnLineComment = (
-	comment: unknown,
-	_sourceCode: string,
-): boolean =>
+const handleOwnLineComment = (comment: unknown, _sourceCode: string): boolean =>
 	tryHandlers(comment, [
 		handleDanglingComment,
 		handleBlockStatementLeadingComment,

@@ -24,8 +24,7 @@ const ANNOTATION_REGEX =
 	/@([a-zA-Z_][a-zA-Z0-9_]*)(\s*\(([^)]*)\)|(?![a-zA-Z0-9_(]))/g;
 const ANNOTATION_OPTION_REGEX = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
 
-const { group, indent, hardline, softline, join, ifBreak, concat } =
-	doc.builders;
+const { group, indent, hardline, softline, join, ifBreak } = doc.builders;
 
 const ANNOTATION_CLASS = 'apex.jorje.data.ast.Modifier$Annotation';
 const TRUE_ANNOTATION_VALUE_CLASS =
@@ -38,6 +37,10 @@ const MIN_PARAMS_FOR_MULTILINE = 1;
 const ZERO_LENGTH = 0;
 const ONE_INDEX = 1;
 const STRING_START_INDEX = 0;
+const KEY_GROUP_INDEX = 1;
+const VALUE_GROUP_INDEX = 2;
+const NEXT_LINE_OFFSET = 1;
+const ANNOTATION_PARAM_INDENT = 2;
 
 const isAnnotation = createNodeClassGuard<ApexAnnotationNode>(ANNOTATION_CLASS);
 
@@ -68,7 +71,9 @@ const isStringAnnotationValue = (
 	) {
 		return false;
 	}
-	return 'value' in value && typeof value.value === 'string';
+	if (!('value' in value)) return false;
+	const valueProp = (value as { value?: unknown }).value;
+	return typeof valueProp === 'string';
 };
 
 const formatAnnotationValue = (
@@ -78,7 +83,8 @@ const formatAnnotationValue = (
 	if (cls === TRUE_ANNOTATION_VALUE_CLASS) return 'true';
 	if (cls === FALSE_ANNOTATION_VALUE_CLASS) return 'false';
 	if (isStringAnnotationValue(value)) {
-		return value.value ? `'${value.value}'` : "''";
+		const stringValue = value.value;
+		return stringValue ? `'${stringValue}'` : "''";
 	}
 	return "''";
 };
@@ -94,8 +100,11 @@ const formatAnnotationParam = (
 			formatAnnotationValue(param.value),
 		];
 	}
-	if ('value' in param && typeof param.value === 'string') {
-		return `'${param.value}'`;
+	if ('value' in param) {
+		const valueProp = (param as { value?: unknown }).value;
+		if (typeof valueProp === 'string') {
+			return `'${valueProp}'`;
+		}
 	}
 	return "''";
 };
@@ -114,63 +123,48 @@ const parseAndReformatAnnotationString = (
 	lines: string[],
 	startLineIndex: number,
 ): string[] | null => {
-	// Extract annotation name
 	const nameMatch = /^@([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/.exec(
 		annotationString.trim(),
 	);
 	if (!nameMatch) return null;
 
-	const originalName = nameMatch[1] ?? '';
-	const normalizedName = normalizeAnnotationName(originalName);
+	const normalizedName = normalizeAnnotationName(nameMatch[ONE_INDEX] ?? '');
 
-	// Collect parameter lines
+	// Collect parameter lines until closing paren
 	const paramLines: string[] = [];
-	for (let i = startLineIndex + 1; i < lines.length; i++) {
-		const line = lines[i] ?? '';
-		const trimmed = line.trim();
+	for (let i = startLineIndex + NEXT_LINE_OFFSET; i < lines.length; i++) {
+		const trimmed = (lines[i] ?? '').trim();
 		paramLines.push(trimmed);
-		if (trimmed.startsWith(')') || trimmed.endsWith(')')) {
-			break;
+		if (trimmed.startsWith(')') || trimmed.endsWith(')')) break;
+	}
+
+	// Parse parameters: key="value" or key='value'
+	const parsedParams: { key: string; value: string }[] = [];
+	const paramRegex = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']/;
+	for (const pl of paramLines) {
+		const match = paramRegex.exec(pl.replace(/,$/, ''));
+		if (match) {
+			parsedParams.push({
+				key: match[KEY_GROUP_INDEX] ?? '',
+				value: match[VALUE_GROUP_INDEX] ?? '',
+			});
 		}
 	}
 
-	// Parse parameters from string representation
-	const parsedParams: { key: string; value: string }[] = [];
-	for (const pl of paramLines) {
-		// Match key="value" or key='value' patterns, handling trailing commas
-		const match = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']/.exec(
-			pl.replace(/,$/, ''),
-		);
-		if (!match) continue;
-		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- regex capture group indices
-		const [, rawKey, rawValue] = match;
-		parsedParams.push({ key: rawKey ?? '', value: rawValue ?? '' });
-	}
+	if (parsedParams.length === ZERO_LENGTH) return null;
 
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array length check
-	if (parsedParams.length === 0) return null;
-
-	// Reformat using our normalization rules (consistent with AST-based formatAnnotationValue)
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 2 spaces for annotation parameter indentation
-	const indentSpaces = '  ';
-	const formattedParams: string[] = [];
-	for (let idx = 0; idx < parsedParams.length; idx++) {
-		const param = parsedParams[idx];
-		if (!param) continue;
-		const { key, value } = param;
+	// Reformat with normalization (consistent with AST-based formatAnnotationValue)
+	const indentSpaces = ' '.repeat(ANNOTATION_PARAM_INDENT);
+	const formattedParams = parsedParams.map((param, idx) => {
 		const normalizedKey = normalizeAnnotationOptionName(
 			normalizedName,
-			key,
+			param.key,
 		);
-		// Use single quotes to match formatAnnotationValue (AST-based formatting)
-		const paramStr = `${normalizedKey}='${value}'`;
-		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index comparison
-		if (idx < parsedParams.length - 1) {
-			formattedParams.push(`${indentSpaces}${paramStr},`);
-		} else {
-			formattedParams.push(`${indentSpaces}${paramStr}`);
-		}
-	}
+		const paramStr = `${normalizedKey}='${param.value}'`;
+		return idx < parsedParams.length - 1
+			? `${indentSpaces}${paramStr},`
+			: `${indentSpaces}${paramStr}`;
+	});
 
 	return [`@${normalizedName}(`, ...formattedParams, ')'];
 };
@@ -226,8 +220,11 @@ const printAnnotation = (
 	// Single-line: use group with ifBreak to allow breaking if it exceeds printWidth
 	// eslint-disable-next-line @typescript-eslint/no-magic-numbers, @typescript-eslint/prefer-destructuring -- array index, single param access
 	const singleParam = formattedParams[0];
+	if (singleParam === undefined) {
+		return group(['@', normalizedName, '()']);
+	}
 	const singleParamDoc: Doc = Array.isArray(singleParam)
-		? concat(singleParam)
+		? singleParam
 		: singleParam;
 	return group([
 		'@',
@@ -264,137 +261,6 @@ const createAnnotationReplacer =
 			},
 		)}`;
 	};
-
-/**
- * @internal
- * Parses annotation syntax from text and normalizes it using character-based parsing.
- * This replaces regex-based annotation normalization with character-based parsing.
- * @param annotationText - The annotation text to parse and normalize.
- * @returns The normalized annotation text.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Reserved for future use
-	const parseAndNormalizeAnnotation = (annotationText: string): string => {
-	// Parse @name(parameters) pattern using character scanning
-	if (!annotationText.startsWith('@')) {
-		return annotationText;
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- skip '@' character
-	let pos = 1;
-	let name = '';
-
-	// Parse annotation name
-	while (
-		pos < annotationText.length &&
-		(annotationText[pos] === '_' ||
-			(annotationText[pos] >= 'a' && annotationText[pos] <= 'z') ||
-			(annotationText[pos] >= 'A' && annotationText[pos] <= 'Z') ||
-			(annotationText[pos] >= '0' && annotationText[pos] <= '9'))
-	) {
-		name += annotationText[pos];
-		pos++;
-	}
-
-	if (name.length === 0) {
-		return annotationText; // Invalid annotation
-	}
-
-	const normalizedName = normalizeAnnotationName(name);
-
-	// Check if there are parameters
-	if (pos >= annotationText.length || annotationText[pos] !== '(') {
-		// No parameters
-		return `@${normalizedName}`;
-	}
-
-	// Parse parameters by copying the text as-is and normalizing parameter names
-	let result = `@${normalizedName}(`;
-	pos++; // Skip opening (
-
-	// Find the end of parameters
-	const paramEnd = annotationText.indexOf(')', pos);
-	if (paramEnd === -1) {
-		return annotationText; // Invalid
-	}
-
-	const paramText = annotationText.substring(pos, paramEnd);
-
-	// Process parameter text, normalizing parameter names but preserving spacing
-	let processedParams = '';
-	let paramNameStart = -1;
-	let inParamName = false;
-
-	for (let i = 0; i < paramText.length; i++) {
-		const char = paramText[i];
-
-		if (!inParamName && /\w/.test(char)) {
-			// Start of parameter name
-			inParamName = true;
-			paramNameStart = i;
-		} else if (inParamName && char === '=') {
-			// End of parameter name
-			const paramName = paramText.substring(paramNameStart, i);
-			const normalizedParam = normalizeAnnotationOptionName(
-				normalizedName,
-				paramName,
-			);
-			if (normalizedParam !== paramName) {
-				processedParams += normalizedParam;
-			} else {
-				processedParams += paramName;
-			}
-			processedParams += '=';
-			inParamName = false;
-			paramNameStart = -1;
-		} else if (inParamName && !/\w/.test(char)) {
-			// End of parameter name (non-word character)
-			if (paramNameStart !== -1) {
-				const paramName = paramText.substring(paramNameStart, i);
-				const normalizedParam = normalizeAnnotationOptionName(
-					normalizedName,
-					paramName,
-				);
-				if (normalizedParam !== paramName) {
-					processedParams += normalizedParam;
-				} else {
-					processedParams += paramName;
-				}
-				paramNameStart = -1;
-			}
-			inParamName = false;
-			processedParams += char;
-		} else if (!inParamName) {
-			processedParams += char;
-		}
-	}
-
-	// Handle case where parameter name goes to end
-	if (inParamName && paramNameStart !== -1) {
-		const paramName = paramText.substring(paramNameStart);
-		const normalizedParam = normalizeAnnotationOptionName(
-			normalizedName,
-			paramName,
-		);
-		if (normalizedParam !== paramName) {
-			processedParams += normalizedParam;
-		} else {
-			processedParams += paramName;
-		}
-	}
-
-	const closingParen = processedParams + ')';
-	result += closingParen;
-
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- position check
-	if (pos < annotationText.length && annotationText[pos] === ')') {
-		result += ')';
-	} else {
-		// Unclosed parentheses, return as-is
-		return annotationText;
-	}
-
-	return result;
-};
 
 /**
  * Normalizes annotation names in source text before parsing.
@@ -484,7 +350,7 @@ const normalizeAnnotationNamesInTextExcludingApexDoc = (
 		'example',
 	] as const;
 
-	const apexDocAnnotationsSet = new Set(APEXDOC_ANNOTATIONS);
+	const apexDocAnnotationsSet = new Set<string>([...APEXDOC_ANNOTATIONS]);
 	const replacer = createAnnotationReplacer();
 
 	/**

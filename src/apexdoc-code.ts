@@ -80,14 +80,17 @@ const extractCodeFromBlock = (
 	// Preserve blank lines: remove only leading/trailing blank lines, keep middle ones
 	// Split into lines to process leading/trailing separately
 	const codeLines = code.split('\n');
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-	while (codeLines.length > 0 && codeLines[0]?.trim().length === 0) {
-		codeLines.shift();
-	}
+	const FIRST_LINE_INDEX = 0;
 	while (
 		codeLines.length > 0 &&
-		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-		codeLines[codeLines.length - 1]?.trim().length === 0
+		codeLines[FIRST_LINE_INDEX]?.trim().length === ZERO_LENGTH
+	) {
+		codeLines.shift();
+	}
+	const LAST_LINE_INDEX = codeLines.length - 1;
+	while (
+		codeLines.length > 0 &&
+		codeLines[LAST_LINE_INDEX]?.trim().length === ZERO_LENGTH
 	) {
 		codeLines.pop();
 	}
@@ -109,8 +112,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	let codeBlockBraceCount = 0;
 
 	return lines.map((commentLine, index) => {
-		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-		const prefix = index > 0 ? ' ' : '';
+		const prefix = index > ZERO_LENGTH ? ' ' : '';
 		const trimmedLine = commentLine.trim();
 
 		if (trimmedLine.startsWith(CODE_TAG)) {
@@ -122,7 +124,6 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 		if (inCodeBlock) {
 			for (const char of trimmedLine) {
 				if (char === '{') codeBlockBraceCount++;
-				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- brace count comparison
 				else if (char === '}') codeBlockBraceCount--;
 			}
 			willEndCodeBlock = codeBlockBraceCount === ZERO_LENGTH;
@@ -154,59 +155,6 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
  * @param optionsWithPlugin - Parser options with plugin configured.
  * @returns The formatted code string.
  */
-const formatCodeWithPrettier = async (
-	normalizedCode: string,
-	optionsWithPlugin: ParserOptions & { plugins: unknown[] },
-): Promise<string> => {
-	try {
-		return await prettier.format(normalizedCode, {
-			...optionsWithPlugin,
-			parser: 'apex-anonymous',
-		});
-	} catch {
-		try {
-			return await prettier.format(normalizedCode, {
-				...optionsWithPlugin,
-				parser: 'apex',
-			});
-		} catch {
-			// When parsing fails, preserve the original code as-is
-			return normalizedCode;
-		}
-	}
-};
-
-/**
- * Preserves blank lines after closing braces when followed by annotations or access modifiers.
- * @param formatted - The formatted code string.
- * @returns The formatted code with blank lines preserved.
- */
-const preserveBlankLinesAfterBraces = (formatted: string): string => {
-	const formattedLines = formatted.trim().split('\n');
-	const resultLines: string[] = [];
-
-	for (let i = 0; i < formattedLines.length; i++) {
-		const formattedLine = formattedLines[i] ?? '';
-		const trimmedLine = formattedLine.trim();
-		resultLines.push(formattedLine);
-
-		// Insert blank line after } when followed by annotations or access modifiers
-		if (trimmedLine.endsWith('}') && i < formattedLines.length - 1) {
-			const nextLine = formattedLines[i + 1]?.trim() ?? '';
-			// Check if next line starts with annotation or access modifier using Set-based detection
-			if (
-				nextLine.length > ZERO_LENGTH &&
-				(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
-			) {
-				// Insert blank line to preserve structure from original
-				resultLines.push('');
-			}
-		}
-	}
-
-	return resultLines.join('\n');
-};
-
 /**
  * Formats a CodeBlockToken using prettier with our plugin and effective page width.
  * @param root0 - The parameters object.
@@ -216,16 +164,19 @@ const preserveBlankLinesAfterBraces = (formatted: string): string => {
  * @param root0.currentPluginInstance - Plugin instance to ensure wrapped printer is used.
  * @returns Updated CodeBlockToken with formattedCode populated.
  */
+// eslint-disable-next-line @typescript-eslint/no-deprecated -- Legacy token type still in use
 const formatCodeBlockToken = async ({
 	token,
 	effectiveWidth,
 	embedOptions,
 	currentPluginInstance,
 }: {
+	// eslint-disable-next-line @typescript-eslint/no-deprecated -- Legacy token type still in use
 	readonly token: CodeBlockToken;
 	readonly effectiveWidth: number;
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
+	// eslint-disable-next-line @typescript-eslint/no-deprecated -- Legacy token type still in use
 }): Promise<CodeBlockToken> => {
 	const normalizedCode = normalizeAnnotationNamesInText(token.rawCode);
 	const optionsWithPlugin = {
@@ -237,16 +188,99 @@ const formatCodeBlockToken = async ({
 		printWidth: effectiveWidth,
 	};
 
-	const formatted = await formatCodeWithPrettier(
-		normalizedCode,
-		optionsWithPlugin,
-	);
-	const formattedWithBlankLines = preserveBlankLinesAfterBraces(formatted);
+	// Format with prettier, trying apex-anonymous first, then apex
+	let formatted: string = normalizedCode;
+	try {
+		formatted = await prettier.format(normalizedCode, {
+			...optionsWithPlugin,
+			parser: 'apex-anonymous',
+		});
+	} catch {
+		try {
+			formatted = await prettier.format(normalizedCode, {
+				...optionsWithPlugin,
+				parser: 'apex',
+			});
+		} catch {
+			formatted = normalizedCode;
+		}
+	}
+
+	// Preserve blank lines after closing braces when followed by annotations or access modifiers
+	const formattedLines = formatted.trim().split('\n');
+	const resultLines: string[] = [];
+	for (let i = 0; i < formattedLines.length; i++) {
+		const formattedLine = formattedLines[i] ?? '';
+		const trimmedLine = formattedLine.trim();
+		resultLines.push(formattedLine);
+		const nextLineIndex = i + ONE_INDEX;
+		const nextLine = formattedLines[nextLineIndex]?.trim() ?? '';
+		if (
+			trimmedLine.endsWith('}') &&
+			nextLineIndex < formattedLines.length &&
+			nextLine.length > ZERO_LENGTH &&
+			(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
+		) {
+			resultLines.push('');
+		}
+	}
 
 	return {
 		...token,
-		formattedCode: formattedWithBlankLines.trimEnd(),
+		formattedCode: resultLines.join('\n').trimEnd(),
 	};
+};
+
+/**
+ * Processes embed result to extract formatted code lines.
+ * @param embedResult - The embed result string to process.
+ * @returns Array of extracted code lines.
+ */
+const extractCodeFromEmbedResult = (embedResult: string): string[] => {
+	let embedContent = embedResult;
+	if (embedContent.startsWith('/**\n')) {
+		embedContent = embedContent.substring(COMMENT_PREFIX_LENGTH);
+	}
+	if (embedContent.endsWith('\n */\n')) {
+		embedContent = embedContent.slice(0, -CLOSING_COMMENT_LENGTH);
+	} else if (embedContent.endsWith('\n */')) {
+		embedContent = embedContent.slice(0, -ALT_CLOSING_COMMENT_LENGTH);
+	}
+
+	const embedLines = embedContent.split('\n');
+	const processedLines = embedLines.map((line: string) => {
+		let start = 0;
+		while (
+			start < line.length &&
+			(line[start] === ' ' || line[start] === '\t')
+		) {
+			start++;
+		}
+		if (start < line.length && line[start] === '*') {
+			start++;
+			if (start < line.length && line[start] === ' ') {
+				start++;
+			}
+			return line.substring(start);
+		}
+		return line;
+	});
+
+	const codeStart = processedLines.findIndex(
+		(line: string | undefined) => line != null && line.startsWith('{@code'),
+	);
+	const codeEnd = processedLines.findIndex(
+		(line: string | undefined, i: number) =>
+			i > codeStart && line != null && line === '}',
+	);
+
+	if (codeStart >= ZERO_LENGTH && codeEnd > codeStart) {
+		return processedLines
+			.slice(codeStart + ONE_INDEX, codeEnd)
+			.filter((line): line is string => typeof line === 'string');
+	}
+
+	return processedLines.slice(SKIP_FIRST_TWO_LINES);
 };
 
 /**
@@ -266,97 +300,33 @@ function processCodeBlock(
 	commentKey: string | null,
 	_embedOptions: ParserOptions,
 ): string[] {
-	// Extract content between {@code and }
 	const match = /^\{@code\s*([\s\S]*?)\s*\}$/.exec(codeBlock);
 	if (!match) return [codeBlock];
 
-	const [, codeContent] = match;
-	if (codeContent === null || codeContent === undefined || !codeContent)
+	const CODE_CONTENT_GROUP = 1;
+	const codeContent = match[CODE_CONTENT_GROUP];
+	if (
+		codeContent === null ||
+		codeContent === undefined ||
+		codeContent.length === ZERO_LENGTH
+	) {
 		return [codeBlock];
+	}
 
 	const codeLines = codeContent.split('\n');
 
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- single line check
 	if (codeLines.length === ONE_INDEX) {
-		// Single line - add space before closing } if content ends with ;
 		const separator = codeContent.trim().endsWith(';') ? ' ' : '';
 		return [`{@code ${codeContent}${separator}}`];
-	} else {
-		// Multi line - use embed result
-		const embedResult = commentKey
-			? getFormattedCodeBlock(commentKey)
-			: null;
-
-		if (embedResult != null) {
-			// Parse embed result to extract the formatted code
-			// Remove opening /** and closing */
-			let embedContent = embedResult;
-			if (embedContent.startsWith('/**\n')) {
-				embedContent = embedContent.substring(COMMENT_PREFIX_LENGTH); // Remove '/**\n'
-			}
-			if (embedContent.endsWith('\n */\n')) {
-				embedContent = embedContent.slice(0, -CLOSING_COMMENT_LENGTH);
-			} else if (embedContent.endsWith('\n */')) {
-				embedContent = embedContent.slice(
-					0,
-					-ALT_CLOSING_COMMENT_LENGTH,
-				);
-			}
-
-			// Extract base indentation from the first code line (spaces before *)
-			const embedLines = embedContent.split('\n');
-			const processedLines = embedLines.map((line: string) => {
-				// Remove the standard comment prefix but preserve relative indentation
-				// Find first non-whitespace character
-				let start = 0;
-				while (
-					start < line.length &&
-					(line[start] === ' ' || line[start] === '\t')
-				) {
-					start++;
-				}
-				// If we found an asterisk, skip it and optional space
-				if (start < line.length && line[start] === '*') {
-					start++;
-					// Skip optional space after asterisk
-					if (start < line.length && line[start] === ' ') {
-						start++;
-					}
-					return line.substring(start);
-				}
-				return line;
-			});
-
-			// Find the {@code block
-			const codeStart = processedLines.findIndex(
-				(line: string | undefined) =>
-					line != null && line.startsWith('{@code'),
-			);
-			const codeEnd = processedLines.findIndex(
-				(line: string | undefined, i: number) =>
-					i > codeStart && line != null && line === '}',
-			);
-
-			if (codeStart >= 0 && codeEnd > codeStart) {
-				const extractedCodeLines = processedLines
-					.slice(codeStart + ONE_INDEX, codeEnd)
-					.filter((line): line is string => typeof line === 'string');
-				// For embed results, the formatted code is stored without comment prefixes
-				// comments.ts will handle adding the proper indentation
-				return [`{@code`, ...extractedCodeLines, `}`];
-			}
-
-			// Fallback
-			return [
-				`{@code`,
-				...processedLines.slice(SKIP_FIRST_TWO_LINES),
-				`}`,
-			];
-		} else {
-			// Fallback to original format
-			return [`{@code`, ...codeLines, `}`];
-		}
 	}
+
+	const embedResult = commentKey ? getFormattedCodeBlock(commentKey) : null;
+	if (embedResult) {
+		const extractedCodeLines = extractCodeFromEmbedResult(embedResult);
+		return [`{@code`, ...extractedCodeLines, `}`];
+	}
+
+	return [`{@code`, ...codeLines, `}`];
 }
 
 export {

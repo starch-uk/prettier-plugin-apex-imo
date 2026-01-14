@@ -53,25 +53,41 @@ const isNestedInCollection = (
 	return false;
 };
 
-const printEmptyList = (
+/**
+ * Creates type document for collections.
+ */
+const createTypeDoc = (
+	typeName: string,
 	printedTypes: readonly Doc[],
-	isSet: boolean,
+	typeSeparator: Doc,
 	isNested: boolean,
 ): Doc => {
-	const typeName = isSet ? 'Set' : 'List';
-	const typeSeparator: Doc = isSet ? [',', softline] : '.';
-	const typeDoc: Doc = [
+	const baseTypeDoc: Doc = [
 		typeName,
 		'<',
 		join(typeSeparator, printedTypes),
 		'>',
 	];
-	return [isNested ? group(typeDoc) : typeDoc, '{}'];
+	return isNested ? group(baseTypeDoc) : baseTypeDoc;
 };
+
+const printEmptyList = (
+	printedTypes: readonly Doc[],
+	isSet: boolean,
+	isNested: boolean,
+): Doc => [
+	createTypeDoc(
+		isSet ? 'Set' : 'List',
+		printedTypes,
+		isSet ? [',', softline] : '.',
+		isNested,
+	),
+	'{}',
+];
 
 const printEmptyMap = (
 	printedTypes: readonly Doc[],
-	_isNested: boolean,
+	isNested: boolean,
 ): Doc => {
 	const typeDoc: Doc = group([
 		'Map<',
@@ -110,15 +126,12 @@ const printList = ({
 		return originalPrint();
 	}
 
-	const typeSeparator: Doc = isSet ? [',', softline] : '.';
-	const typeName = isSet ? 'Set' : 'List';
-	const baseTypeDoc: Doc = [
-		typeName,
-		'<',
-		join(typeSeparator, printedTypes),
-		'>',
-	];
-	const typeDoc: Doc = isNested ? group(baseTypeDoc) : baseTypeDoc;
+	const typeDoc = createTypeDoc(
+		isSet ? 'Set' : 'List',
+		printedTypes,
+		isSet ? [',', softline] : '.',
+		isNested,
+	);
 	return [
 		typeDoc,
 		'{',
@@ -156,12 +169,11 @@ const printMap = ({
 		return originalPrint();
 	}
 
-	const baseTypeDoc: Doc = [
+	const typeDoc: Doc = group([
 		'Map<',
 		join([', ', softline], printedTypes),
 		'>',
-	];
-	const typeDoc: Doc = isNested ? group(baseTypeDoc) : baseTypeDoc;
+	]);
 	return [
 		typeDoc,
 		'{',

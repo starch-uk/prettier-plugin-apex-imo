@@ -28,7 +28,6 @@ import {
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import {
-	getNodeClass,
 	getNodeClassOptional,
 	createNodeClassGuard,
 	startsWithAccessModifier,
@@ -153,7 +152,6 @@ const clearFormattedCodeBlocks = (): void => {
 const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
 const INLINE_COMMENT_CLASS =
 	'apex.jorje.parser.impl.HiddenTokens$InlineComment';
-const SINGLE_DECLARATION = 1;
 
 const isCommentNode = createNodeClassGuard<ApexNode>(
 	(cls) =>
@@ -243,14 +241,18 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						// takes precedence over the base apex printers for shared parser names.
 						const pluginInstance = getCurrentPluginInstance();
 						const basePlugins = options.plugins || [];
-						const plugins = pluginInstance
+						const plugins: (
+							| string
+							| URL
+							| prettier.Plugin<ApexNode>
+						)[] = pluginInstance
 							? [
 									// Keep any existing plugins except our own instance
-									...(basePlugins.filter(
+									...basePlugins.filter(
 										(p) => p !== pluginInstance.default,
-									) as unknown[]),
+									),
 									// Append our wrapped plugin last so its printers win
-									pluginInstance.default,
+									pluginInstance.default as prettier.Plugin<ApexNode>,
 								]
 							: basePlugins;
 
@@ -514,18 +516,76 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	};
 
 	/**
-	 * Handles VariableDecls nodes with assignments.
+	 * Handles VariableDecls nodes (with or without assignments).
 	 */
-	const handleVariableDeclsWithAssignments = (
+	const handleVariableDecls = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc | null => {
 		const { decls } = node as { decls?: unknown[] };
-		if (!Array.isArray(decls) || !hasVariableAssignments(decls))
-			return null;
+		if (!Array.isArray(decls)) return null;
 
+		const hasAssignments = hasVariableAssignments(decls);
+
+		if (!hasAssignments) {
+			// Handle case without assignments
+			const modifierDocs = path.map(
+				print,
+				'modifiers' as never,
+			) as unknown as Doc[];
+			const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
+			const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
+			const { join: joinDocs } = doc.builders;
+			const nameDocs = path.map(
+				(declPath: Readonly<AstPath<ApexNode>>) => {
+					const declNode = declPath.node;
+					if (typeof declNode !== 'object' || declNode === null)
+						return undefined;
+					return declPath.call(
+						print,
+						'name' as never,
+					) as unknown as Doc;
+				},
+				'decls' as never,
+			) as unknown as (Doc | undefined)[];
+
+			if (nameDocs.length === 0) return null;
+
+			const resultParts: Doc[] = [];
+			if (modifierDocs.length > 0) {
+				resultParts.push(...modifierDocs);
+			}
+			resultParts.push(breakableTypeDoc);
+
+			if (nameDocs.length > 1) {
+				const typeAndNames = nameDocs
+					.filter((nameDoc): nameDoc is Doc => nameDoc !== undefined)
+					.map((nameDoc) => {
+						const wrappedName = ifBreak(indent([line, nameDoc]), [
+							' ',
+							nameDoc,
+						]);
+						return group([breakableTypeDoc, wrappedName]);
+					});
+				resultParts.push(joinDocs([', ', softline], typeAndNames), ';');
+				return group(resultParts);
+			}
+
+			if (nameDocs[0] !== undefined) {
+				const wrappedName = ifBreak(indent([line, nameDocs[0]]), [
+					' ',
+					nameDocs[0],
+				]);
+				resultParts.push(wrappedName, ';');
+				return group(resultParts);
+			}
+
+			return null;
+		}
+
+		// Handle case with assignments
 		const modifierDocs = path.map(
 			print,
 			'modifiers' as never,
@@ -621,7 +681,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 				const params = typeDocToCheck[2] as unknown[];
 				const hasNestedMap = (param: unknown): boolean => {
-					if (typeof param === 'string') return param.includes('Map<');
+					if (typeof param === 'string')
+						return param.includes('Map<');
 					if (Array.isArray(param)) {
 						// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 						const paramFirst = param[0];
@@ -673,72 +734,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	};
 
 	/**
-	 * Handles VariableDecls nodes without assignments.
-	 */
-	const handleVariableDeclsWithoutAssignments = (
-		path: Readonly<AstPath<ApexNode>>,
-		node: ApexNode,
-		options: Readonly<ParserOptions>,
-		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
-	): Doc | null => {
-		const { decls } = node as { decls?: unknown[] };
-		if (!Array.isArray(decls) || hasVariableAssignments(decls)) return null;
-
-		const modifierDocs = path.map(
-			print,
-			'modifiers' as never,
-		) as unknown as Doc[];
-		const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
-		const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
-		const { join: joinDocs } = doc.builders;
-		const nameDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
-			const declNode = declPath.node;
-			if (typeof declNode !== 'object' || declNode === null)
-				return undefined;
-			return declPath.call(print, 'name' as never) as unknown as Doc;
-		}, 'decls' as never) as unknown as (Doc | undefined)[];
-
-		if (nameDocs.length === 0) return null;
-
-		const resultParts: Doc[] = [];
-		if (modifierDocs.length > 0) {
-			resultParts.push(...modifierDocs);
-		}
-		resultParts.push(breakableTypeDoc);
-
-		if (nameDocs.length > 1) {
-			const typeAndNames = nameDocs
-				.filter((nameDoc): nameDoc is Doc => nameDoc !== undefined)
-				.map((nameDoc) => {
-					const wrappedName = ifBreak(indent([line, nameDoc]), [
-						' ',
-						nameDoc,
-					]);
-					return group([breakableTypeDoc, wrappedName]);
-				});
-			resultParts.push(joinDocs([', ', softline], typeAndNames), ';');
-			return group(resultParts);
-		}
-
-		if (nameDocs[0] !== undefined) {
-			const wrappedName = ifBreak(indent([line, nameDocs[0]]), [
-				' ',
-				nameDocs[0],
-			]);
-			resultParts.push(wrappedName, ';');
-			return group(resultParts);
-		}
-
-		return null;
-	};
-
-	/**
 	 * Handles ExpressionStmnt with AssignmentExpr nodes.
 	 */
 	const handleAssignmentExpression = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
-		options: Readonly<ParserOptions>,
+		_options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc | null => {
 		const nodeClass = getNodeClassOptional(node);
@@ -818,21 +819,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		if (identifierResult !== null) return identifierResult;
 
 		if (nodeClass === 'apex.jorje.data.ast.VariableDecls') {
-			const withAssignments = handleVariableDeclsWithAssignments(
+			const variableDeclsResult = handleVariableDecls(
 				path,
 				node,
 				options,
 				print,
 			);
-			if (withAssignments !== null) return withAssignments;
-
-			const withoutAssignments = handleVariableDeclsWithoutAssignments(
-				path,
-				node,
-				options,
-				print,
-			);
-			if (withoutAssignments !== null) return withoutAssignments;
+			if (variableDeclsResult !== null) return variableDeclsResult;
 		}
 
 		const assignmentResult = handleAssignmentExpression(

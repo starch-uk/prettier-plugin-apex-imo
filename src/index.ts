@@ -126,9 +126,9 @@ const isApexParser = (
 	parser: string | undefined,
 ): parser is (typeof APEX_PARSERS)[number] =>
 	typeof parser === 'string' &&
-	(parser === 'apex' ||
-		parser === 'apex-anonymous' ||
-		APEX_PARSERS_SET.has(parser));
+	(APEX_PARSERS_SET.has(parser) ||
+		parser === 'apex' ||
+		parser === 'apex-anonymous');
 
 const wrapParsers = (
 	parsers: Readonly<Plugin<ApexNode>['parsers']>,

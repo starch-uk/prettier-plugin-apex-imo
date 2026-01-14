@@ -2,10 +2,10 @@
  * @file Unified token-based processing system for ApexDoc comments.
  *
  * This module provides a consolidated approach to handling ApexDoc comments through:
- * - Token parsing and processing (async-first)
- * - Code block detection and formatting
- * - Annotation normalization and wrapping
- * - Integration with Prettier's document building system
+ * - Token parsing and processing (async-first).
+ * - Code block detection and formatting.
+ * - Annotation normalization and wrapping.
+ * - Integration with Prettier's document building system.
  */
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
@@ -60,6 +60,10 @@ const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
 /**
  * Calculates comment prefix and effective width for ApexDoc formatting.
  * Caches these calculations to avoid repeated computation.
+ * @param commentIndent - The indentation level of the comment in spaces.
+ * @param printWidth - The print width option.
+ * @param options - Options including tabWidth and useTabs.
+ * @returns Object with commentPrefix, bodyIndent, actualPrefixLength, and effectiveWidth.
  */
 const calculatePrefixAndWidth = (
 	commentIndent: number,
@@ -78,8 +82,7 @@ const calculatePrefixAndWidth = (
 	const bodyIndent =
 		commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
 	const actualPrefixLength = commentPrefix.length + bodyIndent;
-	const effectiveWidth =
-		(printWidth ?? 80) - actualPrefixLength;
+	const effectiveWidth = (printWidth ?? 80) - actualPrefixLength;
 	return {
 		commentPrefix,
 		bodyIndent,
@@ -252,10 +255,7 @@ const renderAnnotationToken = (
 	const annotationName = token.name;
 
 	// Add followingText before annotation if it exists
-	if (
-		token.followingText &&
-		token.followingText.trim().length > EMPTY
-	) {
+	if (token.followingText && token.followingText.trim().length > EMPTY) {
 		const followingLines = token.followingText
 			.split('\n')
 			.filter((line: string) => line.trim().length > EMPTY);
@@ -320,8 +320,7 @@ const renderCodeBlockToken = (
 			const nextLine = codeLines[i + 1]?.trim() ?? '';
 			if (
 				nextLine.length > 0 &&
-				(nextLine.startsWith('@') ||
-					startsWithAccessModifier(nextLine))
+				(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
 			) {
 				resultLines.push('');
 			}
@@ -353,7 +352,8 @@ const renderCodeBlockToken = (
 			const singleLineWithBraces = `{@code ${singleLineContent} }`;
 			const printWidth = options.printWidth ?? 80;
 			const fitsOnOneLine =
-				singleLineWithBraces.length <= printWidth - commentPrefix.length;
+				singleLineWithBraces.length <=
+				printWidth - commentPrefix.length;
 
 			finalCodeLines =
 				isSingleLine && fitsOnOneLine
@@ -446,7 +446,11 @@ const tokensToApexDocString = (
 			const rendered = renderAnnotationToken(token, commentPrefix);
 			if (rendered) apexDocTokens.push(rendered);
 		} else if (token.type === 'code') {
-			const rendered = renderCodeBlockToken(token, commentPrefix, options);
+			const rendered = renderCodeBlockToken(
+				token,
+				commentPrefix,
+				options,
+			);
 			if (rendered) apexDocTokens.push(rendered);
 		} else if (token.type === 'text' || token.type === 'paragraph') {
 			apexDocTokens.push(
@@ -660,7 +664,10 @@ const mergeCodeBlockTokens = (
 									content: mergedContent,
 									lines: mergedLines,
 									...(token.isContinuation !== undefined
-										? { isContinuation: token.isContinuation }
+										? {
+												isContinuation:
+													token.isContinuation,
+											}
 										: {}),
 								};
 								mergedTokens.push(mergedToken);
@@ -713,7 +720,10 @@ const applyTokenProcessingPipeline = (
 	normalizedComment?: string,
 ): readonly CommentToken[] => {
 	// Detect code blocks first to separate {@code} content from regular text
-	let processedTokens = detectCodeBlockTokens(tokens, normalizedComment ?? '');
+	let processedTokens = detectCodeBlockTokens(
+		tokens,
+		normalizedComment ?? '',
+	);
 
 	// Detect annotations in tokens that contain ApexDoc content
 	// Code blocks are now handled as separate tokens
@@ -1416,7 +1426,8 @@ const wrapAnnotationTokens = (
 					{
 						printWidth: continuationLineAvailableWidth,
 						tabWidth: options.tabWidth,
-						...(options.useTabs !== null && options.useTabs !== undefined
+						...(options.useTabs !== null &&
+						options.useTabs !== undefined
 							? { useTabs: options.useTabs }
 							: {}),
 					},
@@ -1446,7 +1457,8 @@ const wrapAnnotationTokens = (
 						continuationLineAvailableWidth,
 					),
 					tabWidth: options.tabWidth,
-					...(options.useTabs !== null && options.useTabs !== undefined
+					...(options.useTabs !== null &&
+					options.useTabs !== undefined
 						? { useTabs: options.useTabs }
 						: {}),
 				},
@@ -1473,7 +1485,6 @@ export {
 	wrapAnnotationTokens,
 	removeTrailingEmptyLines,
 };
-
 
 /**
  * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.
