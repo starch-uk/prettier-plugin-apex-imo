@@ -170,11 +170,12 @@ const isCommentNode = createNodeClassGuard<ApexNode>(
 const canAttachComment = (node: unknown): boolean => {
 	if (!node || typeof node !== 'object') return false;
 	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
+	if (!nodeWithClass.loc) return false;
+	const nodeClass = nodeWithClass['@class'];
 	return (
-		!!nodeWithClass.loc &&
-		!!nodeWithClass['@class'] &&
-		nodeWithClass['@class'] !== INLINE_COMMENT_CLASS &&
-		nodeWithClass['@class'] !== BLOCK_COMMENT_CLASS
+		!!nodeClass &&
+		nodeClass !== INLINE_COMMENT_CLASS &&
+		nodeClass !== BLOCK_COMMENT_CLASS
 	);
 };
 
@@ -262,8 +263,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						// For safety, we use a conservative estimate: tabWidth + 3
 						const tabWidthValue = options.tabWidth || 2;
 						const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
+						const DEFAULT_PRINT_WIDTH = 80;
 						const effectiveWidth =
-							(options.printWidth || 80) - commentPrefixLength;
+							(options.printWidth || DEFAULT_PRINT_WIDTH) -
+							commentPrefixLength;
 
 						let formattedCode;
 						try {

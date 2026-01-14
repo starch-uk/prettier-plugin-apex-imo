@@ -43,7 +43,7 @@ const SORTED_SUFFIXES = Object.entries(APEX_OBJECT_SUFFIXES).sort(
 );
 
 const normalizeTypeName = (typeName: string): string => {
-	if (!typeName || typeof typeName !== 'string') return typeName;
+	if (!typeName) return typeName;
 	const standardNormalized = normalizeStandardObjectType(typeName);
 	if (standardNormalized !== typeName) return standardNormalized;
 
@@ -130,11 +130,11 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const { key, stack } = path;
 	if (key === 'types') return true;
 	if (!Array.isArray(stack)) return false;
-	if (typeof key === 'string' && isTypeRelatedKey(key)) return true;
+	const keyString = typeof key === 'string' ? key : undefined;
 	if (
-		typeof key === 'string' &&
-		key.toLowerCase() === 'field' &&
-		hasFromExprInStack(stack)
+		keyString &&
+		(isTypeRelatedKey(key) ||
+			(keyString.toLowerCase() === 'field' && hasFromExprInStack(stack)))
 	)
 		return true;
 	if (stack.length < STACK_PARENT_OFFSET) return false;

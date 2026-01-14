@@ -6,6 +6,7 @@ import type { ParserOptions } from 'prettier';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import type { ApexNode } from './types.js';
+import { getNodeClassOptional } from './utils.js';
 import {
 	normalizeSingleApexDocComment,
 	normalizeAnnotationTokens,
@@ -164,10 +165,11 @@ const handleDanglingComment = (comment: unknown): boolean => {
 	};
 
 	const { enclosingNode } = commentWithContext;
+	if (!enclosingNode) return false;
+	const enclosingNodeClass = getNodeClassOptional(enclosingNode);
 	if (
-		enclosingNode &&
-		enclosingNode['@class'] &&
-		ALLOW_DANGLING_COMMENTS.includes(enclosingNode['@class']) &&
+		enclosingNodeClass &&
+		ALLOW_DANGLING_COMMENTS.includes(enclosingNodeClass) &&
 		((enclosingNode as { stmnts?: unknown[] }).stmnts?.length === 0 ||
 			(enclosingNode as { members?: unknown[] }).members?.length === 0)
 	) {
@@ -193,10 +195,9 @@ const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
 	};
 
 	const { followingNode } = commentWithContext;
-	if (
-		!followingNode ||
-		followingNode['@class'] !== 'apex.jorje.data.ast.Stmnt$BlockStmnt'
-	) {
+	if (!followingNode) return false;
+	const followingNodeClass = getNodeClassOptional(followingNode);
+	if (followingNodeClass !== 'apex.jorje.data.ast.Stmnt$BlockStmnt') {
 		return false;
 	}
 
@@ -229,11 +230,11 @@ const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
 	};
 
 	const { precedingNode, placement } = commentWithContext;
+	if (placement !== 'endOfLine' || !precedingNode) return false;
+	const precedingNodeClass = getNodeClassOptional(precedingNode);
 	if (
-		placement !== 'endOfLine' ||
-		!precedingNode ||
-		(precedingNode['@class'] !== 'apex.jorje.data.ast.Expr$BinaryExpr' &&
-			precedingNode['@class'] !== 'apex.jorje.data.ast.Expr$BooleanExpr')
+		precedingNodeClass !== 'apex.jorje.data.ast.Expr$BinaryExpr' &&
+		precedingNodeClass !== 'apex.jorje.data.ast.Expr$BooleanExpr'
 	) {
 		return false;
 	}
@@ -978,41 +979,22 @@ const wrapTextToWidth = (
 		return [textContent];
 	}
 
-	// Use fill builder to wrap content - split on whitespace characters manually
-	const words: string[] = [];
-	let currentWord = '';
-	for (let i = 0; i < textContent.length; i++) {
-		const char = textContent[i];
-		if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
-			if (currentWord.length > 0) {
-				words.push(currentWord);
-				currentWord = '';
-			}
-		} else {
-			currentWord += char;
-		}
-	}
-	if (currentWord.length > 0) {
-		words.push(currentWord);
-	}
-	const fillDoc =
-		words.length > 0
-			? prettier.doc.builders.fill(
-					prettier.doc.builders.join(
-						prettier.doc.builders.line,
-						words,
-					),
-				)
-			: '';
-	const wrappedText = fillDoc
-		? prettier.doc.printer.printDocToString(fillDoc, {
-				printWidth: effectiveWidth,
-				tabWidth: options.tabWidth,
-				...(options.useTabs !== null && options.useTabs !== undefined
-					? { useTabs: options.useTabs }
-					: {}),
-			}).formatted
-		: '';
+	// Use fill builder to wrap content - split on whitespace
+	const words = textContent.split(/\s+/).filter((word) => word.length > 0);
+	if (words.length === 0) return [textContent];
+
+	const fillDoc = prettier.doc.builders.fill(
+		prettier.doc.builders.join(prettier.doc.builders.line, words),
+	);
+	const useTabsOption =
+		options.useTabs !== null && options.useTabs !== undefined
+			? { useTabs: options.useTabs }
+			: {};
+	const wrappedText = prettier.doc.printer.printDocToString(fillDoc, {
+		printWidth: effectiveWidth,
+		tabWidth: options.tabWidth,
+		...useTabsOption,
+	}).formatted;
 	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
 };
 
@@ -1120,11 +1102,10 @@ const customPrintComment = (
 			return false;
 		}
 		const commentValue = (comment as { value: string }).value;
+		const trimmedStart = commentValue.trimStart();
+		const trimmedEnd = commentValue.trimEnd();
 		// Must start with /** and end with */
-		if (
-			!commentValue.trimStart().startsWith('/**') ||
-			!commentValue.trimEnd().endsWith('*/')
-		) {
+		if (!trimmedStart.startsWith('/**') || !trimmedEnd.endsWith('*/')) {
 			return false;
 		}
 		const lines = commentValue.split('\n');

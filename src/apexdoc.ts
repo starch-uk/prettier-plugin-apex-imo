@@ -56,6 +56,7 @@ const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
 const ZERO_INDENT = 0;
 const BODY_INDENT_WHEN_ZERO = 2;
 const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
+const DEFAULT_PRINT_WIDTH = 80;
 
 /**
  * Calculates comment prefix and effective width for ApexDoc formatting.
@@ -82,7 +83,8 @@ const calculatePrefixAndWidth = (
 	const bodyIndent =
 		commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
 	const actualPrefixLength = commentPrefix.length + bodyIndent;
-	const effectiveWidth = (printWidth ?? 80) - actualPrefixLength;
+	const effectiveWidth =
+		(printWidth ?? DEFAULT_PRINT_WIDTH) - actualPrefixLength;
 	return {
 		commentPrefix,
 		bodyIndent,
@@ -198,25 +200,23 @@ const normalizeSingleApexDocComment = (
 	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
 
-	// Wrap annotations if printWidth is available
-	// Calculate effectiveWidth accounting for body indentation (same as tokensToApexDocString)
-	if (printWidth) {
-		const { effectiveWidth, actualPrefixLength } = calculatePrefixAndWidth(
-			commentIndent,
-			printWidth,
-			{
+	// Cache prefix and width calculations (used in both wrapAnnotationTokens and tokensToApexDocString)
+	const prefixAndWidth = printWidth
+		? calculatePrefixAndWidth(commentIndent, printWidth, {
 				tabWidth: tabWidthValue,
 				useTabs: options.useTabs,
-			},
-		);
+			})
+		: null;
 
+	// Wrap annotations if printWidth is available
+	if (prefixAndWidth) {
 		// Pass the actual prefix length to wrapAnnotationTokens so it can calculate first line width correctly
 		// eslint-disable-next-line @typescript-eslint/no-use-before-define
 		tokens = wrapAnnotationTokens(
 			tokens,
-			effectiveWidth,
+			prefixAndWidth.effectiveWidth,
 			commentIndent,
-			actualPrefixLength,
+			prefixAndWidth.actualPrefixLength,
 			{
 				tabWidth: tabWidthValue,
 				useTabs: options.useTabs,
@@ -225,16 +225,19 @@ const normalizeSingleApexDocComment = (
 	}
 
 	// Convert tokens back to string
-	// For now, skip paragraph wrapping to avoid filtering out text tokens
-	// TODO: Implement proper paragraph wrapping that preserves all token types
 	const finalTokens = tokens;
 
 	// eslint-disable-next-line @typescript-eslint/no-use-before-define
-	const commentString = tokensToApexDocString(finalTokens, commentIndent, {
-		printWidth: printWidth,
-		tabWidth: tabWidthValue,
-		useTabs: options.useTabs,
-	});
+	const commentString = tokensToApexDocString(
+		finalTokens,
+		commentIndent,
+		{
+			printWidth: printWidth,
+			tabWidth: tabWidthValue,
+			useTabs: options.useTabs,
+		},
+		prefixAndWidth,
+	);
 
 	// Convert the formatted comment string to Doc
 	const lines = commentString.split('\n');
@@ -253,14 +256,17 @@ const renderAnnotationToken = (
 		token.content.length > EMPTY ? token.content.split('\n') : [''];
 	const lines: string[] = [];
 	const annotationName = token.name;
+	const trimmedCommentPrefix = commentPrefix.trimEnd();
 
 	// Add followingText before annotation if it exists
-	if (token.followingText && token.followingText.trim().length > EMPTY) {
+	const trimmedFollowingText = token.followingText?.trim();
+	if (trimmedFollowingText && trimmedFollowingText.length > EMPTY) {
 		const followingLines = token.followingText
 			.split('\n')
-			.filter((line: string) => line.trim().length > EMPTY);
+			.map((line: string) => line.trim())
+			.filter((line: string) => line.length > EMPTY);
 		for (const line of followingLines) {
-			lines.push(`${commentPrefix}${line.trim()}`);
+			lines.push(`${commentPrefix}${line}`);
 		}
 	}
 
@@ -278,7 +284,7 @@ const renderAnnotationToken = (
 		if (lineContent.length > EMPTY) {
 			lines.push(`${commentPrefix}${lineContent}`);
 		} else {
-			lines.push(commentPrefix.trimEnd());
+			lines.push(trimmedCommentPrefix);
 		}
 	}
 
@@ -328,43 +334,45 @@ const renderCodeBlockToken = (
 	}
 
 	codeToUse = resultLines.join('\n');
-	const isEmptyBlock = codeToUse.trim().length === EMPTY;
+	const trimmedCodeToUse = codeToUse.trim();
+	const isEmptyBlock = trimmedCodeToUse.length === EMPTY;
 	const lines: string[] = [];
 
 	if (isEmptyBlock) {
 		lines.push(`${commentPrefix}{@code}`);
 	} else if (codeToUse.length > EMPTY) {
-		const codeLines = codeToUse.split('\n');
-		const alreadyWrapped = codeToUse.trim().startsWith('{@code');
-		let finalCodeLines: string[];
+		const codeLinesForProcessing = codeToUse.split('\n');
+		const alreadyWrapped = trimmedCodeToUse.startsWith('{@code');
+		let finalCodeLines: string[] = [];
 
 		if (alreadyWrapped) {
-			finalCodeLines = codeLines;
+			finalCodeLines = codeLinesForProcessing;
 			if (finalCodeLines.length === 1) {
-				const line = finalCodeLines[0];
+				const [line] = finalCodeLines;
 				if (line && line.includes(';') && line.endsWith('}')) {
 					finalCodeLines[0] = line.slice(0, -1) + ' }';
 				}
 			}
 		} else {
-			const isSingleLine = codeLines.length === 1;
-			const singleLineContent = codeLines[0]?.trim() ?? '';
+			const isSingleLine = codeLinesForProcessing.length === 1;
+			const singleLineContent = codeLinesForProcessing[0]?.trim() ?? '';
 			const singleLineWithBraces = `{@code ${singleLineContent} }`;
-			const printWidth = options.printWidth ?? 80;
+			const printWidth = options.printWidth ?? DEFAULT_PRINT_WIDTH;
+			const commentPrefixLength = commentPrefix.length;
 			const fitsOnOneLine =
-				singleLineWithBraces.length <=
-				printWidth - commentPrefix.length;
+				singleLineWithBraces.length <= printWidth - commentPrefixLength;
 
 			finalCodeLines =
 				isSingleLine && fitsOnOneLine
 					? [singleLineWithBraces]
-					: [`{@code`, ...codeLines, `}`];
+					: [`{@code`, ...codeLinesForProcessing, `}`];
 		}
 
+		const trimmedCommentPrefix = commentPrefix.trimEnd();
 		for (const codeLine of finalCodeLines) {
 			lines.push(
 				codeLine.trim().length === EMPTY
-					? commentPrefix.trimEnd()
+					? trimmedCommentPrefix
 					: `${commentPrefix}${codeLine}`,
 			);
 		}
@@ -402,8 +410,9 @@ const renderTextOrParagraphToken = (
 		allLines.push(...wrappedLine.split('\n'));
 	}
 	const cleanedLines = removeTrailingEmptyLines(allLines);
+	const trimmedCommentPrefix = commentPrefix;
 	const linesWithPrefix = cleanedLines.map(
-		(line: string) => `${commentPrefix}${line.trim()}`,
+		(line: string) => `${trimmedCommentPrefix}${line.trim()}`,
 	);
 	return {
 		...token,
@@ -432,12 +441,12 @@ const tokensToApexDocString = (
 		readonly useTabs?: boolean | null | undefined;
 		readonly printWidth?: number;
 	}>,
+	cachedPrefixAndWidth?: ReturnType<typeof calculatePrefixAndWidth> | null,
 ): string => {
-	const { commentPrefix, effectiveWidth } = calculatePrefixAndWidth(
-		commentIndent,
-		options.printWidth,
-		options,
-	);
+	const prefixAndWidth =
+		cachedPrefixAndWidth ??
+		calculatePrefixAndWidth(commentIndent, options.printWidth, options);
+	const { commentPrefix, effectiveWidth } = prefixAndWidth;
 
 	const apexDocTokens: CommentToken[] = [];
 
@@ -581,6 +590,32 @@ const parseApexDocTokens = (
 };
 
 /**
+ * Checks if content has a complete {@code} block starting at codeTagIndex.
+ * @param content - The content to check.
+ * @param codeTagIndex - The index where {@code starts.
+ * @returns True if a complete block is found.
+ */
+const hasCompleteCodeBlock = (
+	content: string,
+	codeTagIndex: number,
+): boolean => {
+	let braceCount = 0;
+	let searchPos = codeTagIndex;
+	while (searchPos < content.length) {
+		if (content[searchPos] === '{') {
+			braceCount++;
+		} else if (content[searchPos] === '}') {
+			braceCount--;
+			if (braceCount === 0) {
+				return true;
+			}
+		}
+		searchPos++;
+	}
+	return false;
+};
+
+/**
  * Merges paragraph tokens that contain split {@code} blocks to ensure complete blocks are in single tokens.
  * @param tokens - Array of comment tokens.
  * @returns Array of tokens with merged {@code} blocks.
@@ -604,21 +639,10 @@ const mergeCodeBlockTokens = (
 
 			if (codeTagIndex !== -1) {
 				// Check if this token contains a complete {@code} block
-				let braceCount = 0;
-				let hasCompleteBlock = false;
-				let searchPos = codeTagIndex;
-
-				while (searchPos < content.length && !hasCompleteBlock) {
-					if (content[searchPos] === '{') {
-						braceCount++;
-					} else if (content[searchPos] === '}') {
-						braceCount--;
-						if (braceCount === 0) {
-							hasCompleteBlock = true;
-						}
-					}
-					searchPos++;
-				}
+				let hasCompleteBlock = hasCompleteCodeBlock(
+					content,
+					codeTagIndex,
+				);
 
 				if (!hasCompleteBlock) {
 					// Need to merge with subsequent tokens
@@ -638,24 +662,10 @@ const mergeCodeBlockTokens = (
 							mergedLines.push(...nextToken.lines);
 
 							// Check if the merged content now has a complete block
-							braceCount = 0;
-							searchPos = codeTagIndex;
-							hasCompleteBlock = false;
-
-							while (
-								searchPos < mergedContent.length &&
-								!hasCompleteBlock
-							) {
-								if (mergedContent[searchPos] === '{') {
-									braceCount++;
-								} else if (mergedContent[searchPos] === '}') {
-									braceCount--;
-									if (braceCount === 0) {
-										hasCompleteBlock = true;
-									}
-								}
-								searchPos++;
-							}
+							hasCompleteBlock = hasCompleteCodeBlock(
+								mergedContent,
+								codeTagIndex,
+							);
 
 							if (hasCompleteBlock) {
 								// Found complete block, create merged token
@@ -1356,27 +1366,9 @@ const wrapAnnotationTokens = (
 			// First line has less width due to @annotationName prefix
 			// Continuation lines have full effectiveWidth
 			// Split on whitespace characters manually
-			const words: string[] = [];
-			let currentWord = '';
-			for (let i = 0; i < annotationContent.length; i++) {
-				const char = annotationContent[i];
-				if (
-					char === ' ' ||
-					char === '\t' ||
-					char === '\n' ||
-					char === '\r'
-				) {
-					if (currentWord.length > 0) {
-						words.push(currentWord);
-						currentWord = '';
-					}
-				} else {
-					currentWord += char;
-				}
-			}
-			if (currentWord.length > 0) {
-				words.push(currentWord);
-			}
+			const words = annotationContent
+				.split(/\s+/)
+				.filter((word) => word.length > 0);
 
 			if (words.length === 0) {
 				newTokens.push(token);
@@ -1384,13 +1376,9 @@ const wrapAnnotationTokens = (
 			}
 
 			// Calculate what fits on the first line
-			let firstLineWords: string[] = [];
+			const firstLineWords: string[] = [];
 			let currentFirstLine = '';
-			let remainingWords = [...words];
-
-			while (remainingWords.length > 0) {
-				const word = remainingWords[0];
-				if (!word) break;
+			for (const word of words) {
 				const testLine =
 					currentFirstLine === ''
 						? word
@@ -1401,18 +1389,26 @@ const wrapAnnotationTokens = (
 				) {
 					firstLineWords.push(word);
 					currentFirstLine = testLine;
-					remainingWords.shift();
 				} else {
 					break;
 				}
 			}
+			const remainingWords = words.slice(firstLineWords.length);
 
 			// Use fill builder for remaining content with continuation width
-			let wrappedContent: string | Doc = '';
-			if (firstLineWords.length > 0) {
-				wrappedContent = firstLineWords.join(' ');
-			}
+			const firstLineContent =
+				firstLineWords.length > 0 ? firstLineWords.join(' ') : '';
 
+			const useTabsOption =
+				options.useTabs !== null && options.useTabs !== undefined
+					? { useTabs: options.useTabs }
+					: {};
+			const baseOptions = {
+				tabWidth: options.tabWidth,
+				...useTabsOption,
+			};
+
+			let wrappedContent: string | Doc = firstLineContent;
 			if (remainingWords.length > 0) {
 				// Use fill for continuation lines with full effectiveWidth
 				const continuationFill = prettier.doc.builders.fill(
@@ -1424,12 +1420,8 @@ const wrapAnnotationTokens = (
 				const continuationText = prettier.doc.printer.printDocToString(
 					continuationFill,
 					{
+						...baseOptions,
 						printWidth: continuationLineAvailableWidth,
-						tabWidth: options.tabWidth,
-						...(options.useTabs !== null &&
-						options.useTabs !== undefined
-							? { useTabs: options.useTabs }
-							: {}),
 					},
 				).formatted;
 
@@ -1437,11 +1429,9 @@ const wrapAnnotationTokens = (
 				const continuationLines = continuationText
 					.split('\n')
 					.filter((line) => line.trim().length > 0);
-				const allLines: string[] = [];
-				if (firstLineWords.length > 0) {
-					allLines.push(firstLineWords.join(' '));
-				}
-				allLines.push(...continuationLines);
+				const allLines = firstLineContent
+					? [firstLineContent, ...continuationLines]
+					: continuationLines;
 
 				wrappedContent = prettier.doc.builders.join(
 					prettier.doc.builders.hardline,
@@ -1452,15 +1442,11 @@ const wrapAnnotationTokens = (
 			const newContent = prettier.doc.printer.printDocToString(
 				wrappedContent,
 				{
+					...baseOptions,
 					printWidth: Math.max(
 						firstLineAvailableWidth,
 						continuationLineAvailableWidth,
 					),
-					tabWidth: options.tabWidth,
-					...(options.useTabs !== null &&
-					options.useTabs !== undefined
-						? { useTabs: options.useTabs }
-						: {}),
 				},
 			).formatted;
 			newTokens.push({
