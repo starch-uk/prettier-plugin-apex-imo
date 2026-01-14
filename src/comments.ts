@@ -18,9 +18,9 @@ import {
 } from './utils.js';
 import {
 	normalizeSingleApexDocComment,
-	normalizeAnnotationTokens,
 	removeTrailingEmptyLines,
 } from './apexdoc.js';
+import { normalizeAnnotationTokens } from './apexdoc-annotations.js';
 
 // Doc-based token types for future token-to-Doc conversion
 interface DocContentToken {
