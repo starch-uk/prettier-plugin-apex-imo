@@ -88,7 +88,7 @@ const formatAnnotationValue = (
 	if (cls === TRUE_ANNOTATION_VALUE_CLASS) return 'true';
 	if (cls === FALSE_ANNOTATION_VALUE_CLASS) return 'false';
 	if (isStringAnnotationValue(value)) {
-		const stringValue = value.value;
+		const stringValue = (value as { value: string }).value;
 		return stringValue.length > 0 ? `'${stringValue}'` : "''";
 	}
 	return "''";

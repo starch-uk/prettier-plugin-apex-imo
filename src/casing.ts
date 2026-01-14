@@ -149,7 +149,6 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	if (typeof parent !== 'object' || parent == null) return false;
 	const parentClass = getNodeClassOptional(parent);
 	const hasTypesArray =
-		typeof parent === 'object' &&
 		'types' in parent &&
 		Array.isArray((parent as { types?: unknown })['types']);
 
@@ -188,16 +187,16 @@ function shouldNormalizeType(
 	params: Readonly<ShouldNormalizeTypeParams>,
 ): boolean {
 	const { forceTypeContext, parentKey, key, path } = params;
-	if (forceTypeContext || parentKey === 'types' || key === 'names') {
-		return true;
-	}
-	if (typeof key === 'string') {
-		const lowerKey = key.toLowerCase();
-		if (lowerKey === 'type' || lowerKey === 'typeref' || key === 'types') {
-			return true;
-		}
-	}
-	return isInTypeContext(path);
+	return (
+		forceTypeContext ||
+		parentKey === 'types' ||
+		key === 'names' ||
+		(typeof key === 'string' &&
+			(key.toLowerCase() === 'type' ||
+				key.toLowerCase() === 'typeref' ||
+				key === 'types')) ||
+		isInTypeContext(path)
+	);
 }
 
 /**
