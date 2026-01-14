@@ -396,7 +396,6 @@ const normalizeCommentLine = (
 	}
 
 	// Found asterisk - normalize
-	const beforeAsterisk = line.substring(0, asteriskPos);
 	let afterAsterisk = line.substring(asteriskPos + 1);
 	// Skip multiple asterisks
 	while (afterAsterisk.startsWith('*')) {
@@ -627,6 +626,19 @@ const detectCodeBlocks = (
  * @param normalizedComment - The normalized comment string.
  * @returns Array of tokens.
  */
+/**
+ * Creates a paragraph token from accumulated paragraph data.
+ */
+const createParagraphToken = (
+	paragraph: readonly string[],
+	lines: readonly string[],
+): ContentToken => ({
+	type: 'paragraph',
+	content: paragraph.join(' '),
+	lines: [...lines],
+	isContinuation: false,
+});
+
 const parseCommentToTokens = (
 	normalizedComment: Readonly<string>,
 ): readonly CommentToken[] => {
@@ -672,12 +684,7 @@ const parseCommentToTokens = (
 		if (isInCodeBlock) {
 			// Finish current paragraph if any, then handle code block
 			if (currentParagraph.length > EMPTY) {
-				tokens.push({
-					type: 'paragraph',
-					content: currentParagraph.join(' '),
-					lines: currentParagraphLines,
-					isContinuation: false,
-				} satisfies ParagraphToken);
+				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -705,12 +712,7 @@ const parseCommentToTokens = (
 		if (trimmedLine.length === EMPTY) {
 			// Empty line - finish current paragraph if any
 			if (currentParagraph.length > EMPTY) {
-				tokens.push({
-					type: 'paragraph',
-					content: currentParagraph.join(' '),
-					lines: currentParagraphLines,
-					isContinuation: false,
-				} satisfies ParagraphToken);
+				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -742,12 +744,7 @@ const parseCommentToTokens = (
 				currentParagraph.length > EMPTY &&
 				!hasUnclosedCodeBlock
 			) {
-				tokens.push({
-					type: 'paragraph',
-					content: currentParagraph.join(' '),
-					lines: currentParagraphLines,
-					isContinuation: false,
-				} satisfies ParagraphToken);
+				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -779,12 +776,7 @@ const parseCommentToTokens = (
 					nextTrimmed.length > EMPTY) ||
 				isAnnotationLine
 			) {
-				tokens.push({
-					type: 'paragraph',
-					content: currentParagraph.join(' '),
-					lines: currentParagraphLines,
-					isContinuation: false,
-				} satisfies ParagraphToken);
+				tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
@@ -793,12 +785,7 @@ const parseCommentToTokens = (
 
 	// Add last paragraph if any
 	if (currentParagraph.length > EMPTY) {
-		tokens.push({
-			type: 'paragraph',
-			content: currentParagraph.join(' '),
-			lines: currentParagraphLines,
-			isContinuation: false,
-		} satisfies ParagraphToken);
+		tokens.push(createParagraphToken(currentParagraph, currentParagraphLines));
 	}
 
 	// If no paragraphs were found, create a single text token
@@ -809,7 +796,7 @@ const parseCommentToTokens = (
 				type: 'text',
 				content,
 				lines: contentLines,
-			} satisfies TextToken,
+			} satisfies ContentToken,
 		];
 	}
 
@@ -845,6 +832,7 @@ const tokensToCommentString = (
 
 	for (let i = 0; i < tokens.length; i++) {
 		const token = tokens[i];
+		if (!token) continue;
 		const nextToken = i + 1 < tokens.length ? tokens[i + 1] : null;
 		const isFollowedByCodeBlock = nextToken?.type === 'code';
 
@@ -879,9 +867,11 @@ const tokensToCommentString = (
 			}
 		} else if (token.type === 'paragraph') {
 			// Use wrapped lines if available, otherwise use original lines
-			for (let j = 0; j < token.lines.length; j++) {
-				let line = token.lines[j];
-				const isLastLine = j === token.lines.length - 1;
+			const paragraphToken = token;
+			for (let j = 0; j < paragraphToken.lines.length; j++) {
+				let line = paragraphToken.lines[j];
+				if (!line) continue;
+				const isLastLine = j === paragraphToken.lines.length - 1;
 				// Remove trailing newline from the last line of a paragraph token if it's followed by a code block
 				// to avoid an extra blank line before the code block
 				if (
@@ -916,7 +906,8 @@ const tokensToCommentString = (
 			}
 
 			// Use formatted code if available, otherwise use raw code
-			const codeToUse = token.formattedCode ?? token.rawCode;
+			const codeToken = token;
+			const codeToUse = codeToken.formattedCode ?? codeToken.rawCode;
 			// Handle empty code blocks - render {@code} even if content is empty
 			const isEmptyBlock = codeToUse.trim().length === EMPTY;
 			if (isEmptyBlock) {
@@ -994,9 +985,11 @@ const wrapTextToWidth = (
 	const wrappedText = fillDoc
 		? prettier.doc.printer.printDocToString(fillDoc, {
 				printWidth: effectiveWidth,
-				tabWidth: options.tabWidth,
-				useTabs: options.useTabs,
-			}).formatted
+			tabWidth: options.tabWidth,
+			...(options.useTabs !== null && options.useTabs !== undefined
+				? { useTabs: options.useTabs }
+				: {}),
+		}).formatted
 		: '';
 	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
 };
@@ -1044,12 +1037,15 @@ const wrapParagraphTokens = (
 			(line) => `${commentPrefix}${line}`,
 		);
 
-		wrappedTokens.push({
-			type: 'paragraph',
+		const wrappedToken = {
+			type: 'paragraph' as const,
 			content: wrappedLines.join(' '),
 			lines: wrappedTokenLines,
-			isContinuation: token.isContinuation,
-		} satisfies ParagraphToken);
+			...(token.isContinuation !== undefined
+				? { isContinuation: token.isContinuation }
+				: {}),
+		} satisfies ContentToken;
+		wrappedTokens.push(wrappedToken);
 	}
 
 	return wrappedTokens;
@@ -1180,7 +1176,7 @@ const customPrintComment = (
 
 			// Return the normalized comment as Prettier documents
 			const lines = normalizedComment.split('\n');
-			const { fill, join, hardline } = prettier.doc.builders;
+			const { join, hardline } = prettier.doc.builders;
 			return [join(hardline, lines)];
 		}
 	}
@@ -1189,56 +1185,66 @@ const customPrintComment = (
 };
 
 /**
+ * Tries handlers in order until one returns true.
+ */
+const tryHandlers = (
+	comment: unknown,
+	handlers: ReadonlyArray<(comment: unknown) => boolean>,
+): boolean => {
+	for (const handler of handlers) {
+		if (handler(comment)) return true;
+	}
+	return false;
+};
+
+/**
  * Handles comments that are on their own line.
  * This is called by Prettier's comment handling code.
- * @param _comment - The comment node (unused in stub).
- * @param _sourceCode - The entire source code (unused in stub).
+ * @param comment - The comment node.
+ * @param _sourceCode - The entire source code (unused).
  * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleOwnLineComment = (
 	comment: unknown,
 	_sourceCode: string,
-): boolean => {
-	return (
-		handleDanglingComment(comment) ||
-		handleBlockStatementLeadingComment(comment)
-	);
-};
+): boolean =>
+	tryHandlers(comment, [
+		handleDanglingComment,
+		handleBlockStatementLeadingComment,
+	]);
 
 /**
  * Handles comments that have preceding text but no trailing text on a line.
  * This is called by Prettier's comment handling code.
- * @param _comment - The comment node (unused in stub).
- * @param _sourceCode - The entire source code (unused in stub).
+ * @param comment - The comment node.
+ * @param _sourceCode - The entire source code (unused).
  * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleEndOfLineComment = (
 	comment: unknown,
 	_sourceCode: string,
-): boolean => {
-	return (
-		handleDanglingComment(comment) ||
-		handleBinaryExpressionTrailingComment(comment) ||
-		handleBlockStatementLeadingComment(comment)
-	);
-};
+): boolean =>
+	tryHandlers(comment, [
+		handleDanglingComment,
+		handleBinaryExpressionTrailingComment,
+		handleBlockStatementLeadingComment,
+	]);
 
 /**
  * Handles comments that have both preceding text and trailing text on a line.
  * This is called by Prettier's comment handling code.
- * @param _comment - The comment node (unused in stub).
- * @param _sourceCode - The entire source code (unused in stub).
+ * @param comment - The comment node.
+ * @param _sourceCode - The entire source code (unused).
  * @returns False to let Prettier handle the comment with its default logic.
  */
 const handleRemainingComment = (
 	comment: unknown,
 	_sourceCode: string,
-): boolean => {
-	return (
-		handleDanglingComment(comment) ||
-		handleBlockStatementLeadingComment(comment)
-	);
-};
+): boolean =>
+	tryHandlers(comment, [
+		handleDanglingComment,
+		handleBlockStatementLeadingComment,
+	]);
 
 export {
 	getIndentLevel,
