@@ -6,7 +6,12 @@ import type { ParserOptions } from 'prettier';
 import type { AstPath, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import type { ApexNode } from './types.js';
-import { getNodeClassOptional } from './utils.js';
+import {
+	calculateEffectiveWidth,
+	getNodeClassOptional,
+	isEmpty,
+	isNotEmpty,
+} from './utils.js';
 import {
 	normalizeSingleApexDocComment,
 	normalizeAnnotationTokens,
@@ -715,7 +720,7 @@ const parseCommentToTokens = (
 		// Remove comment prefix (*) to check if line is empty
 		const trimmedLine = removeCommentPrefix(line);
 
-		if (trimmedLine.length === EMPTY) {
+		if (isEmpty(trimmedLine)) {
 			// Empty line - finish current paragraph if any
 			if (currentParagraph.length > EMPTY) {
 				tokens.push(
@@ -777,7 +782,7 @@ const parseCommentToTokens = (
 			const nextTrimmed =
 				nextLine !== undefined ? removeCommentPrefix(nextLine) : '';
 			const nextStartsWithCapital =
-				nextTrimmed.length > EMPTY &&
+				isNotEmpty(nextTrimmed) &&
 				nextTrimmed.charAt(0) >= 'A' &&
 				nextTrimmed.charAt(0) <= 'Z';
 
@@ -789,7 +794,7 @@ const parseCommentToTokens = (
 			if (
 				(endsWithSentencePunctuation &&
 					nextStartsWithCapital &&
-					nextTrimmed.length > EMPTY) ||
+					isNotEmpty(nextTrimmed)) ||
 				isAnnotationLine
 			) {
 				tokens.push(
@@ -812,7 +817,7 @@ const parseCommentToTokens = (
 	}
 
 	// If no paragraphs were found, create a single text token
-	if (tokens.length === EMPTY) {
+	if (isEmpty(tokens)) {
 		const content = contentLines.join('\n');
 		return [
 			{
@@ -980,8 +985,8 @@ const wrapTextToWidth = (
 	}
 
 	// Use fill builder to wrap content - split on whitespace
-	const words = textContent.split(/\s+/).filter((word) => word.length > 0);
-	if (words.length === 0) return [textContent];
+	const words = textContent.split(/\s+/).filter((word) => isNotEmpty(word));
+	if (isEmpty(words)) return [textContent];
 
 	const fillDoc = prettier.doc.builders.fill(
 		prettier.doc.builders.join(prettier.doc.builders.line, words),
@@ -995,7 +1000,7 @@ const wrapTextToWidth = (
 		tabWidth: options.tabWidth,
 		...useTabsOption,
 	}).formatted;
-	return wrappedText.split('\n').filter((line) => line.trim().length > 0);
+	return wrappedText.split('\n').filter((line) => isNotEmpty(line.trim()));
 };
 
 /**
@@ -1017,7 +1022,7 @@ const wrapParagraphTokens = (
 	}>,
 ): readonly ContentToken[] => {
 	const commentPrefixLength = CommentPrefix.getLength(baseIndent);
-	const effectiveWidth = printWidth - commentPrefixLength;
+	const effectiveWidth = calculateEffectiveWidth(printWidth, commentPrefixLength);
 
 	const wrappedTokens: ContentToken[] = [];
 

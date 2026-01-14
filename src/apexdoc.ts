@@ -25,6 +25,11 @@ import {
 	EMPTY,
 	NOT_FOUND_INDEX,
 } from './comments.js';
+import {
+	calculateEffectiveWidth,
+	isEmpty,
+	isNotEmpty,
+} from './utils.js';
 import type {
 	CommentToken,
 	ContentToken,
@@ -43,7 +48,7 @@ import {
 	EMPTY_CODE_TAG,
 	CODE_TAG,
 } from './apexdoc-code.js';
-import { startsWithAccessModifier } from './utils.js';
+import { preserveBlankLineAfterClosingBrace } from './utils.js';
 import { removeCommentPrefix } from './comments.js';
 import {
 	normalizeAnnotationNamesInText,
@@ -83,12 +88,14 @@ const calculatePrefixAndWidth = (
 	const bodyIndent =
 		commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT;
 	const actualPrefixLength = commentPrefix.length + bodyIndent;
-	const effectiveWidth =
-		(printWidth ?? DEFAULT_PRINT_WIDTH) - actualPrefixLength;
-	return {
-		commentPrefix,
-		bodyIndent,
+	const effectiveWidth = calculateEffectiveWidth(
+		printWidth,
 		actualPrefixLength,
+	);
+	return {
+		actualPrefixLength,
+		bodyIndent,
+		commentPrefix,
 		effectiveWidth,
 	};
 };
@@ -252,19 +259,20 @@ const renderAnnotationToken = (
 	token: AnnotationToken,
 	commentPrefix: string,
 ): ContentToken | null => {
-	const contentLines =
-		token.content.length > EMPTY ? token.content.split('\n') : [''];
+	const contentLines = isNotEmpty(token.content)
+		? token.content.split('\n')
+		: [''];
 	const lines: string[] = [];
 	const annotationName = token.name;
 	const trimmedCommentPrefix = commentPrefix.trimEnd();
 
 	// Add followingText before annotation if it exists
 	const trimmedFollowingText = token.followingText?.trim();
-	if (trimmedFollowingText && trimmedFollowingText.length > EMPTY) {
+	if (trimmedFollowingText && isNotEmpty(trimmedFollowingText)) {
 		const followingLines = token.followingText
 			.split('\n')
 			.map((line: string) => line.trim())
-			.filter((line: string) => line.length > EMPTY);
+			.filter((line: string) => isNotEmpty(line));
 		for (const line of followingLines) {
 			lines.push(`${commentPrefix}${line}`);
 		}
@@ -272,16 +280,15 @@ const renderAnnotationToken = (
 
 	// First line includes the @annotation name
 	const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
-	const firstLine =
-		firstContent.length > EMPTY
-			? `${commentPrefix}@${annotationName} ${firstContent}`
-			: `${commentPrefix}@${annotationName}`;
+	const firstLine = isNotEmpty(firstContent)
+		? `${commentPrefix}@${annotationName} ${firstContent}`
+		: `${commentPrefix}@${annotationName}`;
 	lines.push(firstLine);
 
 	// Subsequent lines are continuation of the annotation content
 	for (let i = INDEX_ONE; i < contentLines.length; i++) {
 		const lineContent = contentLines[i] ?? '';
-		if (lineContent.length > EMPTY) {
+		if (isNotEmpty(lineContent)) {
 			lines.push(`${commentPrefix}${lineContent}`);
 		} else {
 			lines.push(trimmedCommentPrefix);
@@ -319,23 +326,16 @@ const renderCodeBlockToken = (
 
 	for (let i = 0; i < codeLines.length; i++) {
 		const codeLine = codeLines[i] ?? '';
-		const trimmedLine = codeLine.trim();
 		resultLines.push(codeLine);
 
-		if (trimmedLine.endsWith('}') && i < codeLines.length - 1) {
-			const nextLine = codeLines[i + 1]?.trim() ?? '';
-			if (
-				nextLine.length > 0 &&
-				(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
-			) {
-				resultLines.push('');
-			}
+		if (preserveBlankLineAfterClosingBrace(codeLines, i)) {
+			resultLines.push('');
 		}
 	}
 
 	codeToUse = resultLines.join('\n');
 	const trimmedCodeToUse = codeToUse.trim();
-	const isEmptyBlock = trimmedCodeToUse.length === EMPTY;
+	const isEmptyBlock = isEmpty(trimmedCodeToUse);
 	const lines: string[] = [];
 
 	if (isEmptyBlock) {
@@ -371,18 +371,18 @@ const renderCodeBlockToken = (
 		const trimmedCommentPrefix = commentPrefix.trimEnd();
 		for (const codeLine of finalCodeLines) {
 			lines.push(
-				codeLine.trim().length === EMPTY
+				isEmpty(codeLine.trim())
 					? trimmedCommentPrefix
 					: `${commentPrefix}${codeLine}`,
 			);
 		}
 	}
 
-	return lines.length > EMPTY
+	return isNotEmpty(lines)
 		? {
-				type: 'text',
 				content: lines.join('\n'),
 				lines,
+				type: 'text',
 			}
 		: null;
 };
@@ -526,7 +526,7 @@ const wrapTextContent = (
 	// 3. Next line is empty, annotation, or code block
 	const cleanedLines = originalLines
 		.map((line) => removeCommentPrefix(line))
-		.filter((line) => line.length > EMPTY);
+		.filter((line) => isNotEmpty(line));
 
 	const joinedParts: string[] = [];
 	for (let i = 0; i < cleanedLines.length; i++) {
@@ -578,14 +578,14 @@ const parseApexDocTokens = (
 	readonly effectiveWidth: number;
 } => {
 	const commentPrefixLength = CommentPrefix.getLength(commentIndent);
-	const effectiveWidth = printWidth - commentPrefixLength;
+	const effectiveWidth = calculateEffectiveWidth(printWidth, commentPrefixLength);
 
 	// Parse comment to tokens using the basic parser
 	let tokens = parseCommentToTokens(normalizedComment);
 
 	return {
-		tokens,
 		effectiveWidth,
+		tokens,
 	};
 };
 
@@ -670,9 +670,9 @@ const mergeCodeBlockTokens = (
 							if (hasCompleteBlock) {
 								// Found complete block, create merged token
 								const mergedToken: ContentToken = {
-									type: 'paragraph',
 									content: mergedContent,
 									lines: mergedLines,
+									type: 'paragraph',
 									...(token.isContinuation !== undefined
 										? {
 												isContinuation:
@@ -807,7 +807,7 @@ const collectContinuationFromComment = (
 		.map((line) => removeCommentPrefix(line))
 		.filter(
 			(l) =>
-				l.length > EMPTY &&
+				isNotEmpty(l) &&
 				!l.startsWith('@') &&
 				!l.startsWith('{@code'),
 		);
@@ -944,7 +944,7 @@ const detectAnnotationsInTokens = (
 					.map((line) => removeCommentPrefix(line))
 					.filter(
 						(l) =>
-							l.length > EMPTY &&
+							isNotEmpty(l) &&
 							!l.startsWith('@') &&
 							!l.startsWith('{@code'),
 					);

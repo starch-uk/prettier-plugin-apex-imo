@@ -28,8 +28,11 @@ import {
 } from './casing.js';
 import { isListInit, isMapInit, printCollection } from './collections.js';
 import {
+	calculateEffectiveWidth,
+	formatApexCodeWithFallback,
 	getNodeClassOptional,
 	createNodeClassGuard,
+	preserveBlankLineAfterClosingBrace,
 	startsWithAccessModifier,
 } from './utils.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
@@ -263,35 +266,20 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						// For safety, we use a conservative estimate: tabWidth + 3
 						const tabWidthValue = options.tabWidth || 2;
 						const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
-						const DEFAULT_PRINT_WIDTH = 80;
-						const effectiveWidth =
-							(options.printWidth || DEFAULT_PRINT_WIDTH) -
-							commentPrefixLength;
+						const effectiveWidth = calculateEffectiveWidth(
+							options.printWidth,
+							commentPrefixLength,
+						);
 
-						let formattedCode;
-						try {
-							formattedCode = await prettier.format(codeContent, {
+						// Format with prettier, trying apex-anonymous first, then apex
+						let formattedCode = await formatApexCodeWithFallback(
+							codeContent,
+							{
 								...options,
 								printWidth: effectiveWidth,
-								parser: 'apex-anonymous',
 								plugins,
-							});
-						} catch {
-							try {
-								formattedCode = await prettier.format(
-									codeContent,
-									{
-										...options,
-										printWidth: effectiveWidth,
-										parser: 'apex',
-										plugins,
-									},
-								);
-							} catch {
-								// When parsing fails, preserve the original code as-is
-								formattedCode = codeContent;
-							}
-						}
+							},
+						);
 
 						// Normalize multiline annotations (2+ parameters) to use the same formatting
 						// as our AST-based printAnnotation logic. This ensures consistency between
@@ -360,26 +348,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 						for (let i = 0; i < formattedLines.length; i++) {
 							const formattedLine = formattedLines[i] ?? '';
-							const trimmedLine = formattedLine.trim();
 							resultLines.push(formattedLine);
 
 							// Insert blank line after } when followed by annotations or access modifiers
 							// This preserves the structure from original code
-							if (
-								trimmedLine.endsWith('}') &&
-								i < formattedLines.length - 1
-							) {
-								const nextLineRaw = formattedLines[i + 1] ?? '';
-								const nextLine = nextLineRaw.trim();
-								// Check if next line starts with annotation or access modifier using AST-based detection
-								if (
-									nextLine.length > 0 &&
-									(nextLine.startsWith('@') ||
-										startsWithAccessModifier(nextLine))
-								) {
-									// Insert blank line - it will become ' *' when mapped with comment prefix
-									resultLines.push('');
-								}
+							if (preserveBlankLineAfterClosingBrace(formattedLines, i)) {
+								// Insert blank line - it will become ' *' when mapped with comment prefix
+								resultLines.push('');
 							}
 						}
 

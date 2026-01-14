@@ -4,11 +4,14 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
-import * as prettier from 'prettier';
 import type { ParserOptions } from 'prettier';
+import * as prettier from 'prettier';
 import { NOT_FOUND_INDEX, removeCommentPrefix } from './comments.js';
 import { normalizeAnnotationNamesInText } from './annotations.js';
-import { startsWithAccessModifier } from './utils.js';
+import {
+	formatApexCodeWithFallback,
+	preserveBlankLineAfterClosingBrace,
+} from './utils.js';
 import type { CodeBlockToken } from './comments.js';
 
 const CODE_TAG = '{@code';
@@ -189,38 +192,19 @@ const formatCodeBlockToken = async ({
 	};
 
 	// Format with prettier, trying apex-anonymous first, then apex
-	let formatted: string = normalizedCode;
-	try {
-		formatted = await prettier.format(normalizedCode, {
-			...optionsWithPlugin,
-			parser: 'apex-anonymous',
-		});
-	} catch {
-		try {
-			formatted = await prettier.format(normalizedCode, {
-				...optionsWithPlugin,
-				parser: 'apex',
-			});
-		} catch {
-			formatted = normalizedCode;
-		}
-	}
+	const formatted = await formatApexCodeWithFallback(
+		normalizedCode,
+		optionsWithPlugin,
+	);
 
 	// Preserve blank lines after closing braces when followed by annotations or access modifiers
 	const formattedLines = formatted.trim().split('\n');
 	const resultLines: string[] = [];
 	for (let i = 0; i < formattedLines.length; i++) {
 		const formattedLine = formattedLines[i] ?? '';
-		const trimmedLine = formattedLine.trim();
 		resultLines.push(formattedLine);
-		const nextLineIndex = i + ONE_INDEX;
-		const nextLine = formattedLines[nextLineIndex]?.trim() ?? '';
-		if (
-			trimmedLine.endsWith('}') &&
-			nextLineIndex < formattedLines.length &&
-			nextLine.length > ZERO_LENGTH &&
-			(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))
-		) {
+
+		if (preserveBlankLineAfterClosingBrace(formattedLines, i)) {
 			resultLines.push('');
 		}
 	}

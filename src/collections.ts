@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { doc, type AstPath, type Doc } from 'prettier';
 import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
-import { getNodeClass } from './utils.js';
+import { getNodeClass, isEmpty } from './utils.js';
 import { createTypeNormalizingPrint } from './casing.js';
 
 const MIN_ENTRIES_FOR_MULTILINE = 2;
@@ -114,11 +114,9 @@ const printList = ({
 }): Doc => {
 	const { node } = path;
 	const isSet = nodeClass === SET_LITERAL_CLASS;
-	const isEmpty =
-		!Array.isArray(node.values) ||
-		node.values.length === EMPTY_ARRAY_LENGTH;
+	const isEmptyValues = !Array.isArray(node.values) || isEmpty(node.values);
 
-	if (isEmpty) {
+	if (isEmptyValues) {
 		return printEmptyList(printedTypes, isSet, isNested);
 	}
 
@@ -158,10 +156,9 @@ const printMap = ({
 	readonly isNested: boolean;
 }): Doc => {
 	const node = path.node;
-	const isEmpty =
-		!Array.isArray(node.pairs) || node.pairs.length === EMPTY_ARRAY_LENGTH;
+	const isEmptyPairs = !Array.isArray(node.pairs) || isEmpty(node.pairs);
 
-	if (isEmpty) {
+	if (isEmptyPairs) {
 		return printEmptyMap(printedTypes, isNested);
 	}
 
