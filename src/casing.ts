@@ -20,10 +20,14 @@ import { getNodeClassOptional } from './utils.js';
  */
 const SLICE_START_INDEX = 0;
 
-const normalizeStandardObjectType = (typeName: string): string =>
-	typeName
-		? (STANDARD_OBJECTS[typeName.toLowerCase()] ?? typeName)
-		: typeName;
+const normalizeStandardObjectType = (typeName: string): string => {
+	if (!typeName) {
+		return typeName;
+	}
+	const lowerTypeName = typeName.toLowerCase();
+	const standardObject = STANDARD_OBJECTS[lowerTypeName];
+	return standardObject !== undefined ? standardObject : typeName;
+};
 
 /**
  * Normalizes a type name by first checking if it's a standard object, then normalizing any object suffix.
@@ -70,7 +74,7 @@ const isIdentifier = (
 	const nodeClass = getNodeClassOptional(node);
 	return (
 		nodeClass === IDENTIFIER_CLASS ||
-		(nodeClass?.includes('Identifier') ?? false) ||
+		(nodeClass !== undefined && nodeClass.includes('Identifier')) ||
 		('value' in node &&
 			typeof (node as Record<string, unknown>).value === 'string')
 	);
@@ -294,7 +298,7 @@ const createTypeNormalizingPrint =
 		// but our print function only needs the path - ignore extra args
 		// Pass extra args through to originalPrint in case it needs them
 		const { node, key } = subPath;
-		const normalizedKey = key ?? undefined;
+		const normalizedKey = key;
 		const shouldNormalize = shouldNormalizeType({
 			forceTypeContext,
 			key: normalizedKey,

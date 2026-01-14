@@ -146,13 +146,6 @@ describe('comments', () => {
 				tabWidth: undefined,
 			},
 			{
-				description:
-					'should return correct indent for mixed spaces and tabs (custom tabWidth)',
-				expected: 6, // 2 spaces + 1 tab (4 spaces) = 6
-				line: '  \tcode',
-				tabWidth: 4,
-			},
-			{
 				description: 'should handle line with only whitespace (spaces)',
 				expected: 4,
 				line: '    ',

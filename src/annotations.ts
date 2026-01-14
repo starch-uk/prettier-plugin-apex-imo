@@ -44,8 +44,11 @@ const ANNOTATION_PARAM_INDENT = 2;
 
 const isAnnotation = createNodeClassGuard<ApexAnnotationNode>(ANNOTATION_CLASS);
 
-const normalizeAnnotationName = (name: string): string =>
-	APEX_ANNOTATIONS[name.toLowerCase()] ?? name;
+const normalizeAnnotationName = (name: string): string => {
+	const lowerName = name.toLowerCase();
+	const annotation = APEX_ANNOTATIONS[lowerName];
+	return annotation !== undefined ? annotation : name;
+};
 
 const normalizeAnnotationOptionName = (
 	annotationName: string,
@@ -53,7 +56,12 @@ const normalizeAnnotationOptionName = (
 ): string => {
 	const optionMap =
 		APEX_ANNOTATION_OPTION_NAMES[annotationName.toLowerCase()];
-	return optionMap?.[optionName.toLowerCase()] ?? optionName;
+	if (optionMap === undefined) {
+		return optionName;
+	}
+	const lowerOptionName = optionName.toLowerCase();
+	const normalizedOption = optionMap[lowerOptionName];
+	return normalizedOption !== undefined ? normalizedOption : optionName;
 };
 
 const isAnnotationKeyValue = (
@@ -128,12 +136,16 @@ const parseAndReformatAnnotationString = (
 	);
 	if (!nameMatch) return null;
 
-	const normalizedName = normalizeAnnotationName(nameMatch[ONE_INDEX] ?? '');
+	const nameGroup = nameMatch[ONE_INDEX];
+	const normalizedName = normalizeAnnotationName(nameGroup !== undefined ? nameGroup : '');
 
 	// Collect parameter lines until closing paren
 	const paramLines: string[] = [];
 	for (let i = startLineIndex + NEXT_LINE_OFFSET; i < lines.length; i++) {
-		const trimmed = (lines[i] ?? '').trim();
+		if (i < 0 || i >= lines.length) {
+			continue;
+		}
+		const trimmed = lines[i].trim();
 		paramLines.push(trimmed);
 		if (trimmed.startsWith(')') || trimmed.endsWith(')')) break;
 	}
@@ -144,9 +156,11 @@ const parseAndReformatAnnotationString = (
 	for (const pl of paramLines) {
 		const match = paramRegex.exec(pl.replace(/,$/, ''));
 		if (match) {
+			const keyGroup = match[KEY_GROUP_INDEX];
+			const valueGroup = match[VALUE_GROUP_INDEX];
 			parsedParams.push({
-				key: match[KEY_GROUP_INDEX] ?? '',
-				value: match[VALUE_GROUP_INDEX] ?? '',
+				key: keyGroup !== undefined ? keyGroup : '',
+				value: valueGroup !== undefined ? valueGroup : '',
 			});
 		}
 	}

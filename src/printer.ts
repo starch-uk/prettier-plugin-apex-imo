@@ -237,35 +237,44 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						continue;
 					}
 
-					const codeContent = extraction.code;
+				const codeContent = extraction.code;
 
-					try {
-						// Format code using prettier.format to get a formatted string
+				// Format code using prettier.format to get a formatted string
 						// Ensure our plugin is LAST in the plugins array so our wrapped printer
 						// takes precedence over the base apex printers for shared parser names.
-						const pluginInstance = getCurrentPluginInstance();
-						const basePlugins = options.plugins || [];
-						const plugins: (
-							| string
-							| URL
-							| prettier.Plugin<ApexNode>
-						)[] = pluginInstance
-							? [
-									// Keep any existing plugins except our own instance
-									...basePlugins.filter(
-										(p) => p !== pluginInstance.default,
-									),
-									// Append our wrapped plugin last so its printers win
-									pluginInstance.default as prettier.Plugin<ApexNode>,
-								]
-							: basePlugins;
+					const pluginInstance = getCurrentPluginInstance();
+					if (options.plugins === undefined) {
+						throw new Error(
+							'prettier-plugin-apex-imo: options.plugins is required',
+						);
+					}
+					const basePlugins = options.plugins;
+					const plugins: (
+						| string
+						| URL
+						| prettier.Plugin<ApexNode>
+					)[] = pluginInstance
+						? [
+								// Keep any existing plugins except our own instance
+								...basePlugins.filter(
+									(p) => p !== pluginInstance.default,
+								),
+								// Append our wrapped plugin last so its printers win
+								pluginInstance.default as prettier.Plugin<ApexNode>,
+							]
+						: basePlugins;
 
-						// Calculate effective width: account for comment prefix
-						// In class context, comments are typically indented by tabWidth (usually 2 spaces)
-						// So the full prefix is "  * " (tabWidth + 3 for " * ")
-						// For safety, we use a conservative estimate: tabWidth + 3
-						const tabWidthValue = options.tabWidth || 2;
-						const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
+					// Calculate effective width: account for comment prefix
+					// In class context, comments are typically indented by tabWidth (usually 2 spaces)
+					// So the full prefix is "  * " (tabWidth + 3 for " * ")
+					// For safety, we use a conservative estimate: tabWidth + 3
+					if (options.tabWidth === undefined) {
+						throw new Error(
+							'prettier-plugin-apex-imo: options.tabWidth is required',
+						);
+					}
+					const tabWidthValue = options.tabWidth;
+					const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
 						const effectiveWidth = calculateEffectiveWidth(
 							options.printWidth,
 							commentPrefixLength,
@@ -289,7 +298,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 							let modified = false;
 
 							for (let i = 0; i < lines.length; i++) {
-								const line = lines[i] ?? '';
+								if (i < 0 || i >= lines.length) {
+									continue;
+								}
+								const line = lines[i];
 								const trimmed = line.trim();
 
 								// Check if this line starts a multiline annotation (any annotation with parameters)
@@ -305,15 +317,18 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 										);
 
 									if (reformatted) {
-										// Count how many lines the original annotation occupied
-										let originalLineCount = 1;
-										for (
-											let j = i + 1;
-											j < lines.length;
-											j++
-										) {
-											const nextLine = lines[j] ?? '';
-											const nextTrimmed = nextLine.trim();
+									// Count how many lines the original annotation occupied
+									let originalLineCount = 1;
+									for (
+										let j = i + 1;
+										j < lines.length;
+										j++
+									) {
+										if (j < 0 || j >= lines.length) {
+											continue;
+										}
+										const nextLine = lines[j];
+										const nextTrimmed = nextLine.trim();
 											originalLineCount++;
 											if (
 												nextTrimmed.startsWith(')') ||
@@ -347,7 +362,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						const resultLines: string[] = [];
 
 						for (let i = 0; i < formattedLines.length; i++) {
-							const formattedLine = formattedLines[i] ?? '';
+							if (i < 0 || i >= formattedLines.length) {
+								continue;
+							}
+							const formattedLine = formattedLines[i];
 							resultLines.push(formattedLine);
 
 							// Insert blank line after } when followed by annotations or access modifiers
@@ -389,16 +407,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						result = beforeCode + newCodeBlock + afterCode;
 						hasChanges = true;
 
-						// Move past this code block
-						startIndex = beforeCode.length + newCodeBlock.length;
-					} catch (error) {
-						// If formatting fails, skip this block
-						console.warn(
-							'Embed: Failed to format code block:',
-							error,
-						);
-						startIndex = extraction.endPos;
-					}
+				// Move past this code block
+				startIndex = beforeCode.length + newCodeBlock.length;
 				}
 
 				if (!hasChanges) {

@@ -279,7 +279,7 @@ const renderAnnotationToken = (
 	}
 
 	// First line includes the @annotation name
-	const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
+	const firstContent = contentLines.length > ARRAY_START_INDEX ? contentLines[ARRAY_START_INDEX] : '';
 	const firstLine = isNotEmpty(firstContent)
 		? `${commentPrefix}@${annotationName} ${firstContent}`
 		: `${commentPrefix}@${annotationName}`;
@@ -287,7 +287,10 @@ const renderAnnotationToken = (
 
 	// Subsequent lines are continuation of the annotation content
 	for (let i = INDEX_ONE; i < contentLines.length; i++) {
-		const lineContent = contentLines[i] ?? '';
+		if (i < 0 || i >= contentLines.length) {
+			continue;
+		}
+		const lineContent = contentLines[i];
 		if (isNotEmpty(lineContent)) {
 			lines.push(`${commentPrefix}${lineContent}`);
 		} else {
@@ -315,7 +318,7 @@ const renderCodeBlockToken = (
 		readonly printWidth?: number;
 	}>,
 ): ContentToken | null => {
-	let codeToUse = token.formattedCode ?? token.rawCode;
+	let codeToUse = token.formattedCode !== undefined ? token.formattedCode : token.rawCode;
 	if (!token.formattedCode) {
 		codeToUse = normalizeAnnotationNamesInText(codeToUse);
 	}
@@ -325,7 +328,10 @@ const renderCodeBlockToken = (
 	const resultLines: string[] = [];
 
 	for (let i = 0; i < codeLines.length; i++) {
-		const codeLine = codeLines[i] ?? '';
+		if (i < 0 || i >= codeLines.length) {
+			continue;
+		}
+		const codeLine = codeLines[i];
 		resultLines.push(codeLine);
 
 		if (preserveBlankLineAfterClosingBrace(codeLines, i)) {
@@ -355,9 +361,14 @@ const renderCodeBlockToken = (
 			}
 		} else {
 			const isSingleLine = codeLinesForProcessing.length === 1;
-			const singleLineContent = codeLinesForProcessing[0]?.trim() ?? '';
+			const singleLineContent = codeLinesForProcessing.length > 0 && codeLinesForProcessing[0] !== undefined ? codeLinesForProcessing[0].trim() : '';
 			const singleLineWithBraces = `{@code ${singleLineContent} }`;
-			const printWidth = options.printWidth ?? DEFAULT_PRINT_WIDTH;
+			if (options.printWidth === undefined) {
+				throw new Error(
+					'prettier-plugin-apex-imo: options.printWidth is required for renderCodeBlockToken',
+				);
+			}
+			const printWidth = options.printWidth;
 			const commentPrefixLength = commentPrefix.length;
 			const fitsOnOneLine =
 				singleLineWithBraces.length <= printWidth - commentPrefixLength;
@@ -444,8 +455,9 @@ const tokensToApexDocString = (
 	cachedPrefixAndWidth?: ReturnType<typeof calculatePrefixAndWidth> | null,
 ): string => {
 	const prefixAndWidth =
-		cachedPrefixAndWidth ??
-		calculatePrefixAndWidth(commentIndent, options.printWidth, options);
+		cachedPrefixAndWidth !== undefined && cachedPrefixAndWidth !== null
+			? cachedPrefixAndWidth
+			: calculatePrefixAndWidth(commentIndent, options.printWidth, options);
 	const { commentPrefix, effectiveWidth } = prefixAndWidth;
 
 	const apexDocTokens: CommentToken[] = [];
@@ -530,8 +542,11 @@ const wrapTextContent = (
 
 	const joinedParts: string[] = [];
 	for (let i = 0; i < cleanedLines.length; i++) {
-		const currentLine = cleanedLines[i]?.trim() ?? '';
-		const nextLine = cleanedLines[i + 1]?.trim() ?? '';
+		if (i < 0 || i >= cleanedLines.length) {
+			continue;
+		}
+		const currentLine = cleanedLines[i].trim();
+		const nextLine = i + 1 < cleanedLines.length ? cleanedLines[i + 1].trim() : '';
 
 		// Check if we should join with next line
 		const currentEndsWithPeriod = currentLine.endsWith('.');
@@ -732,14 +747,14 @@ const applyTokenProcessingPipeline = (
 	// Detect code blocks first to separate {@code} content from regular text
 	let processedTokens = detectCodeBlockTokens(
 		tokens,
-		normalizedComment ?? '',
+		normalizedComment !== undefined ? normalizedComment : '',
 	);
 
 	// Detect annotations in tokens that contain ApexDoc content
 	// Code blocks are now handled as separate tokens
 	processedTokens = detectAnnotationsInTokens(
 		processedTokens,
-		normalizedComment ?? '',
+		normalizedComment !== undefined ? normalizedComment : '',
 	);
 
 	// Normalize annotations
@@ -835,7 +850,10 @@ const collectContinuationFromTokenLines = (
 	let annotationContent = content;
 	let continuationIndex = startIndex;
 	while (continuationIndex < tokenLines.length) {
-		const continuationLine = tokenLines[continuationIndex] ?? '';
+		if (continuationIndex < 0 || continuationIndex >= tokenLines.length) {
+			break;
+		}
+		const continuationLine = tokenLines[continuationIndex];
 		const trimmedLine = continuationLine.replace(/^\s*\*\s*/, '').trim();
 		if (
 			trimmedLine.length === EMPTY ||
@@ -881,7 +899,10 @@ const detectAnnotationsInTokens = (
 				lineIndex < tokenLines.length;
 				lineIndex++
 			) {
-				const line = tokenLines[lineIndex] ?? '';
+				if (lineIndex < 0 || lineIndex >= tokenLines.length) {
+					continue;
+				}
+				const line = tokenLines[lineIndex];
 				// Annotation pattern: @ followed by identifier, possibly with content
 				// After detectCodeBlockTokens, lines have their " * " prefix stripped, so we need to match lines with or without prefix
 				// Pattern matches: (optional prefix) @ (name) (content)
@@ -893,12 +914,12 @@ const detectAnnotationsInTokens = (
 					hasAnnotations = true;
 					// Process each annotation match
 					for (const match of matches) {
-						const annotationName = match[INDEX_ONE] ?? '';
-						const content = (match[INDEX_TWO] ?? '').trim();
+						const annotationName = match[INDEX_ONE] !== undefined ? match[INDEX_ONE] : '';
+						const content = match[INDEX_TWO] !== undefined ? match[INDEX_TWO].trim() : '';
 						const lowerName = annotationName.toLowerCase();
 						const beforeText = extractBeforeText(
 							line,
-							match.index ?? ARRAY_START_INDEX,
+							match.index !== undefined ? match.index : ARRAY_START_INDEX,
 						);
 
 						// Collect continuation lines for this annotation

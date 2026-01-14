@@ -72,8 +72,12 @@ const calculateEffectiveWidth = (
 	printWidth: number | undefined,
 	commentPrefixLength: number,
 ): number => {
-	const DEFAULT_PRINT_WIDTH = 80;
-	return (printWidth ?? DEFAULT_PRINT_WIDTH) - commentPrefixLength;
+	if (printWidth === undefined) {
+		throw new Error(
+			'prettier-plugin-apex-imo: printWidth is required for calculateEffectiveWidth',
+		);
+	}
+	return printWidth - commentPrefixLength;
 };
 
 /**
@@ -87,7 +91,10 @@ const preserveBlankLineAfterClosingBrace = (
 	formattedLines: readonly string[],
 	index: number,
 ): boolean => {
-	const currentLine = formattedLines[index] ?? '';
+	if (index < 0 || index >= formattedLines.length) {
+		return false;
+	}
+	const currentLine = formattedLines[index];
 	const trimmedLine = currentLine.trim();
 	const nextIndex = index + 1;
 
@@ -98,7 +105,7 @@ const preserveBlankLineAfterClosingBrace = (
 		return false;
 	}
 
-	const nextLine = formattedLines[nextIndex]?.trim() ?? '';
+	const nextLine = formattedLines[nextIndex].trim();
 	return (
 		isNotEmpty(nextLine) &&
 		(nextLine.startsWith('@') || startsWithAccessModifier(nextLine))

@@ -61,7 +61,7 @@ const tokenConverters = {
 			type: token.type,
 			content: join(hardline, docLines),
 			lines: docLines,
-			isContinuation: token.isContinuation ?? false,
+			isContinuation: token.isContinuation !== undefined ? token.isContinuation : false,
 		};
 	},
 
@@ -74,7 +74,7 @@ const tokenConverters = {
 		const { join, hardline, group, indent } = prettier.doc.builders;
 
 		// Use formattedCode if available, otherwise rawCode
-		const codeContent = token.formattedCode ?? token.rawCode;
+		const codeContent = token.formattedCode !== undefined ? token.formattedCode : token.rawCode;
 
 		if (!codeContent || codeContent.trim().length === 0) {
 			// Empty code block: {@code}
@@ -256,10 +256,10 @@ const getIndentLevel = (
 	line: Readonly<string>,
 	tabWidth: number = DEFAULT_TAB_WIDTH,
 ): number => {
-	// Regex always matches (at minimum empty string), so exec() never returns null
-	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-	const [match] = /^[\t ]*/.exec(line)!;
-	return match.replace(/\t/g, ' '.repeat(tabWidth)).length;
+	// prettier.util.getIndentSize requires a newline to work correctly
+	// It calculates the indent of the last line in a multi-line string
+	// So we prepend a newline to make it work with single lines
+	return prettier.util.getIndentSize(`\n${line}`, tabWidth);
 };
 
 const createIndent = (
@@ -408,7 +408,8 @@ const normalizeCommentLine = (
 		afterAsterisk = afterAsterisk.substring(1);
 	}
 	// Skip whitespace after asterisk(s)
-	const spaceAfterAsterisk = afterAsterisk.match(/^\s*/)?.[0] ?? '';
+	const spaceMatch = afterAsterisk.match(/^\s*/);
+	const spaceAfterAsterisk = spaceMatch !== null && spaceMatch[0] !== undefined ? spaceMatch[0] : '';
 	afterAsterisk = afterAsterisk.trimStart();
 	// Remove any remaining asterisks at start of content
 	while (afterAsterisk.startsWith('*')) {
@@ -451,7 +452,10 @@ const normalizeBlockComment = (
 		options.useTabs,
 	);
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
-		const line = lines[i] ?? '';
+		if (i < 0 || i >= lines.length) {
+			continue;
+		}
+		const line = lines[i];
 		const isFirstOrLast =
 			i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
 		normalizedLines.push(
@@ -669,7 +673,10 @@ const parseCommentToTokens = (
 	let currentPos = ARRAY_START_INDEX;
 
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
-		const line = contentLines[i] ?? '';
+		if (i < 0 || i >= contentLines.length) {
+			continue;
+		}
+		const line = contentLines[i];
 		const lineStartPos = currentPos;
 		const lineEndPos = currentPos + line.length;
 		currentPos = lineEndPos + INDEX_ONE; // +1 for newline
@@ -935,7 +942,7 @@ const tokensToCommentString = (
 
 			// Use formatted code if available, otherwise use raw code
 			const codeToken = token;
-			const codeToUse = codeToken.formattedCode ?? codeToken.rawCode;
+			const codeToUse = codeToken.formattedCode !== undefined ? codeToken.formattedCode : codeToken.rawCode;
 			// Handle empty code blocks - render {@code} even if content is empty
 			const isEmptyBlock = codeToUse.trim().length === EMPTY;
 			if (isEmptyBlock) {

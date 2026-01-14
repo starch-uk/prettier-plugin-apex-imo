@@ -72,18 +72,9 @@ const customPrintComment = (
 	// Get stored options from printer
 	const storedOptions = getCurrentPrintOptions();
 	if (!storedOptions) {
-		// Fallback to original behavior if options not available
-		const originalPrintCommentFn = (
-			originalApexPrinter as Record<string, unknown>
-		)['printComment'] as
-			| ((path: Readonly<AstPath<ApexNode>>) => Doc)
-			| undefined;
-		if (originalPrintCommentFn) {
-			return originalPrintCommentFn(path);
-		}
-		const node = path.getNode();
-		const commentNode = node as { value?: string };
-		return commentNode.value ?? '';
+		throw new Error(
+			'prettier-plugin-apex-imo: storedOptions is required for customPrintComment',
+		);
 	}
 
 	// Use the centralized comment processing logic

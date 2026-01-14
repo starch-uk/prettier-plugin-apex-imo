@@ -182,12 +182,14 @@ const formatCodeBlockToken = async ({
 	// eslint-disable-next-line @typescript-eslint/no-deprecated -- Legacy token type still in use
 }): Promise<CodeBlockToken> => {
 	const normalizedCode = normalizeAnnotationNamesInText(token.rawCode);
+	if (currentPluginInstance === undefined || currentPluginInstance.default === undefined) {
+		throw new Error(
+			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
+		);
+	}
 	const optionsWithPlugin = {
 		...embedOptions,
-		plugins: [
-			currentPluginInstance?.default ??
-				(await import('./index.js')).default,
-		],
+		plugins: [currentPluginInstance.default],
 		printWidth: effectiveWidth,
 	};
 
@@ -201,7 +203,10 @@ const formatCodeBlockToken = async ({
 	const formattedLines = formatted.trim().split('\n');
 	const resultLines: string[] = [];
 	for (let i = 0; i < formattedLines.length; i++) {
-		const formattedLine = formattedLines[i] ?? '';
+		if (i < 0 || i >= formattedLines.length) {
+			continue;
+		}
+		const formattedLine = formattedLines[i];
 		resultLines.push(formattedLine);
 
 		if (preserveBlankLineAfterClosingBrace(formattedLines, i)) {
