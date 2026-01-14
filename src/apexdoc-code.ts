@@ -145,9 +145,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 		}
 		return (
 			prefix +
-			(index < lines.length - 1
-				? commentLine.trim()
-				: commentLine.trimStart())
+			(index < lines.length - 1 ? trimmedLine : commentLine.trimStart())
 		);
 	});
 };
@@ -187,9 +185,15 @@ const formatCodeBlockToken = async ({
 			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
 		);
 	}
+	const pluginDefault = currentPluginInstance.default;
+	if (pluginDefault === null || pluginDefault === undefined) {
+		throw new Error(
+			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
+		);
+	}
 	const optionsWithPlugin = {
 		...embedOptions,
-		plugins: [currentPluginInstance.default],
+		plugins: [pluginDefault],
 		printWidth: effectiveWidth,
 	};
 
@@ -207,6 +211,7 @@ const formatCodeBlockToken = async ({
 			continue;
 		}
 		const formattedLine = formattedLines[i];
+		if (formattedLine === undefined) continue;
 		resultLines.push(formattedLine);
 
 		if (preserveBlankLineAfterClosingBrace(formattedLines, i)) {

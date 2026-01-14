@@ -102,13 +102,14 @@ const preserveBlankLineAfterClosingBrace = (
 		return false;
 	}
 	const currentLine = formattedLines[index];
+	if (currentLine === undefined) return false;
 	const trimmedLine = currentLine.trim();
 	if (!trimmedLine.endsWith('}')) {
 		return false;
 	}
 
 	const nextLine = formattedLines[index + 1]?.trim();
-	if (!nextLine || !isNotEmpty(nextLine)) {
+	if (!nextLine || isEmpty(nextLine)) {
 		return false;
 	}
 	return nextLine.startsWith('@') || startsWithAccessModifier(nextLine);

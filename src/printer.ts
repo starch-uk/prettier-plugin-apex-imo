@@ -186,10 +186,11 @@ const canAttachComment = (node: unknown): boolean => {
  * @param comment - The comment node to check.
  * @returns True if the comment is a block comment.
  */
-const isBlockComment = (comment: unknown): boolean => {
-	if (!comment || typeof comment !== 'object') return false;
-	return (comment as { '@class'?: unknown })['@class'] === BLOCK_COMMENT_CLASS;
-};
+	const isBlockComment = (comment: unknown): boolean => {
+		if (!comment || typeof comment !== 'object') return false;
+		const commentClass = (comment as { '@class'?: unknown })['@class'];
+		return commentClass === BLOCK_COMMENT_CLASS;
+	};
 
 const createWrappedPrinter = (originalPrinter: any): any => {
 	const result = { ...originalPrinter };

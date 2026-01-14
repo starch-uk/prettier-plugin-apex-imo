@@ -320,7 +320,7 @@ const normalizeCommentLine = (
 			const afterAsterisk = trimmed.substring(1).trimStart();
 			return `${baseIndent} * ${afterAsterisk}`;
 		}
-		return `${baseIndent} * ${line.trimStart()}`;
+		return `${baseIndent} * ${trimmed}`;
 	}
 
 	// Found asterisk - normalize
@@ -374,10 +374,8 @@ const normalizeBlockComment = (
 		options.useTabs,
 	);
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
-		if (i < 0 || i >= lines.length) {
-			continue;
-		}
 		const line = lines[i];
+		if (line === undefined) continue;
 		const isFirstOrLast =
 			i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
 		normalizedLines.push(

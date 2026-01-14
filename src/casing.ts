@@ -3,6 +3,7 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+import type { AstPath, Doc } from 'prettier';
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { APEX_OBJECT_SUFFIXES } from './refs/object-suffixes.js';
@@ -78,12 +79,9 @@ const isIdentifier = (
 	) {
 		return true;
 	}
-	const nodeValue = (node as Record<string, unknown>).value;
-	return typeof nodeValue === 'string';
+	return typeof (node as Record<string, unknown>)['value'] === 'string';
 };
 
-const TYPE_CONTEXT_KEYS = ['type', 'typeref', 'returntype', 'table'] as const;
-const TYPE_CONTEXT_KEYS_SET = new Set(TYPE_CONTEXT_KEYS);
 const STACK_PARENT_OFFSET = 2;
 
 const FROM_EXPR_CLASS = 'apex.jorje.data.ast.FromExpr';
@@ -92,9 +90,7 @@ const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	for (const item of stack) {
 		if (typeof item === 'object' && item !== null && '@class' in item) {
-			const nodeClass = getNodeClassOptional(
-				item as Record<string, unknown>,
-			);
+			const nodeClass = getNodeClassOptional(item as ApexNode);
 			if (
 				nodeClass === FROM_EXPR_CLASS ||
 				nodeClass?.includes('FromExpr')
@@ -113,7 +109,8 @@ const isTypeRelatedKey = (key: number | string | undefined): boolean => {
 		lowerKey === 'types' ||
 		lowerKey === 'type' ||
 		lowerKey === 'typeref' ||
-		TYPE_CONTEXT_KEYS_SET.has(lowerKey) ||
+		lowerKey === 'returntype' ||
+		lowerKey === 'table' ||
 		lowerKey.startsWith('type')
 	);
 };
@@ -136,13 +133,15 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const { key, stack } = path;
 	if (key === 'types') return true;
 	if (!Array.isArray(stack)) return false;
-	const keyString = typeof key === 'string' ? key : undefined;
-	if (
-		keyString &&
-		(isTypeRelatedKey(key) ||
-			(keyString.toLowerCase() === 'field' && hasFromExprInStack(stack)))
-	)
-		return true;
+	if (typeof key === 'string') {
+		const lowerKeyString = key.toLowerCase();
+		if (
+			isTypeRelatedKey(key) ||
+			(lowerKeyString === 'field' && hasFromExprInStack(stack))
+		) {
+			return true;
+		}
+	}
 	if (stack.length < STACK_PARENT_OFFSET) return false;
 
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -152,7 +151,7 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const hasTypesArray =
 		typeof parent === 'object' &&
 		'types' in parent &&
-		Array.isArray(parent.types);
+		Array.isArray((parent as { types?: unknown })['types']);
 
 	return (
 		(isTypeRelatedParentClass(parentClass) || hasTypesArray) &&
@@ -189,16 +188,16 @@ function shouldNormalizeType(
 	params: Readonly<ShouldNormalizeTypeParams>,
 ): boolean {
 	const { forceTypeContext, parentKey, key, path } = params;
-	return (
-		forceTypeContext ||
-		parentKey === 'types' ||
-		key === 'names' ||
-		(typeof key === 'string' &&
-			(key.toLowerCase() === 'type' ||
-				key.toLowerCase() === 'typeref' ||
-				key === 'types')) ||
-		isInTypeContext(path)
-	);
+	if (forceTypeContext || parentKey === 'types' || key === 'names') {
+		return true;
+	}
+	if (typeof key === 'string') {
+		const lowerKey = key.toLowerCase();
+		if (lowerKey === 'type' || lowerKey === 'typeref' || key === 'types') {
+			return true;
+		}
+	}
+	return isInTypeContext(path);
 }
 
 /**
@@ -228,7 +227,7 @@ function normalizeSingleIdentifier(
 	// When key === 'names', we're processing identifiers in a names array (likely from a TypeRef)
 	// The Doc returned is composite and evaluated lazily, so we shouldn't restore values
 	const isInNamesArray = subPath.key === 'names';
-	node.value = normalizedValue;
+	(node as { value: string }).value = normalizedValue;
 	if (isInNamesArray) {
 		// Don't restore values - the Doc is composite and evaluated lazily
 		// The AST is already being mutated, so we keep the normalized values
@@ -238,7 +237,7 @@ function normalizeSingleIdentifier(
 	try {
 		return originalPrint(subPath);
 	} finally {
-		node.value = nodeValue;
+		(node as { value: string }).value = nodeValue;
 	}
 }
 
@@ -299,7 +298,7 @@ const createTypeNormalizingPrint =
 		// but our print function only needs the path - ignore extra args
 		// Pass extra args through to originalPrint in case it needs them
 		const { node, key } = subPath;
-		const normalizedKey = key;
+		const normalizedKey = key === null ? undefined : key;
 		const shouldNormalize = shouldNormalizeType({
 			forceTypeContext,
 			key: normalizedKey,

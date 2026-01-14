@@ -31,10 +31,11 @@ const APEX_PRINTER_ERROR_MESSAGE =
 const getApexPrinter = (): Parameters<typeof createWrappedPrinter>[0] => {
 	const apexPrinter = (apexPlugin as { printers?: { apex?: unknown } })
 		.printers?.apex;
+	const apexPrinterWithPrint = apexPrinter as { print?: unknown } | null;
 	if (
 		typeof apexPrinter !== 'object' ||
 		apexPrinter === null ||
-		typeof (apexPrinter as { print?: unknown }).print !== 'function'
+		typeof apexPrinterWithPrint?.print !== 'function'
 	) {
 		throw new Error(APEX_PRINTER_ERROR_MESSAGE);
 	}
@@ -125,14 +126,13 @@ const wrapParsers = (
 	if (!parsers) return parsers;
 	const wrappedParsers: Record<string, unknown> = {};
 	for (const parserName in parsers) {
-		if (!Object.prototype.hasOwnProperty.call(parsers, parserName))
-			continue;
-		const originalParser = parsers[parserName];
 		if (
-			originalParser === undefined ||
-			typeof originalParser.parse !== 'function'
+			!Object.prototype.hasOwnProperty.call(parsers, parserName) ||
+			parsers[parserName] === undefined ||
+			typeof parsers[parserName]?.parse !== 'function'
 		)
 			continue;
+		const originalParser = parsers[parserName];
 		wrappedParsers[parserName] = {
 			...originalParser,
 			parse: async (

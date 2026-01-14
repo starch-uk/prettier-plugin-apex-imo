@@ -39,13 +39,21 @@ const isNestedInCollection = (
 ): boolean => {
 	const { stack } = path;
 	if (!Array.isArray(stack) || stack.length === 0) return false;
-	return stack.some(
-		(parent) =>
-			typeof parent === 'object' &&
-			parent !== null &&
-			'@class' in parent &&
-			(isListInit(parent as ApexNode) || isMapInit(parent as ApexNode)),
-	);
+	return stack.some((parent) => {
+		if (
+			typeof parent !== 'object' ||
+			parent === null ||
+			!('@class' in parent)
+		) {
+			return false;
+		}
+		const parentClass = getNodeClass(parent as ApexNode);
+		return (
+			parentClass === LIST_LITERAL_CLASS ||
+			parentClass === SET_LITERAL_CLASS ||
+			parentClass === MAP_LITERAL_CLASS
+		);
+	});
 };
 
 /**

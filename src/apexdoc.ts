@@ -268,7 +268,9 @@ const renderAnnotationToken = (
 	// Add followingText before annotation if it exists
 	const trimmedFollowingText = token.followingText?.trim();
 	if (trimmedFollowingText !== undefined && isNotEmpty(trimmedFollowingText)) {
-		const followingLines = token.followingText
+		const followingText = token.followingText;
+		if (followingText === undefined) return null;
+		const followingLines = followingText
 			.split('\n')
 			.map((line: string) => line.trim())
 			.filter((line: string) => isNotEmpty(line));
@@ -332,6 +334,7 @@ const renderCodeBlockToken = (
 			continue;
 		}
 		const codeLine = codeLines[i];
+		if (codeLine === undefined) continue;
 		resultLines.push(codeLine);
 
 		if (preserveBlankLineAfterClosingBrace(codeLines, i)) {
@@ -887,10 +890,11 @@ const detectAnnotationsInTokens = (
 		if (isContentToken(token)) {
 			// For paragraph tokens, use content (which has all lines joined) and split by original line structure
 			// For text tokens, use lines array directly
-			const tokenLines =
-				token.type === 'paragraph' && token.content.includes('\n')
-					? token.content.split('\n')
-					: token.lines;
+			const isParagraphWithNewlines =
+				token.type === 'paragraph' && token.content.includes('\n');
+			const tokenLines = isParagraphWithNewlines
+				? token.content.split('\n')
+				: token.lines;
 			let processedLines: string[] = [];
 			let hasAnnotations = false;
 

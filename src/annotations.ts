@@ -78,8 +78,7 @@ const isStringAnnotationValue = (
 		return false;
 	}
 	if (!('value' in value)) return false;
-	const valueProp = (value as { value?: unknown }).value;
-	return typeof valueProp === 'string';
+	return typeof (value as { value?: unknown })['value'] === 'string';
 };
 
 const formatAnnotationValue = (
@@ -90,7 +89,7 @@ const formatAnnotationValue = (
 	if (cls === FALSE_ANNOTATION_VALUE_CLASS) return 'false';
 	if (isStringAnnotationValue(value)) {
 		const stringValue = value.value;
-		return stringValue ? `'${stringValue}'` : "''";
+		return stringValue.length > 0 ? `'${stringValue}'` : "''";
 	}
 	return "''";
 };
