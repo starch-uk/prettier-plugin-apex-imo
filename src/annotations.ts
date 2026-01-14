@@ -101,6 +101,132 @@ const formatAnnotationParam = (
 	return "''";
 };
 
+/**
+ * Formats an annotation parameter as a string (for use in string-based formatting contexts like {@code} blocks).
+ * Uses the same normalization logic as formatAnnotationParam but returns a string instead of a Doc.
+ * @param param - The annotation parameter to format.
+ * @param originalName - The original annotation name (before normalization).
+ * @returns The formatted parameter as a string (e.g., "Label='Test'" or "Description='Test description'").
+ */
+const formatAnnotationParamAsString = (
+	param: Readonly<ApexAnnotationParameter>,
+	originalName: string,
+): string => {
+	if (isAnnotationKeyValue(param)) {
+		const normalizedOptionName = normalizeAnnotationOptionName(
+			originalName,
+			param.key.value,
+		);
+		const valueStr = formatAnnotationValue(param.value);
+		return `${normalizedOptionName}=${valueStr}`;
+	}
+	if ('value' in param && typeof param.value === 'string') {
+		return `'${param.value}'`;
+	}
+	return "''";
+};
+
+/**
+ * Formats a multiline annotation block as a string array (for use in string-based contexts like {@code} blocks).
+ * This ensures consistency with the AST-based printAnnotation logic.
+ * @param annotationName - The normalized annotation name (e.g., "InvocableMethod").
+ * @param originalName - The original annotation name before normalization.
+ * @param params - Array of annotation parameters.
+ * @param indentLevel - Number of spaces to indent parameters (default: 2).
+ * @returns Array of strings representing the formatted annotation, one line per element.
+ */
+const formatMultilineAnnotationAsString = (
+	annotationName: string,
+	originalName: string,
+	params: readonly ApexAnnotationParameter[],
+	indentLevel = 2,
+): string[] => {
+	if (params.length === 0) {
+		return [`@${annotationName}`];
+	}
+
+	const indent = ' '.repeat(indentLevel);
+	const paramStrings = params.map((param) =>
+		formatAnnotationParamAsString(param, originalName),
+	);
+
+	// Add trailing commas to all but the last parameter
+	const formattedParams = paramStrings.map((paramStr, idx) => {
+		if (idx < paramStrings.length - 1) {
+			return `${indent}${paramStr},`;
+		}
+		return `${indent}${paramStr}`;
+	});
+
+	return [`@${annotationName}(`, ...formattedParams, ')'];
+};
+
+/**
+ * Parses and reformats an annotation from a string representation (e.g., from base plugin output).
+ * Extracts parameters and reformats them using our normalization rules to ensure consistency
+ * with AST-based formatting.
+ * @param annotationString - The annotation string to parse (e.g., "@InvocableMethod(label=\"Test\", description=\"Test\")").
+ * @param lines - Array of lines containing the annotation (for multiline annotations).
+ * @param startLineIndex - Index in lines array where the annotation starts.
+ * @returns Reformatted annotation lines using our shared formatting rules, or null if parsing fails.
+ */
+const parseAndReformatAnnotationString = (
+	annotationString: string,
+	lines: string[],
+	startLineIndex: number,
+): string[] | null => {
+	// Extract annotation name
+	const nameMatch = /^@([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/.exec(annotationString.trim());
+	if (!nameMatch) return null;
+
+	const originalName = nameMatch[1] ?? '';
+	const normalizedName = normalizeAnnotationName(originalName);
+
+	// Collect parameter lines
+	const paramLines: string[] = [];
+	let endLineIndex = startLineIndex;
+	for (let i = startLineIndex + 1; i < lines.length; i++) {
+		const line = lines[i] ?? '';
+		const trimmed = line.trim();
+		paramLines.push(trimmed);
+		if (trimmed.startsWith(')') || trimmed.endsWith(')')) {
+			endLineIndex = i;
+			break;
+		}
+	}
+
+	// Parse parameters from string representation
+	const parsedParams: Array<{ key: string; value: string }> = [];
+	for (const pl of paramLines) {
+		// Match key="value" or key='value' patterns, handling trailing commas
+		const match = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']/.exec(
+			pl.replace(/,$/, ''),
+		);
+		if (!match) continue;
+		const [, rawKey, rawValue] = match;
+		parsedParams.push({ key: rawKey ?? '', value: rawValue ?? '' });
+	}
+
+	if (parsedParams.length === 0) return null;
+
+	// Reformat using our normalization rules
+	const indent = '  '; // 2 spaces
+	const formattedParams: string[] = [];
+	for (let idx = 0; idx < parsedParams.length; idx++) {
+		const { key, value } = parsedParams[idx]!;
+		const normalizedKey = normalizeAnnotationOptionName(normalizedName, key);
+		// Use double quotes to match fixture expectations
+		const paramStr = `${normalizedKey}="${value}"`;
+		if (idx < parsedParams.length - 1) {
+			formattedParams.push(`${indent}${paramStr},`);
+		} else {
+			formattedParams.push(`${indent}${paramStr}`);
+		}
+	}
+
+	return [`@${normalizedName}(`, ...formattedParams, ')'];
+};
+
 // Use Set for O(1) lookup instead of array.includes() O(n)
 const INVOCABLE_ANNOTATIONS_SET = new Set([
 	'invocablemethod',
@@ -130,10 +256,59 @@ const printAnnotation = (
 	const formattedParams: Doc[] = node.parameters.map((param) =>
 		formatAnnotationParam(param, originalName),
 	);
+
+	// #region agent log
+	// Debug: trace annotation formatting behavior for hypotheses H1–H3
+	// H1: printAnnotation is not used in {@code}/apex-anonymous formatting
+	// H2: parametersLength/forceMultiline differ between file and {@code} contexts
+	// H3: annotation name/parameters are being normalized differently in {@code} path
+	// eslint-disable-next-line no-void
+	void fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			sessionId: 'debug-session',
+			runId: 'invocable-codeblock',
+			hypothesisId: 'H1-H3',
+			location: 'src/annotations.ts:printAnnotation:entry',
+			message: 'printAnnotation entry',
+			data: {
+				normalizedName,
+				originalName,
+				parametersLength,
+				hasParameters: parametersLength > 0,
+			},
+			timestamp: Date.now(),
+		}),
+	}).catch(() => {});
+	// #endregion agent log
 	const forceMultiline = shouldForceMultiline(
 		normalizedName,
 		formattedParams,
 	);
+
+	// #region agent log
+	// Debug: branch decision for multiline vs single-line annotations
+	// eslint-disable-next-line no-void
+	void fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			sessionId: 'debug-session',
+			runId: 'invocable-codeblock',
+			hypothesisId: 'H2',
+			location: 'src/annotations.ts:printAnnotation:branch',
+			message: 'printAnnotation branch decision',
+			data: {
+				normalizedName,
+				parametersLength,
+				forceMultiline,
+			},
+			timestamp: Date.now(),
+		}),
+	}).catch(() => {});
+	// #endregion agent log
+
 	// Annotations use whitespace, not commas, between parameters
 	// For multiline, ensure each parameter is a single Doc (group arrays together)
 	const paramsForJoin: Doc[] = forceMultiline
@@ -141,25 +316,44 @@ const printAnnotation = (
 				Array.isArray(param) ? group(param) : param,
 			)
 		: formattedParams;
+
 	if (forceMultiline) {
-		// For multiline, each parameter should be on its own line with indentation
-		// Convert each parameter array to a single Doc for proper indentation
-		const flattenedParams: Doc[] = paramsForJoin.map((param) =>
-			Array.isArray(param) ? concat(param) : param,
-		);
-		return [
+		// #region agent log
+		// Debug: confirm multiline branch used and how many params we indent
+		// eslint-disable-next-line no-void
+		void fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				sessionId: 'debug-session',
+				runId: 'invocable-codeblock',
+				hypothesisId: 'H2',
+				location: 'src/annotations.ts:printAnnotation:multiline',
+				message: 'printAnnotation multiline branch',
+				data: {
+					normalizedName,
+					paramCount: paramsForJoin.length,
+				},
+				timestamp: Date.now(),
+			}),
+		}).catch(() => {});
+		// #endregion agent log
+
+		// For multiline, treat parameters like a call/argument list:
+		// - Wrap the whole annotation in a group
+		// - Indent a block that starts with a hardline so each parameter
+		//   appears on its own line, indented under the opening parenthesis.
+		return group([
+			'@',
+			normalizedName,
 			group([
-				'@',
-				normalizedName,
-				group([
-					'(',
-					indent([hardline, join([hardline], flattenedParams)]),
-					hardline,
-					')',
-				]),
+				'(',
+				indent([hardline, join([hardline], paramsForJoin)]),
+				hardline,
+				')',
 			]),
 			hardline,
-		];
+		]);
 	}
 	// Single-line: use group with ifBreak to allow breaking if it exceeds printWidth
 	const singleParam = formattedParams[0];
@@ -440,5 +634,6 @@ export {
 	isAnnotation,
 	normalizeAnnotationNamesInText,
 	normalizeAnnotationNamesInTextExcludingApexDoc,
+	parseAndReformatAnnotationString,
 	printAnnotation,
 };

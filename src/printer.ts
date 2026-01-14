@@ -15,7 +15,11 @@ import type {
 } from './types.js';
 
 const { group, indent, softline, ifBreak, line } = doc.builders;
-import { isAnnotation, printAnnotation } from './annotations.js';
+import {
+	isAnnotation,
+	parseAndReformatAnnotationString,
+	printAnnotation,
+} from './annotations.js';
 import {
 	createTypeNormalizingPrint,
 	isIdentifier,
@@ -236,14 +240,20 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 					try {
 						// Format code using prettier.format to get a formatted string
-						// Ensure our plugin is first in the plugins array so our wrapped printer is used
+						// Ensure our plugin is LAST in the plugins array so our wrapped printer
+						// takes precedence over the base apex printers for shared parser names.
 						const pluginInstance = getCurrentPluginInstance();
+						const basePlugins = options.plugins || [];
 						const plugins = pluginInstance
 							? [
+									// Keep any existing plugins except our own instance
+									...(basePlugins.filter(
+										(p) => p !== pluginInstance.default,
+									) as unknown[]),
+									// Append our wrapped plugin last so its printers win
 									pluginInstance.default,
-									...(options.plugins || []),
 								]
-							: options.plugins;
+							: basePlugins;
 
 						// Calculate effective width: account for comment prefix
 						// In class context, comments are typically indented by tabWidth (usually 2 spaces)
@@ -276,6 +286,111 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 							} catch {
 								// When parsing fails, preserve the original code as-is
 								formattedCode = codeContent;
+							}
+						}
+
+						// #region agent log
+						// Debug: capture how code inside {@code} is formatted, especially for InvocableMethod annotations.
+						// H4: Prettier.format inside embed is not producing indented parameters even though printAnnotation uses multiline layout.
+						// eslint-disable-next-line no-void
+						void fetch(
+							'http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',
+							{
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({
+									sessionId: 'debug-session',
+									runId: 'invocable-codeblock',
+									hypothesisId: 'H4',
+									location: 'src/printer.ts:embed:formattedCode:before',
+									message: 'embed formattedCode for {@code} block (before InvocableMethod normalization)',
+									data: {
+										hasInvocable:
+											typeof formattedCode === 'string' &&
+											formattedCode.includes('@InvocableMethod'),
+										lines:
+											typeof formattedCode === 'string'
+												? formattedCode.split('\n')
+												: [],
+									},
+									timestamp: Date.now(),
+								}),
+							},
+						).catch(() => {});
+						// #endregion agent log
+
+						// Normalize multiline annotations (2+ parameters) to use the same formatting
+						// as our AST-based printAnnotation logic. This ensures consistency between
+						// regular Apex files and {@code} blocks (which are formatted via string-based path).
+						if (typeof formattedCode === 'string') {
+							const lines = formattedCode.split('\n');
+							let modified = false;
+
+							for (let i = 0; i < lines.length; i++) {
+								const line = lines[i] ?? '';
+								const trimmed = line.trim();
+
+								// Check if this line starts a multiline annotation (any annotation with parameters)
+								if (trimmed.startsWith('@') && trimmed.includes('(')) {
+									const reformatted = parseAndReformatAnnotationString(
+										trimmed,
+										lines,
+										i,
+									);
+
+									if (reformatted) {
+										// Count how many lines the original annotation occupied
+										let originalLineCount = 1;
+										for (let j = i + 1; j < lines.length; j++) {
+											const nextLine = lines[j] ?? '';
+											const nextTrimmed = nextLine.trim();
+											originalLineCount++;
+											if (
+												nextTrimmed.startsWith(')') ||
+												nextTrimmed.endsWith(')')
+											) {
+												break;
+											}
+										}
+
+										// Replace original annotation with reformatted version
+										lines.splice(i, originalLineCount, ...reformatted);
+										modified = true;
+										// Skip past the reformatted annotation
+										i += reformatted.length - 1;
+									}
+								}
+							}
+
+							if (modified) {
+								formattedCode = lines.join('\n');
+
+								// #region agent log
+								// Debug: capture normalized annotation block after our string-level adjustment.
+								// eslint-disable-next-line no-void
+								void fetch(
+									'http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',
+									{
+										method: 'POST',
+										headers: { 'Content-Type': 'application/json' },
+										body: JSON.stringify({
+											sessionId: 'debug-session',
+											runId: 'invocable-codeblock',
+											hypothesisId: 'H5',
+											location: 'src/printer.ts:embed:formattedCode:after',
+											message:
+												'embed formattedCode for {@code} block (after annotation normalization)',
+											data: {
+												lines:
+													typeof formattedCode === 'string'
+														? formattedCode.split('\n')
+														: [],
+											},
+											timestamp: Date.now(),
+										}),
+									},
+								).catch(() => {});
+								// #endregion agent log
 							}
 						}
 
@@ -728,11 +843,51 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			.originalText;
 		const { node } = path;
 		const nodeClass = getNodeClassOptional(node);
+
+		// #region agent log
+		// Debug: trace when customPrint sees annotation nodes, especially in {@code}/apex-anonymous runs.
+		// H1: customPrint/printAnnotation is not used for annotations inside {@code} embed formatting.
+		// eslint-disable-next-line no-void
+		void fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				sessionId: 'debug-session',
+				runId: 'invocable-codeblock',
+				hypothesisId: 'H1',
+				location: 'src/printer.ts:customPrint:entry',
+				message: 'customPrint entry',
+				data: {
+					nodeClass,
+					isAnnotationNode: isAnnotation(node),
+				},
+				timestamp: Date.now(),
+			}),
+		}).catch(() => {});
+		// #endregion agent log
 		const typeNormalizingPrint = createTypeNormalizingPrint(print);
 		const fallback = (): Doc =>
 			originalPrinter.print(path, options, typeNormalizingPrint);
 
 		if (isAnnotation(node)) {
+			// #region agent log
+			// Debug: confirm annotation printing path is taken
+			// eslint-disable-next-line no-void
+			void fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					sessionId: 'debug-session',
+					runId: 'invocable-codeblock',
+					hypothesisId: 'H1',
+					location: 'src/printer.ts:customPrint:annotation',
+					message: 'customPrint is delegating to printAnnotation',
+					data: { nodeClass },
+					timestamp: Date.now(),
+				}),
+			}).catch(() => {});
+			// #endregion agent log
+
 			return printAnnotation(
 				path as Readonly<AstPath<ApexAnnotationNode>>,
 			);
