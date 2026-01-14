@@ -24,7 +24,7 @@ const ANNOTATION_REGEX =
 	/@([a-zA-Z_][a-zA-Z0-9_]*)(\s*\(([^)]*)\)|(?![a-zA-Z0-9_(]))/g;
 const ANNOTATION_OPTION_REGEX = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
 
-const { group, indent, hardline, softline, join } = doc.builders;
+const { group, indent, hardline, softline, join, ifBreak, concat } = doc.builders;
 
 const ANNOTATION_CLASS = 'apex.jorje.data.ast.Modifier$Annotation';
 const TRUE_ANNOTATION_VALUE_CLASS =
@@ -114,16 +114,9 @@ const shouldForceMultiline = (
 	normalizedName: string,
 	formattedParams: readonly Doc[],
 ): boolean => {
-	const normalizedNameLower = normalizedName.toLowerCase();
-	if (!isInvocableAnnotation(normalizedNameLower)) return false;
-	return (
-		formattedParams.length > MIN_PARAMS_FOR_MULTILINE ||
-		formattedParams.some(
-			(p) =>
-				typeof p === 'string' &&
-				p.length > MIN_PARAM_LENGTH_FOR_MULTILINE,
-		)
-	);
+	// All annotations with 2+ parameters should be multiline
+	// Single parameter annotations stay on one line
+	return formattedParams.length > MIN_PARAMS_FOR_MULTILINE;
 };
 
 const printAnnotation = (
@@ -141,21 +134,53 @@ const printAnnotation = (
 		normalizedName,
 		formattedParams,
 	);
-	const lineType = forceMultiline ? hardline : softline;
-	const paramSeparator = forceMultiline ? [' ', hardline] : [' ', softline];
-	return [
-		group([
-			'@',
-			normalizedName,
+	// Annotations use whitespace, not commas, between parameters
+	// For multiline, ensure each parameter is a single Doc (group arrays together)
+	const paramsForJoin: Doc[] = forceMultiline
+		? formattedParams.map((param) =>
+				Array.isArray(param) ? group(param) : param,
+			)
+		: formattedParams;
+	if (forceMultiline) {
+		// For multiline, each parameter should be on its own line with indentation
+		// Convert each parameter array to a single Doc for proper indentation
+		const flattenedParams: Doc[] = paramsForJoin.map((param) =>
+			Array.isArray(param) ? concat(param) : param,
+		);
+		return [
 			group([
-				'(',
-				indent([lineType, join(paramSeparator, formattedParams)]),
-				lineType,
-				')',
+				'@',
+				normalizedName,
+				group([
+					'(',
+					indent([hardline, join([hardline], flattenedParams)]),
+					hardline,
+					')',
+				]),
 			]),
+			hardline,
+		];
+	}
+	// Single-line: use group with ifBreak to allow breaking if it exceeds printWidth
+	const singleParam = formattedParams[0];
+	const singleParamDoc: Doc =
+		Array.isArray(singleParam) ? concat(singleParam) : singleParam;
+	return group([
+		'@',
+		normalizedName,
+		group([
+			'(',
+			ifBreak(
+				// Break: put param on its own indented line
+				indent([softline, singleParamDoc]),
+				// Flat: keep param on same line (no extra whitespace)
+				singleParamDoc,
+			),
+			softline,
+			')',
 		]),
 		hardline,
-	];
+	]);
 };
 
 const createAnnotationReplacer =
