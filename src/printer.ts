@@ -23,13 +23,22 @@ import {
 	normalizeTypeName,
 	TYPEREF_CLASS,
 } from './casing.js';
-import { isListInit, isMapInit, printCollection } from './collections.js';
+import {
+	isListInit,
+	isMapInit,
+	printCollection,
+	LIST_LITERAL_CLASS,
+	SET_LITERAL_CLASS,
+	MAP_LITERAL_CLASS,
+} from './collections.js';
 import {
 	calculateEffectiveWidth,
 	formatApexCodeWithFallback,
 	getNodeClassOptional,
 	createNodeClassGuard,
 	preserveBlankLineAfterClosingBrace,
+	isObject,
+	isApexNodeLike,
 } from './utils.js';
 import { extractCodeFromBlock } from './apexdoc-code.js';
 
@@ -164,7 +173,7 @@ const isCommentNode = createNodeClassGuard<ApexNode>(
  * @returns True if a comment can be attached to this node.
  */
 const canAttachComment = (node: unknown): boolean => {
-	if (!node || typeof node !== 'object') return false;
+	if (!isObject(node)) return false;
 	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
 	const nodeClass = nodeWithClass['@class'];
 	return (
@@ -182,7 +191,7 @@ const canAttachComment = (node: unknown): boolean => {
  * @returns True if the comment is a block comment.
  */
 const isBlockComment = (comment: unknown): boolean => {
-	if (!comment || typeof comment !== 'object') return false;
+	if (!isObject(comment)) return false;
 	return (
 		(comment as { '@class'?: unknown })['@class'] === BLOCK_COMMENT_CLASS
 	);
@@ -396,12 +405,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	 */
 	const hasVariableAssignments = (decls: unknown[]): boolean =>
 		decls.some((decl) => {
-			if (!decl || typeof decl !== 'object') return false;
+			if (!isObject(decl)) return false;
 			const assignment = (decl as { assignment?: unknown }).assignment;
 			return (
-				assignment !== null &&
-				assignment !== undefined &&
-				typeof assignment === 'object' &&
+				isObject(assignment) &&
 				'value' in assignment &&
 				(assignment as { value?: unknown }).value !== null &&
 				(assignment as { value?: unknown }).value !== undefined
@@ -481,30 +488,14 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		// Handle case with assignments
 
-		const LIST_LITERAL_CLASS =
-			'apex.jorje.data.ast.NewObject$NewListLiteral';
-		const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
-		const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
-
 		const isCollectionAssignment = (assignment: unknown): boolean => {
-			if (
-				!assignment ||
-				typeof assignment !== 'object' ||
-				!('value' in assignment)
-			)
-				return false;
+			if (!isObject(assignment) || !('value' in assignment)) return false;
 			const value = (assignment as { value?: unknown }).value;
-			if (!value || typeof value !== 'object' || !('@class' in value))
-				return false;
+			if (!isApexNodeLike(value)) return false;
 			const valueClass = getNodeClassOptional(value as ApexNode);
 			if (valueClass !== 'apex.jorje.data.ast.Expr$NewExpr') return false;
 			const creator = (value as { creator?: unknown }).creator;
-			if (
-				!creator ||
-				typeof creator !== 'object' ||
-				!('@class' in creator)
-			)
-				return false;
+			if (!isApexNodeLike(creator)) return false;
 			const creatorClass = getNodeClassOptional(creator as ApexNode);
 			return (
 				creatorClass === LIST_LITERAL_CLASS ||
@@ -516,8 +507,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const { join: joinDocs } = doc.builders;
 		const declDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
 			const declNode = declPath.node;
-			if (typeof declNode !== 'object' || declNode === null)
-				return print(declPath);
+			if (!isObject(declNode)) return print(declPath);
 
 			const assignment = (declNode as { assignment?: unknown })
 				.assignment;
@@ -647,8 +637,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			return null;
 
 		const expr = (node as { expr?: unknown }).expr;
-		if (!expr || typeof expr !== 'object' || !('@class' in expr))
-			return null;
+		if (!isApexNodeLike(expr)) return null;
 
 		const EXPR_ASSIGNMENT_CLASS = 'Expr$AssignmentExpr';
 		const exprNodeClass = getNodeClassOptional(expr as ApexNode);

@@ -21,6 +21,24 @@ const getNodeClassOptional = (node: Readonly<ApexNode>): string | undefined => {
 };
 
 /**
+ * Checks if a value is a non-null object.
+ * @param value - The value to check.
+ * @returns True if the value is a non-null object.
+ */
+const isObject = (value: unknown): value is object =>
+	value !== null && typeof value === 'object';
+
+/**
+ * Checks if a value is an object-like structure with a '@class' property.
+ * @param value - The value to check.
+ * @returns True if the value is an object with a '@class' property.
+ */
+const isApexNodeLike = (
+	value: unknown,
+): value is { '@class': unknown; [key: string]: unknown } =>
+	isObject(value) && '@class' in value;
+
+/**
  * Creates a type guard factory for AST nodes based on class name.
  * @param className - The exact class name to match, or a function that checks the class name.
  * @returns A type guard function.
@@ -36,7 +54,7 @@ const createNodeClassGuard = <T extends ApexNode>(
 	return (
 		node: Readonly<ApexNode> | null | undefined,
 	): node is Readonly<T> => {
-		if (!node || typeof node !== 'object') return false;
+		if (!isObject(node)) return false;
 		const nodeClass = getNodeClassOptional(node);
 		return checkClass(nodeClass);
 	};
@@ -178,6 +196,8 @@ export {
 	STRING_OFFSET,
 	isEmpty,
 	isNotEmpty,
+	isObject,
+	isApexNodeLike,
 	calculateEffectiveWidth,
 	preserveBlankLineAfterClosingBrace,
 	formatApexCodeWithFallback,

@@ -16,6 +16,7 @@ import {
 	STRING_OFFSET,
 	isEmpty,
 	isNotEmpty,
+	isObject,
 } from './utils.js';
 import {
 	normalizeSingleApexDocComment,
@@ -112,7 +113,7 @@ const ALLOW_DANGLING_COMMENTS = [
  * @returns True if the comment was handled, false otherwise.
  */
 const handleDanglingComment = (comment: unknown): boolean => {
-	if (!comment || typeof comment !== 'object') return false;
+	if (!isObject(comment)) return false;
 
 	const commentWithContext = comment as {
 		enclosingNode?: ApexNode;
@@ -148,7 +149,7 @@ const handleDanglingComment = (comment: unknown): boolean => {
  * @returns True if the comment was handled, false otherwise.
  */
 const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
-	if (!comment || typeof comment !== 'object') return false;
+	if (!isObject(comment)) return false;
 
 	const commentWithContext = comment as {
 		followingNode?: ApexNode;
@@ -184,7 +185,7 @@ const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
 const handleBinaryishExpressionRightChildTrailingComment = (
 	comment: unknown,
 ): boolean => {
-	if (!comment || typeof comment !== 'object') return false;
+	if (!isObject(comment)) return false;
 
 	const commentWithContext = comment as {
 		precedingNode?: ApexNode;

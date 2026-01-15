@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { doc, type AstPath, type Doc } from 'prettier';
 import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
-import { getNodeClass, isEmpty } from './utils.js';
+import { getNodeClass, isEmpty, isObject } from './utils.js';
 import { createTypeNormalizingPrint } from './casing.js';
 
 const MIN_ENTRIES_FOR_MULTILINE = 2;
@@ -40,11 +40,7 @@ const isNestedInCollection = (
 	const { stack } = path;
 	if (!Array.isArray(stack) || stack.length === 0) return false;
 	return stack.some((parent) => {
-		if (
-			typeof parent !== 'object' ||
-			parent === null ||
-			!('@class' in parent)
-		) {
+		if (!isObject(parent) || !('@class' in parent)) {
 			return false;
 		}
 		const parentClass = getNodeClass(parent as ApexNode);
@@ -233,4 +229,7 @@ export {
 	hasMultipleListEntries,
 	hasMultipleMapEntries,
 	printCollection,
+	LIST_LITERAL_CLASS,
+	SET_LITERAL_CLASS,
+	MAP_LITERAL_CLASS,
 };

@@ -7,7 +7,7 @@ import type { AstPath, Doc } from 'prettier';
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { SORTED_SUFFIXES } from './refs/object-suffixes.js';
-import { getNodeClassOptional } from './utils.js';
+import { getNodeClassOptional, isObject } from './utils.js';
 
 /**
  * Normalizes the casing of object type suffixes in a type name.
@@ -67,7 +67,7 @@ const IDENTIFIER_CLASS = 'apex.jorje.data.ast.Identifier';
 const isIdentifier = (
 	node: Readonly<ApexNode> | null | undefined,
 ): node is Readonly<ApexIdentifier> => {
-	if (!node || typeof node !== 'object') return false;
+	if (!isObject(node)) return false;
 	const nodeClass = getNodeClassOptional(node);
 	if (
 		nodeClass === IDENTIFIER_CLASS ||
