@@ -349,7 +349,12 @@ const normalizeCommentLine = (
 		// No asterisk - check if trimmed starts with *
 		const trimmed = line.trimStart();
 		if (trimmed.startsWith('*')) {
-			const afterAsterisk = trimmed.substring(1).trimStart();
+			// Preserve indentation after asterisk for code blocks
+			const afterAsteriskRaw = trimmed.substring(1);
+			// Only trim if there's no space after asterisk (to preserve code indentation)
+			const afterAsterisk = afterAsteriskRaw.startsWith(' ')
+				? afterAsteriskRaw // Keep the space and any following indentation
+				: afterAsteriskRaw.trimStart();
 			return `${baseIndent} * ${afterAsterisk}`;
 		}
 		return `${baseIndent} * ${trimmed}`;
@@ -364,15 +369,24 @@ const normalizeCommentLine = (
 	// Skip whitespace after asterisk(s)
 	const spaceMatch = afterAsterisk.match(/^\s*/);
 	const spaceAfterAsterisk = spaceMatch !== null && spaceMatch[0] !== undefined ? spaceMatch[0] : '';
-	afterAsterisk = afterAsterisk.trimStart();
+	// Preserve indentation: only remove the first space after asterisk, keep additional spaces (code indentation)
+	// If there's exactly one space, remove it. If there are multiple spaces, keep them as indentation.
+	if (spaceAfterAsterisk === ' ') {
+		// Single space - remove it, but preserve any additional indentation in the content
+		afterAsterisk = afterAsterisk.substring(1);
+	} else if (spaceAfterAsterisk.length > 1) {
+		// Multiple spaces - keep them as indentation (remove only the first space)
+		afterAsterisk = afterAsterisk.substring(1);
+	} else {
+		// No space - trim any leading whitespace
+		afterAsterisk = afterAsterisk.trimStart();
+	}
 	// Remove any remaining asterisks at start of content
 	while (afterAsterisk.startsWith('*')) {
 		afterAsterisk = afterAsterisk.substring(1).trimStart();
 	}
-	// Preserve code block indentation (spaces beyond first)
-	const codeBlockIndent =
-		spaceAfterAsterisk.length > 1 ? spaceAfterAsterisk.substring(1) : '';
-	return `${baseIndent} * ${codeBlockIndent}${afterAsterisk}`;
+	// Return normalized line with preserved indentation
+	return `${baseIndent} * ${afterAsterisk}`;
 };
 
 /**
@@ -614,7 +628,9 @@ const createDocContentToken = (
 	lines: readonly string[],
 	isContinuation?: boolean,
 ): DocContentToken => {
-	const trimmedLines = lines.map((line) => removeCommentPrefix(line));
+	// Preserve lines as-is - comment prefix and indentation will be handled later when needed
+	// This preserves code block indentation that would be lost if we strip prefixes here
+	const trimmedLines = lines;
 	return {
 		type,
 		content: contentToDoc(content, trimmedLines),
