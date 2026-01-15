@@ -115,9 +115,9 @@ const printAnnotation = (
 	const parametersLength = node.parameters.length;
 	if (parametersLength === EMPTY)
 		return ['@', normalizedName, hardline];
-	const formattedParams: Doc[] = node.parameters.map((param) => {
-		return formatAnnotationParam(param, originalName);
-	});
+	const formattedParams: Doc[] = node.parameters.map((param) =>
+		formatAnnotationParam(param, originalName),
+	);
 
 	const forceMultiline = shouldForceMultiline(formattedParams);
 

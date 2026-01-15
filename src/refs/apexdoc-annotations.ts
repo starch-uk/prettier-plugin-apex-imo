@@ -29,4 +29,10 @@ const APEXDOC_GROUP_NAMES: Readonly<Record<string, string>> = {
 	variable: 'Variable',
 } as const;
 
-export { APEXDOC_ANNOTATIONS, APEXDOC_GROUP_NAMES };
+/**
+ * Set of ApexDoc annotations for O(1) lookup performance.
+ * Derived from APEXDOC_ANNOTATIONS to avoid duplication.
+ */
+const APEXDOC_ANNOTATIONS_SET = new Set(APEXDOC_ANNOTATIONS);
+
+export { APEXDOC_ANNOTATIONS, APEXDOC_ANNOTATIONS_SET, APEXDOC_GROUP_NAMES };

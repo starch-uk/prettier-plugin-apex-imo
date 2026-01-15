@@ -40,3 +40,14 @@ export const APEX_OBJECT_SUFFIXES: Record<string, string> = {
 	__xo: '__xo', // Salesforce-to-Salesforce (S2S) spoke/proxy object
 	_hst: '_hst', // A historical field for a custom report type
 };
+
+/**
+ * Sorted array of object suffixes (sorted by length descending).
+ * Used for efficient suffix matching in type normalization.
+ * Derived from APEX_OBJECT_SUFFIXES to avoid duplication.
+ */
+const SORTED_SUFFIXES = Object.entries(APEX_OBJECT_SUFFIXES).sort(
+	([, a], [, b]) => b.length - a.length,
+);
+
+export { SORTED_SUFFIXES };

@@ -8,6 +8,12 @@ import { APEX_ANNOTATION_OPTION_NAMES } from './refs/annotations.js';
 import * as prettier from 'prettier';
 import { DECLARATION_MODIFIERS_SET } from './refs/reserved-words.js';
 
+/**
+ * Shared Prettier doc builders for consistent usage across the codebase.
+ * Reduces duplication of prettier.doc.builders destructuring.
+ */
+const docBuilders = prettier.doc.builders;
+
 const getNodeClass = (node: Readonly<ApexNode>): string => node['@class'];
 
 const getNodeClassOptional = (node: Readonly<ApexNode>): string | undefined => {
@@ -200,4 +206,5 @@ export {
 	calculateEffectiveWidth,
 	preserveBlankLineAfterClosingBrace,
 	formatApexCodeWithFallback,
+	docBuilders,
 };

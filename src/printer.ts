@@ -48,19 +48,16 @@ const processTypeParams = (params: unknown[]): Doc[] => {
 	const processedParams: Doc[] = [];
 	for (let j = 0; j < params.length; j++) {
 		const param = params[j] as Doc;
-		if (param === ', ' && j === processedParams.length) {
+		if (param === ', ' && j === processedParams.length && j + 1 < params.length) {
 			processedParams.push(', ');
-			if (j + 1 < params.length) {
-				const remainingParams = params.slice(j + 1) as Doc[];
-				processedParams.push(
-					// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-					group(indent([softline, ...remainingParams])),
-				);
-				break;
-			}
-		} else {
-			processedParams.push(param);
+			const remainingParams = params.slice(j + 1) as Doc[];
+			processedParams.push(
+				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
+				group(indent([softline, ...remainingParams])),
+			);
+			break;
 		}
+		processedParams.push(param);
 	}
 	return processedParams;
 };
@@ -85,16 +82,15 @@ const makeTypeDocBreakable = (
 		const result: Doc[] = [];
 		for (let i = 0; i < typeDoc.length; i++) {
 			const item = typeDoc[i] as Doc;
+			const nextItem = typeDoc[i + 1];
 			if (
 				item === '<' &&
 				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
 				i + 1 < typeDoc.length &&
-				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-				Array.isArray(typeDoc[i + 1])
+				Array.isArray(nextItem)
 			) {
 				result.push(item);
-				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-				result.push(processTypeParams(typeDoc[i + 1]! as unknown[]));
+				result.push(processTypeParams(nextItem as unknown[]));
 				i++;
 			} else {
 				result.push(item);
@@ -238,11 +234,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					| prettier.Plugin<ApexNode>
 				)[] = pluginInstance
 					? [
-							// Keep any existing plugins except our own instance
 							...basePlugins.filter(
 								(p) => p !== pluginInstance.default,
 							),
-							// Append our wrapped plugin last so its printers win
 							pluginInstance.default as prettier.Plugin<ApexNode>,
 						]
 					: basePlugins;
@@ -294,16 +288,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						const formattedLine = formattedLines[i];
 						if (formattedLine === undefined) continue;
 						resultLines.push(formattedLine);
-
 						// Insert blank line after } when followed by annotations or access modifiers
-						// This preserves the structure from original code
 						if (
 							preserveBlankLineAfterClosingBrace(
 								formattedLines as readonly string[],
 								i,
 							)
 						) {
-							// Insert blank line - it will become ' *' when mapped with comment prefix
 							resultLines.push('');
 						}
 					}
@@ -311,21 +302,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					formattedCode = resultLines.join('\n');
 
 					// Replace the code block with formatted version
-					// Add comment prefix (* ) to each code line to preserve comment structure
-					// beforeCode should include everything BEFORE {@code, not including {@code itself
-					// This ensures we can properly replace {@code ... } with the formatted code block
 					const beforeCode = result.substring(0, startIndex);
 					const afterCode = result.substring(extraction.endPos);
-					// Add * prefix to each formatted code line
-					// Prettier normalizes comment indentation to a single space before *
 					const formattedCodeLines = formattedCode.trim().split('\n');
 					const prefixedCodeLines = formattedCodeLines.map(
 						(line) => (line ? ` * ${line}` : ' *'),
 					);
-					// Add {@code tag with * prefix and closing } tag with * prefix to match comment structure
-					// Check if beforeCode already ends with a newline to avoid extra blank lines
 					const needsLeadingNewline = !beforeCode.endsWith('\n');
-					// For empty code blocks, output {@code} on a single line (no content between braces)
 					const isEmptyBlock = codeContent.trim().length === 0;
 					const newCodeBlock = isEmptyBlock
 						? (needsLeadingNewline ? '\n' : '') + ` * ${codeTag}}\n`
@@ -335,8 +318,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 							'\n * }\n';
 					result = beforeCode + newCodeBlock + afterCode;
 					hasChanges = true;
-
-					// Move past this code block
 					startIndex = beforeCode.length + newCodeBlock.length;
 				}
 
@@ -347,8 +328,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				// Store formatted comment in cache for retrieval by processApexDocCommentLines
 				const codeTagPos = commentText.indexOf('{@code');
 				if (codeTagPos !== -1) {
-					const commentKey = `${String(commentText.length)}-${String(codeTagPos)}`;
-					setFormattedCodeBlock(commentKey, result);
+					setFormattedCodeBlock(
+						`${String(commentText.length)}-${String(codeTagPos)}`,
+						result,
+					);
 				}
 
 				// Return formatted comment as Doc (split into lines)
@@ -523,13 +506,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				!('@class' in creator)
 			)
 				return false;
-			const creatorClass = getNodeClassOptional(creator as ApexNode);
 			const LIST_LITERAL_CLASS =
 				'apex.jorje.data.ast.NewObject$NewListLiteral';
 			const SET_LITERAL_CLASS =
 				'apex.jorje.data.ast.NewObject$NewSetLiteral';
 			const MAP_LITERAL_CLASS =
 				'apex.jorje.data.ast.NewObject$NewMapLiteral';
+			const creatorClass = getNodeClassOptional(creator as ApexNode);
 			return (
 				creatorClass === LIST_LITERAL_CLASS ||
 				creatorClass === SET_LITERAL_CLASS ||
@@ -594,42 +577,42 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 			const paramsIndex = 2;
 			if (
-				typeDocToCheck.length > paramsIndex &&
-				Array.isArray(typeDocToCheck[paramsIndex])
+				typeDocToCheck.length <= paramsIndex ||
+				!Array.isArray(typeDocToCheck[paramsIndex])
 			) {
-				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-				const params = typeDocToCheck[paramsIndex] as unknown[];
-				const hasNestedMap = (param: unknown): boolean => {
-					if (typeof param === 'string') return param.includes('Map<');
-					if (!Array.isArray(param)) return false;
-					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-					const paramFirst = param[0];
-					if (paramFirst === 'Map') return true;
-					if (
-						Array.isArray(paramFirst) &&
-						// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-						paramFirst[0] === 'Map'
-					)
-						return true;
-					return param.some((item) => hasNestedMap(item));
-				};
-				return params.some((param) => hasNestedMap(param));
+				return false;
 			}
-			return false;
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+			const params = typeDocToCheck[paramsIndex] as unknown[];
+			const hasNestedMap = (param: unknown): boolean => {
+				if (typeof param === 'string') return param.includes('Map<');
+				if (!Array.isArray(param)) return false;
+				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+				const paramFirst = param[0];
+				return (
+					paramFirst === 'Map' ||
+					(Array.isArray(paramFirst) &&
+						// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+						paramFirst[0] === 'Map') ||
+					param.some((item) => hasNestedMap(item))
+				);
+			};
+			return params.some((param) => hasNestedMap(param));
 		};
 
 		if (declDocs.length > 1) {
 			resultParts.push(' ', joinDocs([', ', softline], declDocs), ';');
-		} else if (declDocs.length === 1 && declDocs[0] !== undefined) {
-			const declDoc = declDocs[0] as Doc;
-			if (
-				Array.isArray(declDoc) &&
-				declDoc.length >= 5 &&
-				declDoc[2] === '='
-			) {
-				const nameDoc = declDoc[0] as Doc;
-				const assignmentDoc = declDoc[4] as Doc;
-				if (isComplexMapType(typeDoc)) {
+		} else if (declDocs.length === 1) {
+			const declDoc = declDocs[0];
+			if (declDoc !== undefined) {
+				if (
+					Array.isArray(declDoc) &&
+					declDoc.length >= 5 &&
+					declDoc[2] === '=' &&
+					isComplexMapType(typeDoc)
+				) {
+					const nameDoc = declDoc[0] as Doc;
+					const assignmentDoc = declDoc[4] as Doc;
 					resultParts.push(' ', group([nameDoc, ' ', '=']));
 					resultParts.push(
 						ifBreak(indent([line, assignmentDoc]), [
@@ -641,8 +624,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				} else {
 					resultParts.push(' ', [declDoc, ';']);
 				}
-			} else {
-				resultParts.push(' ', [declDoc, ';']);
 			}
 		}
 
@@ -669,10 +650,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		if (!expr || typeof expr !== 'object' || !('@class' in expr))
 			return null;
 
+		const EXPR_ASSIGNMENT_CLASS = 'Expr$AssignmentExpr';
 		const exprNodeClass = getNodeClassOptional(expr as ApexNode);
 		if (
 			exprNodeClass === undefined ||
-			!exprNodeClass.includes('Expr$AssignmentExpr')
+			!exprNodeClass.includes(EXPR_ASSIGNMENT_CLASS)
 		)
 			return null;
 

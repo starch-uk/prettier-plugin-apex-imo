@@ -6,7 +6,6 @@
 import * as prettier from 'prettier';
 import type {
 	ApexDocComment,
-	ApexDocContent,
 	ApexDocAnnotation,
 } from './comments.js';
 import {
@@ -20,18 +19,15 @@ import {
 import { removeTrailingEmptyLines } from './apexdoc.js';
 import {
 	ARRAY_START_INDEX,
+	docBuilders,
 	EMPTY,
 	INDEX_ONE,
-	isEmpty,
 	isNotEmpty,
 } from './utils.js';
 import {
-	APEXDOC_ANNOTATIONS,
+	APEXDOC_ANNOTATIONS_SET,
 } from './refs/apexdoc-annotations.js';
 import { normalizeGroupContent } from './apexdoc-group.js';
-
-// Use Set for O(1) lookup instead of array.includes() O(n)
-const APEXDOC_ANNOTATIONS_SET = new Set(APEXDOC_ANNOTATIONS);
 
 /**
  * Extracts text before an annotation, filtering out annotation patterns.
@@ -96,7 +92,7 @@ const collectContinuationFromComment = (
 				!l.startsWith('@') &&
 				!l.startsWith('{@code'),
 		);
-	if (continuationLines.length > 0) {
+	if (continuationLines.length > EMPTY) {
 		for (const continuationLine of continuationLines) {
 			consumedContent.add(continuationLine.trim());
 		}
@@ -211,7 +207,6 @@ const detectAnnotationsInDocs = (
 						}
 
 						// Create ApexDocAnnotation with Doc content
-						const { join, hardline } = prettier.doc.builders;
 						const annotationContentDoc = annotationContent as Doc;
 						const followingTextDoc =
 							beforeText.length > EMPTY ? (beforeText as Doc) : undefined;
@@ -255,15 +250,11 @@ const detectAnnotationsInDocs = (
 				}
 				newDocs.push(doc);
 			} else if (processedLines.length > EMPTY) {
-				const remainingContent = processedLines
+				const trimmedLines = processedLines
 					.map((l) => l.replace(/^\s*\*\s*/, '').trim())
-					.filter((l) => l.length > EMPTY && !consumedContent.has(l))
-					.join(' ');
-				if (remainingContent.length > EMPTY) {
-					// Create ApexDocContent for remaining content
-					const trimmedLines = processedLines
-						.map((l) => l.replace(/^\s*\*\s*/, '').trim())
-						.filter((l) => l.length > EMPTY && !consumedContent.has(l));
+					.filter((l) => l.length > EMPTY && !consumedContent.has(l));
+				if (trimmedLines.length > EMPTY) {
+					const remainingContent = trimmedLines.join(' ');
 					newDocs.push(
 						createDocContent('text', remainingContent, trimmedLines),
 					);
@@ -342,8 +333,7 @@ const renderAnnotation = (
 		: undefined;
 	const trimmedFollowingText = followingTextString?.trim();
 	if (trimmedFollowingText !== undefined && isNotEmpty(trimmedFollowingText)) {
-		if (followingTextString === undefined) return null;
-		const followingLines = followingTextString
+		const followingLines = followingTextString!
 			.split('\n')
 			.map((line: string) => line.trim())
 			.filter((line: string) => isNotEmpty(line));
@@ -353,10 +343,7 @@ const renderAnnotation = (
 	}
 
 	// First line includes the @annotation name
-	const firstContent =
-		contentLines.length > ARRAY_START_INDEX
-			? contentLines[ARRAY_START_INDEX] ?? ''
-			: '';
+	const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
 	const firstLine = isNotEmpty(firstContent)
 		? `${commentPrefix}@${annotationName} ${firstContent}`
 		: `${commentPrefix}@${annotationName}`;
@@ -469,15 +456,11 @@ const wrapAnnotations = (
 				...useTabsOption,
 			};
 
+			const { fill, join: joinBuilders, line, hardline } = docBuilders;
 			let wrappedContent: string | prettier.Doc = firstLineContent;
 			if (remainingWords.length > 0) {
 				// Use fill for continuation lines with full effectiveWidth
-				const continuationFill = prettier.doc.builders.fill(
-					prettier.doc.builders.join(
-						prettier.doc.builders.line,
-						remainingWords,
-					),
-				);
+				const continuationFill = fill(joinBuilders(line, remainingWords));
 				const continuationText = prettier.doc.printer.printDocToString(
 					continuationFill,
 					{
@@ -494,10 +477,7 @@ const wrapAnnotations = (
 					? [firstLineContent, ...continuationLines]
 					: continuationLines;
 
-				wrappedContent = prettier.doc.builders.join(
-					prettier.doc.builders.hardline,
-					allLines,
-				);
+				wrappedContent = joinBuilders(hardline, allLines);
 			}
 
 			const newContentString = prettier.doc.printer.printDocToString(

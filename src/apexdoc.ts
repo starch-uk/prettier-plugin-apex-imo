@@ -10,7 +10,6 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import type { ParserOptions, Doc } from 'prettier';
-import * as prettier from 'prettier';
 import {
 	normalizeBlockComment,
 	parseCommentToDocs,
@@ -27,6 +26,7 @@ import {
 import {
 	ARRAY_START_INDEX,
 	calculateEffectiveWidth,
+	docBuilders,
 	EMPTY,
 	INDEX_ONE,
 	isEmpty,
@@ -49,7 +49,6 @@ import {
 	CODE_TAG,
 } from './apexdoc-code.js';
 import { preserveBlankLineAfterClosingBrace } from './utils.js';
-import { removeCommentPrefix } from './comments.js';
 
 const ZERO_INDENT = 0;
 const BODY_INDENT_WHEN_ZERO = 2;
@@ -186,7 +185,7 @@ const normalizeSingleApexDocComment = (
 
 	// Convert the formatted comment string to Doc
 	const lines = commentString.split('\n');
-	const { join, hardline } = prettier.doc.builders;
+	const { join, hardline } = docBuilders;
 	return join(hardline, lines);
 };
 
@@ -205,9 +204,6 @@ const processCodeLinesWithBlankLinePreservation = (
 	const resultLines: string[] = [];
 
 	for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
-		if (i < ARRAY_START_INDEX || i >= codeLines.length) {
-			continue;
-		}
 		const codeLine = codeLines[i];
 		if (codeLine === undefined) continue;
 		resultLines.push(codeLine);
@@ -228,15 +224,14 @@ const processCodeLinesWithBlankLinePreservation = (
 const handleAlreadyWrappedCode = (
 	codeLinesForProcessing: string[],
 ): string[] => {
-	const finalCodeLines = codeLinesForProcessing;
-	if (finalCodeLines.length === INDEX_ONE) {
-		const [line] = finalCodeLines;
+	if (codeLinesForProcessing.length === INDEX_ONE) {
+		const [line] = codeLinesForProcessing;
 		if (line !== undefined && line.includes(';') && line.endsWith('}')) {
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- string slice position
-			finalCodeLines[ARRAY_START_INDEX] = line.slice(0, -1) + ' }';
+			codeLinesForProcessing[ARRAY_START_INDEX] = line.slice(0, -1) + ' }';
 		}
 	}
-	return finalCodeLines;
+	return codeLinesForProcessing;
 };
 
 /**
@@ -252,11 +247,9 @@ const handleUnwrappedCode = (
 	printWidth: number,
 ): string[] => {
 	const isSingleLine = codeLinesForProcessing.length === INDEX_ONE;
-	const singleLineContent =
-		codeLinesForProcessing.length > EMPTY &&
-		codeLinesForProcessing[ARRAY_START_INDEX] !== undefined
-			? codeLinesForProcessing[ARRAY_START_INDEX]?.trim() ?? ''
-			: '';
+	const singleLineContent = isSingleLine
+		? codeLinesForProcessing[ARRAY_START_INDEX]?.trim() ?? ''
+		: '';
 	const singleLineWithBraces = `{@code ${singleLineContent} }`;
 	const commentPrefixLength = commentPrefix.length;
 	const fitsOnOneLine =
@@ -303,13 +296,15 @@ interface RenderedContentToken {
 	readonly isContinuation?: boolean;
 }
 
+type RenderedContent = RenderedContentToken | null;
+
 const renderCodeBlock = (
 	doc: ApexDocCodeBlock,
 	commentPrefix: string,
 	options: Readonly<{
 		readonly printWidth?: number;
 	}>,
-): RenderedContentToken | null => {
+): RenderedContent => {
 	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
 	// Use formattedCode if available, otherwise use rawCode
 	const codeToUse = doc.formattedCode ?? doc.rawCode;
@@ -387,14 +382,10 @@ const renderTextOrParagraphDoc = (
 		effectiveWidth,
 		options,
 	);
-	const allLines: string[] = [];
-	for (const wrappedLine of wrappedLines) {
-		allLines.push(...wrappedLine.split('\n'));
-	}
+	const allLines = wrappedLines.flatMap((line) => line.split('\n'));
 	const cleanedLines = removeTrailingEmptyLines(allLines);
-	const trimmedCommentPrefix = commentPrefix;
 	const linesWithPrefix = cleanedLines.map(
-		(line: string) => `${trimmedCommentPrefix}${line.trim()}`,
+		(line: string) => `${commentPrefix}${line.trim()}`,
 	);
 	return {
 		...doc,
@@ -432,33 +423,24 @@ const docsToApexDocString = (
 
 	const apexDocs: ApexDocComment[] = [];
 
+	const addRenderedContent = (rendered: RenderedContent): void => {
+		if (rendered) {
+			apexDocs.push(
+				createDocContent(
+					rendered.type,
+					rendered.content,
+					rendered.lines,
+					rendered.isContinuation,
+				),
+			);
+		}
+	};
+
 	for (const doc of docs) {
 		if (doc.type === 'annotation') {
-			const rendered = renderAnnotation(doc, commentPrefix);
-			if (rendered) {
-				// Convert rendered content to ApexDocContent
-				apexDocs.push(createDocContent(
-					rendered.type,
-					rendered.content,
-					rendered.lines,
-					rendered.isContinuation,
-				));
-			}
+			addRenderedContent(renderAnnotation(doc, commentPrefix));
 		} else if (doc.type === 'code') {
-			const rendered = renderCodeBlock(
-				doc,
-				commentPrefix,
-				options,
-			);
-			if (rendered) {
-				// Convert rendered content to ApexDocContent
-				apexDocs.push(createDocContent(
-					rendered.type,
-					rendered.content,
-					rendered.lines,
-					rendered.isContinuation,
-				));
-			}
+			addRenderedContent(renderCodeBlock(doc, commentPrefix, options));
 		} else if (doc.type === 'text' || doc.type === 'paragraph') {
 			const rendered = renderTextOrParagraphDoc(
 				doc,
@@ -466,13 +448,14 @@ const docsToApexDocString = (
 				effectiveWidth,
 				options,
 			);
-			// Convert rendered content to ApexDocContent
-			apexDocs.push(createDocContent(
-				rendered.type,
-				rendered.content,
-				rendered.lines,
-				rendered.isContinuation,
-			));
+			apexDocs.push(
+				createDocContent(
+					rendered.type,
+					rendered.content,
+					rendered.lines,
+					rendered.isContinuation,
+				),
+			);
 		} else {
 			apexDocs.push(doc);
 		}
@@ -635,7 +618,7 @@ const createMergedDoc = (
 	mergedContent: string,
 	mergedLines: string[],
 ): ApexDocContent => {
-	const { join, hardline } = prettier.doc.builders;
+	const { join, hardline } = docBuilders;
 	const docLines = mergedLines.map((line) => line as Doc);
 	return {
 		type: 'paragraph',
@@ -670,19 +653,15 @@ const mergeIncompleteCodeBlock = (
 ): { mergedDoc: ApexDocContent | null; nextIndex: number } => {
 	let mergedContent = getContentString(doc);
 	let mergedLines = getContentLines(doc);
-	let hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
 	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- index increment
 	let j = startIndex + INDEX_ONE;
 
-	while (j < docs.length && !hasCompleteBlock) {
+	while (j < docs.length) {
 		const nextDoc = docs[j];
-		if (!nextDoc) {
+		if (!nextDoc || (nextDoc.type !== 'paragraph' && nextDoc.type !== 'text')) {
+			// Non-content doc or missing doc, stop merging
 			j++;
 			continue;
-		}
-		if (nextDoc.type !== 'paragraph' && nextDoc.type !== 'text') {
-			// Non-content doc, stop merging
-			break;
 		}
 
 		const nextContent = getContentString(nextDoc);
@@ -690,16 +669,11 @@ const mergeIncompleteCodeBlock = (
 		mergedLines = [...mergedLines, ...getContentLines(nextDoc)];
 
 		// Check if the merged content now has a complete block
-		hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
-
-		if (hasCompleteBlock) {
-			// Found complete block, create merged doc
-			const mergedDoc = createMergedDoc(
-				doc,
-				mergedContent,
-				mergedLines,
-			);
-			return { mergedDoc, nextIndex: j };
+		if (hasCompleteCodeBlock(mergedContent, codeTagIndex)) {
+			return {
+				mergedDoc: createMergedDoc(doc, mergedContent, mergedLines),
+				nextIndex: j,
+			};
 		}
 		j++;
 	}
@@ -744,9 +718,7 @@ const mergeCodeBlockDocs = (
 		}
 
 		// Check if this doc contains a complete {@code} block
-		const hasCompleteBlock = hasCompleteCodeBlock(content, codeTagIndex);
-
-		if (hasCompleteBlock) {
+		if (hasCompleteCodeBlock(content, codeTagIndex)) {
 			// Complete block in single doc
 			mergedDocs.push(doc);
 			i++;
@@ -754,24 +726,12 @@ const mergeCodeBlockDocs = (
 		}
 
 		// Need to merge with subsequent docs
-		// Type guard: ensure doc is ApexDocContent
-		if (doc.type === 'paragraph' || doc.type === 'text') {
-			const mergeResult = mergeIncompleteCodeBlock(
-				doc,
-				codeTagIndex,
-				docs,
-				i,
-			);
-			if (mergeResult.mergedDoc) {
-				mergedDocs.push(mergeResult.mergedDoc);
-				i = mergeResult.nextIndex + 1;
-			} else {
-				// Couldn't find complete block, add original doc
-				mergedDocs.push(doc);
-				i++;
-			}
+		const mergeResult = mergeIncompleteCodeBlock(doc, codeTagIndex, docs, i);
+		if (mergeResult.mergedDoc) {
+			mergedDocs.push(mergeResult.mergedDoc);
+			i = mergeResult.nextIndex + 1;
 		} else {
-			// Non-content doc, shouldn't happen but handle gracefully
+			// Couldn't find complete block, add original doc
 			mergedDocs.push(doc);
 			i++;
 		}
@@ -856,6 +816,29 @@ const createDocTextFromText = (
 };
 
 /**
+ * Adds a text doc from cleaned text if it's not empty.
+ * @param cleanedText - The cleaned text content.
+ * @param doc - The Doc content doc.
+ * @param newDocs - Array to add new Doc docs to.
+ */
+const addTextDocIfNotEmpty = (
+	cleanedText: string,
+	doc: ApexDocContent,
+	newDocs: ApexDocComment[],
+): void => {
+	if (cleanedText.length <= EMPTY) {
+		return;
+	}
+	const textDoc =
+		doc.type === 'paragraph'
+			? createDocTextFromParagraph(cleanedText, doc)
+			: createDocTextFromText(cleanedText);
+	if (textDoc) {
+		newDocs.push(textDoc);
+	}
+};
+
+/**
  * Processes remaining text after last code tag.
  * @param content - The content string.
  * @param currentPos - The current position in content.
@@ -875,18 +858,7 @@ const processRemainingText = (
 	if (remainingText.length <= EMPTY) {
 		return;
 	}
-	const cleanedText = remainingText.trimEnd();
-	if (cleanedText.length <= EMPTY) {
-		return;
-	}
-
-	const textDoc =
-		doc.type === 'paragraph'
-			? createDocTextFromParagraph(cleanedText, doc)
-			: createDocTextFromText(cleanedText);
-	if (textDoc) {
-		newDocs.push(textDoc);
-	}
+	addTextDocIfNotEmpty(remainingText.trimEnd(), doc, newDocs);
 };
 
 /**
@@ -911,18 +883,7 @@ const processTextBeforeCode = (
 	if (textBeforeCode.length <= EMPTY) {
 		return;
 	}
-	const cleanedText = textBeforeCode.trimEnd();
-	if (cleanedText.length <= EMPTY) {
-		return;
-	}
-
-	const textDoc =
-		doc.type === 'paragraph'
-			? createDocTextFromParagraph(cleanedText, doc)
-			: createDocTextFromText(cleanedText);
-	if (textDoc) {
-		newDocs.push(textDoc);
-	}
+	addTextDocIfNotEmpty(textBeforeCode.trimEnd(), doc, newDocs);
 };
 
 /**

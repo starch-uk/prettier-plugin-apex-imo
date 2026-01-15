@@ -6,7 +6,7 @@
 import type { AstPath, Doc } from 'prettier';
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
-import { APEX_OBJECT_SUFFIXES } from './refs/object-suffixes.js';
+import { SORTED_SUFFIXES } from './refs/object-suffixes.js';
 import { getNodeClassOptional } from './utils.js';
 
 /**
@@ -42,10 +42,6 @@ const normalizeStandardObjectType = (typeName: string): string => {
  * normalizeTypeName('account__c'); // Returns 'Account__c'
  * ```
  */
-// Cache sorted suffixes for performance (sorted by length descending)
-const SORTED_SUFFIXES = Object.entries(APEX_OBJECT_SUFFIXES).sort(
-	([, a], [, b]) => b.length - a.length,
-);
 
 const normalizeTypeName = (typeName: string): string => {
 	if (!typeName) return typeName;
@@ -222,14 +218,9 @@ function normalizeSingleIdentifier(
 	if (nodeValue.length === 0) return originalPrint(subPath);
 	const normalizedValue = normalizeTypeName(nodeValue);
 	if (normalizedValue === nodeValue) return originalPrint(subPath);
-	// Check if we're processing an identifier in a TypeRef names array
-	// When key === 'names', we're processing identifiers in a names array (likely from a TypeRef)
-	// The Doc returned is composite and evaluated lazily, so we shouldn't restore values
 	const isInNamesArray = subPath.key === 'names';
 	(node as { value: string }).value = normalizedValue;
 	if (isInNamesArray) {
-		// Don't restore values - the Doc is composite and evaluated lazily
-		// The AST is already being mutated, so we keep the normalized values
 		return originalPrint(subPath);
 	}
 	// For simple identifiers (not in names arrays), restore values after printing
@@ -262,8 +253,7 @@ function normalizeNamesArray(
 	const namesArray = node.names;
 	if (!Array.isArray(namesArray)) return originalPrint(subPath);
 	// Normalize each identifier in the names array
-	for (let i = 0; i < namesArray.length; i++) {
-		const nameNode = namesArray[i];
+	for (const nameNode of namesArray) {
 		if (
 			typeof nameNode !== 'object' ||
 			!('value' in nameNode) ||
@@ -293,9 +283,6 @@ const createTypeNormalizingPrint =
 		parentKey?: string,
 	) =>
 	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {
-		// Prettier's path.call may pass extra arguments (index, options)
-		// but our print function only needs the path - ignore extra args
-		// Pass extra args through to originalPrint in case it needs them
 		const { node, key } = subPath;
 		const normalizedKey = key === null ? undefined : key;
 		const shouldNormalize = shouldNormalizeType({
@@ -314,7 +301,6 @@ const createTypeNormalizingPrint =
 		// parentKey === 'names' and shouldNormalize will be true.
 		// So we don't need to handle TypeRef nodes here - just let the normal flow handle identifiers.
 
-		// Only pass path - originalPrint will receive extra args from Prettier if needed
 		if (!shouldNormalize || !isIdent) {
 			return originalPrint(subPath);
 		}

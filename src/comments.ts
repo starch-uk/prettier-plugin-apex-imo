@@ -9,6 +9,7 @@ import type { ApexNode } from './types.js';
 import {
 	ARRAY_START_INDEX,
 	calculateEffectiveWidth,
+	docBuilders,
 	EMPTY,
 	getNodeClassOptional,
 	INDEX_ONE,
@@ -273,11 +274,8 @@ const normalizeCommentStart = (comment: string): string => {
 			asteriskCount++;
 		}
 		// Normalize to exactly two asterisks (/**)
-		if (asteriskCount > 2) {
+		if (asteriskCount !== 2) {
 			return prefix + '/**' + afterSlash.substring(asteriskCount);
-		} else if (asteriskCount === 1) {
-			// Only one asterisk, need to add one more
-			return prefix + '/**' + afterSlash.substring(1);
 		}
 	}
 	return comment;
@@ -334,26 +332,21 @@ const normalizeCommentLine = (
 	// Find asterisk position
 	let asteriskPos = -1;
 	for (let i = 0; i < line.length; i++) {
-		if (line[i] === ' ' || line[i] === '\t') {
-			continue;
-		}
-		if (line[i] === '*') {
+		const char = line[i];
+		if (char === ' ' || char === '\t') continue;
+		if (char === '*') {
 			asteriskPos = i;
 			break;
 		}
-		// No asterisk found before content
 		break;
 	}
 
 	if (asteriskPos === -1) {
-		// No asterisk - check if trimmed starts with *
 		const trimmed = line.trimStart();
 		if (trimmed.startsWith('*')) {
-			// Preserve indentation after asterisk for code blocks
 			const afterAsteriskRaw = trimmed.substring(1);
-			// Only trim if there's no space after asterisk (to preserve code indentation)
 			const afterAsterisk = afterAsteriskRaw.startsWith(' ')
-				? afterAsteriskRaw // Keep the space and any following indentation
+				? afterAsteriskRaw
 				: afterAsteriskRaw.trimStart();
 			return `${baseIndent} * ${afterAsterisk}`;
 		}
@@ -362,30 +355,21 @@ const normalizeCommentLine = (
 
 	// Found asterisk - normalize
 	let afterAsterisk = line.substring(asteriskPos + 1);
-	// Skip multiple asterisks
+	// Skip multiple asterisks and whitespace
 	while (afterAsterisk.startsWith('*')) {
 		afterAsterisk = afterAsterisk.substring(1);
 	}
-	// Skip whitespace after asterisk(s)
 	const spaceMatch = afterAsterisk.match(/^\s*/);
-	const spaceAfterAsterisk = spaceMatch !== null && spaceMatch[0] !== undefined ? spaceMatch[0] : '';
-	// Preserve indentation: only remove the first space after asterisk, keep additional spaces (code indentation)
-	// If there's exactly one space, remove it. If there are multiple spaces, keep them as indentation.
-	if (spaceAfterAsterisk === ' ') {
-		// Single space - remove it, but preserve any additional indentation in the content
-		afterAsterisk = afterAsterisk.substring(1);
-	} else if (spaceAfterAsterisk.length > 1) {
-		// Multiple spaces - keep them as indentation (remove only the first space)
-		afterAsterisk = afterAsterisk.substring(1);
-	} else {
-		// No space - trim any leading whitespace
-		afterAsterisk = afterAsterisk.trimStart();
-	}
+	const spaceAfterAsterisk = spaceMatch?.[0] ?? '';
+	// Remove first space if present, preserve additional spaces (code indentation)
+	afterAsterisk =
+		spaceAfterAsterisk.length > EMPTY
+			? afterAsterisk.substring(1)
+			: afterAsterisk.trimStart();
 	// Remove any remaining asterisks at start of content
 	while (afterAsterisk.startsWith('*')) {
 		afterAsterisk = afterAsterisk.substring(1).trimStart();
 	}
-	// Return normalized line with preserved indentation
 	return `${baseIndent} * ${afterAsterisk}`;
 };
 
@@ -422,10 +406,12 @@ const normalizeBlockComment = (
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
 		const line = lines[i];
 		if (line === undefined) continue;
-		const isFirstOrLast =
-			i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE;
 		normalizedLines.push(
-			normalizeCommentLine(line, baseIndent, isFirstOrLast),
+			normalizeCommentLine(
+				line,
+				baseIndent,
+				i === ARRAY_START_INDEX || i === lines.length - INDEX_ONE,
+			),
 		);
 	}
 	return normalizedLines.join('\n');
@@ -534,26 +520,23 @@ const detectCodeBlocks = (
 			(i + 2 >= text.length || text[i + 2] !== '*')
 		) {
 			const start = i;
-			i += 2; // Skip past /*
-
-			// Find matching */
+			i += 2;
 			let depth = 1;
 			let contentStart = i;
 			let foundEnd = false;
 
 			while (i < text.length - 1 && !foundEnd) {
 				if (text[i] === '/' && text[i + 1] === '*') {
-					// Nested /* - increase depth
 					depth++;
 					i += 2;
 				} else if (text[i] === '*' && text[i + 1] === '/') {
-					// Found */
 					depth--;
 					if (depth === 0) {
-						// This closes our code block
-						const end = i + 2; // Include */
-						const content = text.substring(contentStart, i);
-						codeBlocks.push({ start, end, content });
+						codeBlocks.push({
+							start,
+							end: i + 2,
+							content: text.substring(contentStart, i),
+						});
 						foundEnd = true;
 					}
 					i += 2;
@@ -561,8 +544,6 @@ const detectCodeBlocks = (
 					i++;
 				}
 			}
-
-			// If we didn't find a closing */, skip to next potential start
 			if (!foundEnd) {
 				i = start + 1;
 			}
@@ -588,7 +569,7 @@ const contentToDoc = (
 	content: string,
 	lines: readonly string[],
 ): Doc => {
-	const { join, hardline } = prettier.doc.builders;
+	const { join, hardline } = docBuilders;
 	if (lines.length === 0) {
 		return '' as Doc;
 	}
@@ -661,7 +642,7 @@ const createDocCodeBlock = (
 	// Use formattedCode if available, otherwise use rawCode for Doc content
 	const codeToUse = formattedCode ?? rawCode;
 	const codeLines = codeToUse.split('\n');
-	const { join, hardline } = prettier.doc.builders;
+	const { join, hardline } = docBuilders;
 	return {
 		type: 'code',
 		startPos,
@@ -707,6 +688,21 @@ const parseCommentToDocs = (
 	let currentParagraphLines: string[] = [];
 	let currentPos = ARRAY_START_INDEX;
 
+	const finishParagraph = (): void => {
+		if (currentParagraph.length > EMPTY) {
+			const paragraphContent = currentParagraph.join(' ');
+			docs.push(
+				createDocContent(
+					'paragraph',
+					paragraphContent,
+					currentParagraphLines,
+				),
+			);
+			currentParagraph = [];
+			currentParagraphLines = [];
+		}
+	};
+
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
 		const line = contentLines[i];
 		if (line === undefined) continue;
@@ -729,18 +725,7 @@ const parseCommentToDocs = (
 
 		if (isInCodeBlock) {
 			// Finish current paragraph if any, then handle code block
-			if (currentParagraph.length > EMPTY) {
-				const paragraphContent = currentParagraph.join(' ');
-				docs.push(
-					createDocContent(
-						'paragraph',
-						paragraphContent,
-						currentParagraphLines,
-					),
-				);
-				currentParagraph = [];
-				currentParagraphLines = [];
-			}
+			finishParagraph();
 			// Use cached code block from earlier check
 			if (currentCodeBlock) {
 				// Only add code block doc once (on first line)
@@ -765,18 +750,7 @@ const parseCommentToDocs = (
 
 		if (isEmpty(trimmedLine)) {
 			// Empty line - finish current paragraph if any
-			if (currentParagraph.length > EMPTY) {
-				const paragraphContent = currentParagraph.join(' ');
-				docs.push(
-					createDocContent(
-						'paragraph',
-						paragraphContent,
-						currentParagraphLines,
-					),
-				);
-				currentParagraph = [];
-				currentParagraphLines = [];
-			}
+			finishParagraph();
 			// Empty lines create paragraph boundaries but aren't docs themselves
 		} else {
 			// Check if this line starts with @ (annotation)
@@ -805,16 +779,7 @@ const parseCommentToDocs = (
 				currentParagraph.length > EMPTY &&
 				!hasUnclosedCodeBlock
 			) {
-				const paragraphContent = currentParagraph.join(' ');
-				docs.push(
-					createDocContent(
-						'paragraph',
-						paragraphContent,
-						currentParagraphLines,
-					),
-				);
-				currentParagraph = [];
-				currentParagraphLines = [];
+				finishParagraph();
 			}
 
 			// Check for sentence boundary: ends with sentence-ending punctuation
@@ -844,31 +809,13 @@ const parseCommentToDocs = (
 					isNotEmpty(nextTrimmed)) ||
 				isAnnotationLine
 			) {
-				const paragraphContent = currentParagraph.join(' ');
-				docs.push(
-					createDocContent(
-						'paragraph',
-						paragraphContent,
-						currentParagraphLines,
-					),
-				);
-				currentParagraph = [];
-				currentParagraphLines = [];
+				finishParagraph();
 			}
 		}
 	}
 
 	// Add last paragraph if any
-	if (currentParagraph.length > EMPTY) {
-		const paragraphContent = currentParagraph.join(' ');
-		docs.push(
-			createDocContent(
-				'paragraph',
-				paragraphContent,
-				currentParagraphLines,
-			),
-		);
-	}
+	finishParagraph();
 
 	// If no paragraphs were found, create a single text doc
 	if (isEmpty(docs)) {
@@ -924,8 +871,8 @@ const tokensToCommentString = (
 						// Remove trailing newlines from the last line
 						if (filtered.length > 0) {
 							const lastIndex = filtered.length - 1;
-							let lastLine = filtered[lastIndex];
-							if (lastLine && lastLine.endsWith('\n')) {
+							const lastLine = filtered[lastIndex];
+							if (lastLine?.endsWith('\n')) {
 								filtered[lastIndex] = lastLine.slice(0, -1);
 							}
 						}
@@ -939,11 +886,11 @@ const tokensToCommentString = (
 					continue;
 				}
 				// Preserve existing structure if line already has prefix
-				if (line.trimStart().startsWith('*')) {
-					lines.push(line);
-				} else {
-					lines.push(`${commentPrefix}${line.trimStart()}`);
-				}
+				lines.push(
+					line.trimStart().startsWith('*')
+						? line
+						: `${commentPrefix}${line.trimStart()}`,
+				);
 			}
 		} else if (doc.type === 'code') {
 			// Remove any trailing empty lines before adding the code block
@@ -964,27 +911,23 @@ const tokensToCommentString = (
 			}
 
 			// Use formatted code if available, otherwise use raw code
-			const codeDoc = doc;
-			const codeToUse =
-				codeDoc.formattedCode !== undefined
-					? codeDoc.formattedCode
-					: codeDoc.rawCode;
+			const codeToUse = doc.formattedCode ?? doc.rawCode;
 			// Handle empty code blocks - render {@code} even if content is empty
 			const isEmptyBlock = codeToUse.trim().length === EMPTY;
 			if (isEmptyBlock) {
 				// Empty code block: render as {@code} on a single line
 				lines.push(`${commentPrefix}{@code}`);
-			} else if (codeToUse.length > EMPTY) {
+			} else {
 				// Format code block with comment prefix
 				// Split formatted code into lines and add prefix
 				const codeLines = codeToUse.split('\n');
+				const trimmedCommentPrefix = commentPrefix.trimEnd();
 				for (const codeLine of codeLines) {
-					if (codeLine.trim().length === EMPTY) {
-						// Empty line - just comment prefix
-						lines.push(commentPrefix.trimEnd());
-					} else {
-						lines.push(`${commentPrefix}${codeLine}`);
-					}
+					lines.push(
+						codeLine.trim().length === EMPTY
+							? trimmedCommentPrefix
+							: `${commentPrefix}${codeLine}`,
+					);
 				}
 			}
 		}
@@ -1021,9 +964,8 @@ const wrapTextToWidth = (
 	const words = textContent.split(/\s+/).filter((word) => isNotEmpty(word));
 	if (isEmpty(words)) return [textContent];
 
-	const fillDoc = prettier.doc.builders.fill(
-		prettier.doc.builders.join(prettier.doc.builders.line, words),
-	);
+	const { fill, join: joinBuilders, line } = docBuilders;
+	const fillDoc = fill(joinBuilders(line, words));
 	const useTabsOption =
 		options.useTabs !== null && options.useTabs !== undefined
 			? { useTabs: options.useTabs }
@@ -1162,7 +1104,7 @@ const customPrintComment = (
 
 			// Return the normalized comment as Prettier documents
 			const lines = normalizedComment.split('\n');
-			const { join, hardline } = prettier.doc.builders;
+			const { join, hardline } = docBuilders;
 			return [join(hardline, lines)];
 		}
 	}
