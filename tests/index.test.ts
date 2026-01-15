@@ -2,7 +2,7 @@
  * @file Tests for the main plugin entry point.
  */
 
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-magic-numbers -- Test file needs type assertions and magic numbers for testing edge cases */
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-magic-numbers -- Test file needs type assertions and magic numbers for testing edge cases */
 import { describe, it, expect, vi } from 'vitest';
 import plugin, {
 	languages,

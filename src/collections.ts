@@ -60,6 +60,10 @@ const isNestedInCollection = (
 
 /**
  * Creates type document for collections.
+ * @param typeName
+ * @param printedTypes
+ * @param typeSeparator
+ * @param isNested
  */
 const createTypeDoc = (
 	typeName: string,
@@ -70,7 +74,7 @@ const createTypeDoc = (
 	const baseTypeDoc: Doc = [
 		typeName,
 		'<',
-		join(typeSeparator, printedTypes),
+		join(typeSeparator, [...printedTypes]),
 		'>',
 	];
 	return isNested ? group(baseTypeDoc) : baseTypeDoc;
@@ -93,7 +97,7 @@ const printEmptyList = (
 const printEmptyMap = (printedTypes: readonly Doc[]): Doc => {
 	const typeDoc: Doc = group([
 		'Map<',
-		join([', ', softline], printedTypes),
+		join([', ', softline], [...printedTypes]),
 		'>',
 	]);
 	return [typeDoc, '{}'];
@@ -155,7 +159,7 @@ const printMap = ({
 	readonly originalPrint: () => Doc;
 	readonly printedTypes: readonly Doc[];
 }): Doc => {
-	const node = path.node;
+	const {node} = path;
 	const isEmptyPairs = !Array.isArray(node.pairs) || isEmpty(node.pairs);
 
 	if (isEmptyPairs) {
@@ -168,7 +172,7 @@ const printMap = ({
 
 	const typeDoc: Doc = group([
 		'Map<',
-		join([', ', softline], printedTypes),
+		join([', ', softline], [...printedTypes]),
 		'>',
 	]);
 	return [
@@ -213,18 +217,18 @@ const printCollection = (
 
 	if (isList) {
 		return printList({
-			path: path as Readonly<AstPath<ApexListInitNode>>,
-			print,
-			originalPrint,
-			printedTypes,
 			isNested,
 			nodeClass,
+			originalPrint,
+			path: path as Readonly<AstPath<ApexListInitNode>>,
+			print,
+			printedTypes,
 		});
 	}
 	return printMap({
+		originalPrint,
 		path: path as Readonly<AstPath<ApexMapInitNode>>,
 		print,
-		originalPrint,
 		printedTypes,
 	});
 };
@@ -236,11 +240,11 @@ const printCollection = (
  */
 const isCollectionAssignment = (assignment: unknown): boolean => {
 	if (!isObject(assignment) || !('value' in assignment)) return false;
-	const value = (assignment as { value?: unknown }).value;
+	const {value} = (assignment as { value?: unknown });
 	if (!isApexNodeLike(value)) return false;
 	const valueClass = getNodeClassOptional(value as ApexNode);
 	if (valueClass !== 'apex.jorje.data.ast.Expr$NewExpr') return false;
-	const creator = (value as { creator?: unknown }).creator;
+	const {creator} = (value as { creator?: unknown });
 	if (!isApexNodeLike(creator)) return false;
 	const creatorClass = getNodeClassOptional(creator as ApexNode);
 	return (

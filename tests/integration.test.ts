@@ -555,7 +555,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 				// Handle both: "content}" and "content }" and "content; }"
 				// The pattern captures content up to (but not including) the closing }
 				// We need to handle: "content}" and "content }" and "content; }"
-				const singleLineMatch = firstLine.match(/^(.+?)\s*\}\s*$/);
+				const singleLineMatch = /^(.+?)\s*\}\s*$/.exec(firstLine);
 				if (singleLineMatch && !firstLine.includes('\n')) {
 					// Single-line code block - extract content directly
 					// The content might have trailing space before }, so trim it

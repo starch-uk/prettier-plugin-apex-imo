@@ -8,7 +8,6 @@ import * as prettier from 'prettier';
 import type { ApexNode } from './types.js';
 import {
 	ARRAY_START_INDEX,
-	calculateEffectiveWidth,
 	docBuilders,
 	EMPTY,
 	getNodeClassOptional,
@@ -21,21 +20,28 @@ import {
 import {
 	normalizeSingleApexDocComment,
 	removeTrailingEmptyLines,
+	isApexDoc,
 } from './apexdoc.js';
 import { normalizeAnnotations } from './apexdoc-annotations.js';
+import {
+	createDocCodeBlock,
+	renderCodeBlockInComment,
+} from './apexdoc-code.js';
 
 // Doc-based types for ApexDoc processing
 interface ApexDocContent {
-	readonly type: 'text' | 'paragraph';
+	readonly type: 'paragraph' | 'text';
+
 	/**
 	 * Doc representation of the content.
 	 * This should NOT include any leading comment prefix (`*`, whitespace).
 	 * For paragraphs, this is typically `join(hardline, lines)`.
 	 */
 	readonly content: Doc;
+
 	/**
 	 * Per-line Docs for this content, without comment prefix.
-	 * Consumers that need to reason about individual lines (e.g. wrapping)
+	 * Consumers that need to reason about individual lines (e.g. Wrapping)
 	 * should use this instead of re-splitting strings.
 	 */
 	readonly lines: readonly Doc[];
@@ -46,16 +52,19 @@ interface ApexDocCodeBlock {
 	readonly type: 'code';
 	readonly startPos: number;
 	readonly endPos: number;
+
 	/**
 	 * Raw code string between {@code ... } braces, with comment prefixes removed.
 	 * This is kept for interaction with prettier.format and other string-based helpers.
 	 */
 	readonly rawCode: string;
+
 	/**
 	 * Optional formatted code string as returned from the embed / formatter pipeline.
 	 * When present, this is the canonical string representation of the code block.
 	 */
 	readonly formattedCode?: string;
+
 	/**
 	 * Doc representation of the final code block content, without comment prefix.
 	 * This is typically built as `join(hardline, codeLines)`.
@@ -66,11 +75,13 @@ interface ApexDocCodeBlock {
 interface ApexDocAnnotation {
 	readonly type: 'annotation';
 	readonly name: string;
+
 	/**
 	 * Doc representation of the annotation body (everything after the name).
 	 * This may contain hardlines for wrapped content.
 	 */
 	readonly content: Doc;
+
 	/**
 	 * Optional Doc that should appear immediately before the annotation
 	 * on its own line (used for leading summary text).
@@ -78,7 +89,7 @@ interface ApexDocAnnotation {
 	readonly followingText?: Doc;
 }
 
-type ApexDocComment = ApexDocContent | ApexDocCodeBlock | ApexDocAnnotation;
+type ApexDocComment = ApexDocAnnotation | ApexDocCodeBlock | ApexDocContent;
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -256,7 +267,8 @@ const getCommentIndent = (
 };
 
 /**
- * Normalizes comment start marker: /***** -> /**
+ * Normalizes comment start marker: /***** -> /**.
+ * @param comment
  */
 const normalizeCommentStart = (comment: string): string => {
 	// Find first non-whitespace character
@@ -289,6 +301,7 @@ const normalizeCommentStart = (comment: string): string => {
 
 /**
  * Normalizes comment end marker: multiple asterisks before slash to single asterisk.
+ * @param comment
  */
 const normalizeCommentEnd = (comment: string): string => {
 	// Replace **/ or more with */ - scan for patterns and replace
@@ -324,6 +337,9 @@ const normalizeCommentEnd = (comment: string): string => {
 
 /**
  * Normalizes a single comment line with asterisk prefix.
+ * @param line
+ * @param baseIndent
+ * @param isFirstOrLast
  */
 const normalizeCommentLine = (
 	line: string,
@@ -479,7 +495,7 @@ const CommentPrefix = {
  */
 const removeCommentPrefix = (
 	line: string,
-	preserveIndent: boolean = false,
+	preserveIndent = false,
 ): string => {
 	if (preserveIndent) {
 		// Remove all asterisks (including multiple asterisks separated by spaces) and single space after, preserving indentation
@@ -521,15 +537,15 @@ const removeCommentPrefix = (
 };
 
 /**
- * Detects code blocks (slash-asterisk ... asterisk-slash) within comment text using character scanning.
+ * Detects code blocks (slash-asterisk ... Asterisk-slash) within comment text using character scanning.
  * This replaces regex-based detection for better control and performance.
  * @param text - The comment text content to scan.
  * @returns Array of code block objects with start, end, and content positions.
  */
 const detectCodeBlocks = (
 	text: string,
-): Array<{ start: number; end: number; content: string }> => {
-	const codeBlocks: Array<{ start: number; end: number; content: string }> =
+): { start: number; end: number; content: string }[] => {
+	const codeBlocks: { start: number; end: number; content: string }[] =
 		[];
 	let i = 0;
 
@@ -550,9 +566,9 @@ const detectCodeBlocks = (
 					i += 2;
 					if (depth === 0) {
 						codeBlocks.push({
-							start,
-							end: i,
 							content: text.substring(contentStart, i - 2),
+							end: i,
+							start,
 						});
 					}
 				} else {
@@ -573,6 +589,7 @@ const detectCodeBlocks = (
 
 /**
  * Converts string lines to Doc array (strings are valid Docs).
+ * @param lines
  */
 const linesToDocLines = (lines: readonly string[]): readonly Doc[] =>
 	lines.map((line) => line as Doc);
@@ -580,8 +597,10 @@ const linesToDocLines = (lines: readonly string[]): readonly Doc[] =>
 /**
  * Converts string content to Doc (string is a valid Doc).
  * For multi-line content, joins with hardline.
+ * @param _content
+ * @param lines
  */
-const contentToDoc = (content: string, lines: readonly string[]): Doc => {
+const contentToDoc = (_content: string, lines: readonly string[]): Doc => {
 	const { join, hardline } = docBuilders;
 	if (lines.length === 0) {
 		return '' as Doc;
@@ -589,12 +608,15 @@ const contentToDoc = (content: string, lines: readonly string[]): Doc => {
 	if (lines.length === 1) {
 		return lines[0] as Doc;
 	}
-	return join(hardline, linesToDocLines(lines));
+	return join(hardline, [...linesToDocLines(lines)]);
 };
 
 /**
  * Extracts string content from a Doc for text operations.
  * If Doc is a string, returns it. Otherwise, prints it to string.
+ * @param doc
+ * @param options
+ * @param options.printWidth
  */
 const docToString = (doc: Doc, options?: { printWidth?: number }): string => {
 	if (typeof doc === 'string') {
@@ -609,21 +631,27 @@ const docToString = (doc: Doc, options?: { printWidth?: number }): string => {
 
 /**
  * Extracts string content from ApexDocContent for text operations.
+ * @param doc
  */
 const getContentString = (doc: ApexDocContent): string =>
 	docToString(doc.content);
 
 /**
  * Extracts string lines from ApexDocContent for text operations.
+ * @param doc
  */
 const getContentLines = (doc: ApexDocContent): readonly string[] =>
 	doc.lines.map((line) => docToString(line));
 
 /**
  * Creates an ApexDocContent from string content and lines.
+ * @param type
+ * @param content
+ * @param lines
+ * @param isContinuation
  */
 const createDocContent = (
-	type: 'text' | 'paragraph',
+	type: 'paragraph' | 'text',
 	content: string,
 	lines: readonly string[],
 	isContinuation?: boolean,
@@ -632,49 +660,17 @@ const createDocContent = (
 	// This preserves code block indentation that would be lost if we strip prefixes here
 	const trimmedLines = lines;
 	return {
-		type,
 		content: contentToDoc(content, trimmedLines),
-		lines: linesToDocLines(trimmedLines),
 		isContinuation,
-	};
-};
-
-/**
- * Creates an ApexDocCodeBlock from string code block data.
- * @param startPos - Start position of the code block.
- * @param endPos - End position of the code block.
- * @param rawCode - Raw code string extracted from the comment.
- * @param formattedCode - Optional formatted code string (if code was already formatted by embed function).
- */
-const createDocCodeBlock = (
-	startPos: number,
-	endPos: number,
-	rawCode: string,
-	formattedCode?: string,
-): ApexDocCodeBlock => {
-	// Use formattedCode if available, otherwise use rawCode for Doc content
-	const codeToUse = formattedCode ?? rawCode;
-	const codeLines = codeToUse.split('\n');
-	const { join, hardline } = docBuilders;
-	return {
-		type: 'code',
-		startPos,
-		endPos,
-		rawCode,
-		...(formattedCode !== undefined ? { formattedCode } : {}),
-		content:
-			codeLines.length === 0
-				? ('' as Doc)
-				: codeLines.length === 1
-					? (codeLines[0] as Doc)
-					: join(hardline, linesToDocLines(codeLines)),
+		lines: linesToDocLines(trimmedLines),
+		type,
 	};
 };
 
 /**
  * Parses a normalized comment string into Doc-based tokens.
  * Detects paragraphs based on empty lines and continuation logic.
- * Also detects code blocks (pattern: slash-asterisk ... asterisk-slash).
+ * Also detects code blocks (pattern: slash-asterisk ... Asterisk-slash).
  * @param normalizedComment - The normalized comment string.
  * @returns Array of Doc-based tokens.
  */
@@ -848,6 +844,7 @@ const parseCommentToDocs = (
  * Converts Doc tokens back to a formatted comment string.
  * Uses wrapped paragraphs if they've been wrapped.
  * @param tokens - Array of Doc-based comment tokens.
+ * @param docs
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
  * @returns The formatted comment string.
@@ -916,33 +913,16 @@ const tokensToCommentString = (
 				checkIndex--
 			) {
 				const lineToCheck = lines[checkIndex];
-				if (lineToCheck && lineToCheck.trim().length === 0) {
+				if (lineToCheck?.trim().length === 0) {
 					lines.splice(checkIndex, 1);
 				} else {
 					break; // Stop when we find a non-empty line
 				}
 			}
 
-			// Use formatted code if available, otherwise use raw code
-			const codeToUse = doc.formattedCode ?? doc.rawCode;
-			// Handle empty code blocks - render {@code} even if content is empty
-			const isEmptyBlock = codeToUse.trim().length === EMPTY;
-			if (isEmptyBlock) {
-				// Empty code block: render as {@code} on a single line
-				lines.push(`${commentPrefix}{@code}`);
-			} else {
-				// Format code block with comment prefix
-				// Split formatted code into lines and add prefix
-				const codeLines = codeToUse.split('\n');
-				const trimmedCommentPrefix = commentPrefix.trimEnd();
-				for (const codeLine of codeLines) {
-					lines.push(
-						codeLine.trim().length === EMPTY
-							? trimmedCommentPrefix
-							: `${commentPrefix}${codeLine}`,
-					);
-				}
-			}
+			// Use renderCodeBlockInComment to handle code block rendering
+			const codeBlockLines = renderCodeBlockInComment(doc, commentPrefix);
+			lines.push(...codeBlockLines);
 		}
 		// Annotation docs will be handled later
 	}
@@ -1002,6 +982,8 @@ const wrapTextToWidth = (
  * @param options - Parser options for processing.
  * @param getCurrentOriginalText - Function to get the original source text.
  * @param getFormattedCodeBlock - Function to get cached embed-formatted comments.
+ * @param _getCurrentOriginalText
+ * @param _getFormattedCodeBlock
  * @returns The formatted comment as a Prettier Doc.
  */
 const printComment = (
@@ -1019,49 +1001,6 @@ const printComment = (
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires parameters
 ): Doc => {
 	const node = path.getNode();
-
-	/**
-	 * Check if this is an ApexDoc comment using the same logic as prettier-plugin-apex.
-	 * But be more lenient: allow malformed comments (lines without asterisks) to be detected as ApexDoc
-	 * if they start with / ** and end with * /.
-	 * @param comment - The comment node to check.
-	 * @returns True if the comment is an ApexDoc comment, false otherwise.
-	 */
-	const isApexDoc = (comment: unknown): boolean => {
-		if (
-			comment === null ||
-			comment === undefined ||
-			typeof comment !== 'object' ||
-			!('value' in comment) ||
-			typeof comment.value !== 'string'
-		) {
-			return false;
-		}
-		const commentValue = (comment as { value: string }).value;
-		const trimmedStart = commentValue.trimStart();
-		const trimmedEnd = commentValue.trimEnd();
-		// Must start with /** and end with */
-		if (!trimmedStart.startsWith('/**') || !trimmedEnd.endsWith('*/')) {
-			return false;
-		}
-		const lines = commentValue.split('\n');
-		// For well-formed ApexDoc, all middle lines should have asterisks
-		// For malformed ApexDoc, we still want to detect it if it starts with /** and ends with */
-		// If it has at least one middle line with an asterisk, treat it as ApexDoc
-		// If it has NO asterisks but starts with /** and ends with */, also treat it as ApexDoc
-		// (so we can normalize it by adding asterisks)
-		if (lines.length <= INDEX_ONE) return false;
-		const middleLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
-		// If at least one middle line has an asterisk, treat it as ApexDoc (even if malformed)
-		for (const commentLine of middleLines) {
-			if (commentLine.trim().startsWith('*')) {
-				return true;
-			}
-		}
-		// If no middle lines have asterisks but comment starts with /** and ends with */,
-		// treat it as ApexDoc so we can normalize it (add asterisks)
-		return middleLines.length > ARRAY_START_INDEX;
-	};
 
 	if (node !== null && 'value' in node && typeof node['value'] === 'string') {
 		const commentNode = node as unknown as { value: string };
@@ -1128,10 +1067,12 @@ const printComment = (
 
 /**
  * Tries handlers in order until one returns true.
+ * @param comment
+ * @param handlers
  */
 const tryHandlers = (
 	comment: unknown,
-	handlers: ReadonlyArray<(comment: unknown) => boolean>,
+	handlers: readonly ((comment: unknown) => boolean)[],
 ): boolean => {
 	for (const handler of handlers) {
 		if (handler(comment)) return true;
@@ -1206,7 +1147,6 @@ export {
 	docToString,
 	getContentString,
 	getContentLines,
-	createDocCodeBlock,
 	createDocContent,
 };
 export type {

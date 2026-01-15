@@ -125,7 +125,7 @@ const isTypeRelatedParentClass = (parentClass: string | undefined): boolean => {
 };
 
 const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+	 
 	const { key, stack } = path;
 	if (key === 'types') return true;
 	if (!Array.isArray(stack)) return false;
@@ -140,13 +140,13 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	}
 	if (stack.length < STACK_PARENT_OFFSET) return false;
 
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+	 
 	const parent = stack[stack.length - STACK_PARENT_OFFSET];
 	if (typeof parent !== 'object' || parent == null) return false;
 	const parentClass = getNodeClassOptional(parent);
 	const hasTypesArray =
 		'types' in parent &&
-		Array.isArray((parent as { types?: unknown })['types']);
+		Array.isArray((parent as { types?: unknown }).types);
 
 	return (
 		(isTypeRelatedParentClass(parentClass) || hasTypesArray) &&

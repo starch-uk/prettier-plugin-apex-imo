@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { ParserOptions } from 'prettier';
 import * as prettier from 'prettier';
+import type { Doc } from 'prettier';
 import { NOT_FOUND_INDEX, removeCommentPrefix } from './comments.js';
 import {
 	EMPTY,
@@ -13,7 +14,9 @@ import {
 	calculateEffectiveWidth,
 	formatApexCodeWithFallback,
 	preserveBlankLineAfterClosingBrace,
+	docBuilders,
 } from './utils.js';
+import type { ApexDocCodeBlock } from './comments.js';
 
 const CODE_TAG = '{@code';
 const CODE_TAG_LENGTH = CODE_TAG.length;
@@ -155,6 +158,7 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
  * @param optionsWithPlugin - Parser options with plugin configured.
  * @returns The formatted code string.
  */
+
 /**
  * Formats a code block using prettier with our plugin and effective page width.
  * @param root0 - The parameters object.
@@ -176,8 +180,7 @@ const formatCodeBlockToken = async ({
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<string> => {
 	if (
-		currentPluginInstance === undefined ||
-		currentPluginInstance.default === undefined
+		currentPluginInstance?.default === undefined
 	) {
 		throw new Error(
 			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
@@ -313,6 +316,75 @@ function processCodeBlock(
 }
 
 /**
+ * Creates an ApexDocCodeBlock from string code block data.
+ * @param startPos - Start position of the code block.
+ * @param endPos - End position of the code block.
+ * @param rawCode - Raw code string extracted from the comment.
+ * @param formattedCode - Optional formatted code string (if code was already formatted by embed function).
+ * @returns The ApexDocCodeBlock object.
+ */
+const createDocCodeBlock = (
+	startPos: number,
+	endPos: number,
+	rawCode: string,
+	formattedCode?: string,
+): ApexDocCodeBlock => {
+	// Use formattedCode if available, otherwise use rawCode for Doc content
+	const codeToUse = formattedCode ?? rawCode;
+	const codeLines = codeToUse.split('\n');
+	const { join, hardline } = docBuilders;
+	const linesToDocLines = (lines: readonly string[]): Doc[] =>
+		lines.map((line) => line as Doc);
+	return {
+		endPos,
+		rawCode,
+		startPos,
+		type: 'code',
+		...(formattedCode !== undefined ? { formattedCode } : {}),
+		content:
+			codeLines.length === 0
+				? ('' as Doc)
+				: codeLines.length === 1
+					? (codeLines[0] as Doc)
+					: join(hardline, [...linesToDocLines(codeLines)]),
+	};
+};
+
+/**
+ * Renders a code block in a comment string with proper formatting.
+ * @param doc - The ApexDocCodeBlock to render.
+ * @param commentPrefix - The comment prefix string (e.g., "  * ").
+ * @returns Array of formatted lines for the code block.
+ */
+const renderCodeBlockInComment = (
+	doc: ApexDocCodeBlock,
+	commentPrefix: string,
+): string[] => {
+	const lines: string[] = [];
+	// Use formatted code if available, otherwise use raw code
+	const codeToUse = doc.formattedCode ?? doc.rawCode;
+	// Handle empty code blocks - render {@code} even if content is empty
+	const isEmptyBlock = codeToUse.trim().length === EMPTY;
+	if (isEmptyBlock) {
+		// Empty code block: render as {@code} on a single line
+		lines.push(`${commentPrefix}{@code}`);
+	} else {
+		// Format code block with comment prefix
+		// Split formatted code into lines and add prefix
+		const codeLines = codeToUse.split('\n');
+		const trimmedCommentPrefix = commentPrefix.trimEnd();
+		for (const codeLine of codeLines) {
+			lines.push(
+				codeLine.trim().length === EMPTY
+					? trimmedCommentPrefix
+					: `${commentPrefix}${codeLine}`,
+			);
+		}
+	}
+	return lines;
+};
+
+/**
  * Processes all {@code} blocks in a comment text, formats them, and returns the formatted comment.
  * This is used by the Prettier embed function to process code blocks in comments.
  * @param root0 - The parameters object.
@@ -332,7 +404,7 @@ const processAllCodeBlocksInComment = async ({
 }: {
 	readonly commentText: string;
 	readonly options: ParserOptions;
-	readonly plugins: readonly (string | URL | prettier.Plugin<unknown>)[];
+	readonly plugins: (prettier.Plugin<unknown> | URL | string)[];
 	readonly commentPrefixLength: number;
 	readonly setFormattedCodeBlock: (key: string, value: string) => void;
 }): Promise<string | undefined> => {
@@ -361,8 +433,8 @@ const processAllCodeBlocksInComment = async ({
 		// takes precedence over the base apex printers for shared parser names.
 		let formattedCode = await formatApexCodeWithFallback(codeContent, {
 			...options,
-			printWidth: effectiveWidth,
 			plugins,
+			printWidth: effectiveWidth,
 		});
 
 		// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
@@ -434,4 +506,6 @@ export {
 	processCodeBlock,
 	processCodeBlockLines,
 	processAllCodeBlocksInComment,
+	createDocCodeBlock,
+	renderCodeBlockInComment,
 };

@@ -5,7 +5,7 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { doc } from 'prettier';
-import * as prettier from 'prettier';
+import type * as prettier from 'prettier';
 import type { AstPath, Doc, ParserOptions } from 'prettier';
 import type {
 	ApexNode,
@@ -55,7 +55,7 @@ const processTypeParams = (params: unknown[]): Doc[] => {
 			processedParams.push(', ');
 			const remainingParams = params.slice(j + 1) as Doc[];
 			processedParams.push(
-				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
+				 
 				group(indent([softline, ...remainingParams])),
 			);
 			break;
@@ -84,7 +84,7 @@ const makeTypeDocBreakable = (
 	if (Array.isArray(typeDoc)) {
 		const result: Doc[] = [];
 		for (let i = 0; i < typeDoc.length; i++) {
-			const item = typeDoc[i] as Doc;
+			const item = typeDoc[i]!;
 			const nextItem = typeDoc[i + 1];
 			if (
 				item === '<' &&
@@ -209,11 +209,14 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const commentNode = path.node as { value?: string };
 			const commentText = commentNode.value;
 
-			if (!commentText || !commentText.includes('{@code')) {
+			if (!commentText?.includes('{@code')) {
 				return null;
 			}
 
-			// Return async function that processes {@code} blocks using prettier.format
+			/**
+			 * Return async function that processes {@code} blocks using prettier.format.
+			 * @param _textToDoc
+			 */
 			return async (
 				_textToDoc: (
 					text: string,
@@ -232,7 +235,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				const tabWidthValue = options.tabWidth;
 				const basePlugins = options.plugins;
 				const pluginInstance = getCurrentPluginInstance();
-				const plugins: (string | URL | prettier.Plugin<ApexNode>)[] =
+				const plugins: (prettier.Plugin<ApexNode> | URL | string)[] =
 					pluginInstance
 						? [
 								...basePlugins.filter(
@@ -241,18 +244,20 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 								pluginInstance.default as prettier.Plugin<ApexNode>,
 							]
 						: basePlugins;
-				const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
+
+				/**
+				 * Base indent + " * " prefix.
+				 */
+			 const commentPrefixLength = tabWidthValue + 3; 
 
 				// Process all code blocks in the comment
 				const formattedComment = await processAllCodeBlocksInComment({
+					commentPrefixLength,
 					commentText,
 					options,
-					plugins: plugins as readonly (
-						| string
-						| URL
-						| prettier.Plugin<unknown>
+					plugins: [...plugins] as (
+						prettier.Plugin<unknown> | URL | string
 					)[],
-					commentPrefixLength,
 					setFormattedCodeBlock,
 				});
 
@@ -270,6 +275,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Handles TypeRef nodes with names array normalization.
+	 * @param path
+	 * @param node
+	 * @param options
+	 * @param print
 	 */
 	const handleTypeRef = (
 		path: Readonly<AstPath<ApexNode>>,
@@ -298,6 +307,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Handles Identifier nodes in type context normalization.
+	 * @param path
+	 * @param node
+	 * @param options
+	 * @param typeNormalizingPrint
 	 */
 	const handleIdentifier = (
 		path: Readonly<AstPath<ApexNode>>,
@@ -320,11 +333,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Checks if VariableDecls has assignments using AST traversal.
+	 * @param decls
 	 */
 	const hasVariableAssignments = (decls: unknown[]): boolean =>
 		decls.some((decl) => {
 			if (!isObject(decl)) return false;
-			const assignment = (decl as { assignment?: unknown }).assignment;
+			const {assignment} = (decl as { assignment?: unknown });
 			return (
 				isObject(assignment) &&
 				'value' in assignment &&
@@ -335,6 +349,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Handles VariableDecls nodes (with or without assignments).
+	 * @param path
+	 * @param node
+	 * @param options
+	 * @param print
 	 */
 	const handleVariableDecls = (
 		path: Readonly<AstPath<ApexNode>>,
@@ -411,8 +429,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const declNode = declPath.node;
 			if (!isObject(declNode)) return print(declPath);
 
-			const assignment = (declNode as { assignment?: unknown })
-				.assignment;
+			const {assignment} = (declNode as { assignment?: unknown });
 			if (assignment === null || assignment === undefined)
 				return print(declPath);
 
@@ -479,7 +496,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			}
 			if (!Array.isArray(typeDocToCheck)) return false;
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+			 
 			const paramsIndex = 2;
 			if (
 				typeDocToCheck.length <= paramsIndex ||
@@ -487,7 +504,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			) {
 				return false;
 			}
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+			 
 			const params = typeDocToCheck[paramsIndex] as unknown[];
 			return params.some((param) => hasNestedMap(param));
 		};
@@ -503,8 +520,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					declDoc[2] === '=' &&
 					isComplexMapType(typeDoc)
 				) {
-					const nameDoc = declDoc[0] as Doc;
-					const assignmentDoc = declDoc[4] as Doc;
+					const nameDoc = declDoc[0]!;
+					const assignmentDoc = declDoc[4]!;
 					resultParts.push(' ', group([nameDoc, ' ', '=']));
 					resultParts.push(
 						ifBreak(indent([line, assignmentDoc]), [
@@ -524,6 +541,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Handles ExpressionStmnt with AssignmentExpr nodes.
+	 * @param path
+	 * @param node
+	 * @param _options
+	 * @param print
 	 */
 	const handleAssignmentExpression = (
 		path: Readonly<AstPath<ApexNode>>,
@@ -533,19 +554,17 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	): Doc | null => {
 		const nodeClass = getNodeClassOptional(node);
 		if (
-			nodeClass === undefined ||
-			!nodeClass.includes('Stmnt$ExpressionStmnt')
+			!nodeClass?.includes('Stmnt$ExpressionStmnt')
 		)
 			return null;
 
-		const expr = (node as { expr?: unknown }).expr;
+		const {expr} = (node as { expr?: unknown });
 		if (!isApexNodeLike(expr)) return null;
 
 		const EXPR_ASSIGNMENT_CLASS = 'Expr$AssignmentExpr';
 		const exprNodeClass = getNodeClassOptional(expr as ApexNode);
 		if (
-			exprNodeClass === undefined ||
-			!exprNodeClass.includes(EXPR_ASSIGNMENT_CLASS)
+			!exprNodeClass?.includes(EXPR_ASSIGNMENT_CLASS)
 		)
 			return null;
 
@@ -574,8 +593,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc => {
-		const originalText = (options as { originalText?: string })
-			.originalText;
+		const {originalText} = (options as { originalText?: string });
 		currentPrintState = {
 			options,
 			...(originalText !== undefined && { originalText }),
@@ -639,9 +657,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 /**
  * Process {@code} blocks in a comment asynchronously using Apex parser and printer.
- * @param commentValue - The comment text
- * @param options - Parser options
- * @returns Promise resolving to processed comment
+ * @param commentValue - The comment text.
+ * @param options - Parser options.
+ * @returns Promise resolving to processed comment.
  */
 export {
 	canAttachComment,

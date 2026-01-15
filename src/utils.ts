@@ -2,9 +2,9 @@
  * @file Utility functions for working with Apex AST nodes.
  */
 
-import type { ApexNode } from './types.js';
 import type { ParserOptions } from 'prettier';
 import * as prettier from 'prettier';
+import type { ApexNode } from './types.js';
 import { DECLARATION_MODIFIERS_SET } from './refs/reserved-words.js';
 
 /**
@@ -88,14 +88,14 @@ const STRING_OFFSET = 1;
  * @param value - The value to check.
  * @returns True if the value is empty.
  */
-const isEmpty = (value: string | unknown[]): boolean => value.length === EMPTY;
+const isEmpty = (value: unknown[] | string): boolean => value.length === EMPTY;
 
 /**
  * Checks if a value is not empty (string or array).
  * @param value - The value to check.
  * @returns True if the value is not empty.
  */
-const isNotEmpty = (value: string | unknown[]): boolean => value.length > EMPTY;
+const isNotEmpty = (value: unknown[] | string): boolean => value.length > EMPTY;
 
 /**
  * Calculates effective width by subtracting comment prefix length from print width.
@@ -155,7 +155,6 @@ const preserveBlankLineAfterClosingBrace = (
  * Note: Annotations are normalized via AST during printing (see printAnnotation in annotations.ts).
  * The wrapped printer intercepts annotation nodes and normalizes them, so no string-based
  * normalization fallback is needed.
- *
  * @param code - The code to format.
  * @param options - Parser options including printWidth, tabWidth, useTabs, and plugins.
  * @returns Promise resolving to formatted code string.

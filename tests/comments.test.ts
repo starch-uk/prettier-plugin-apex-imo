@@ -416,11 +416,11 @@ describe('comments', () => {
 			it('should handle end-of-line comments', () => {
 				// Test with a binary expression comment
 				const comment = {
+					placement: 'endOfLine',
 					precedingNode: {
 						'@class': 'apex.jorje.data.ast.Expr$BinaryExpr',
 						right: { type: 'expression' },
 					},
-					placement: 'endOfLine',
 				};
 				const result = handleEndOfLineComment(comment, '');
 				expect(result).toBe(true);

@@ -22,7 +22,7 @@ const normalizeGroupName = (groupName: string): string => {
 	}
 	const lowerGroupName = groupName.toLowerCase();
 	const mappedValue =
-		APEXDOC_GROUP_NAMES[lowerGroupName as keyof typeof APEXDOC_GROUP_NAMES];
+		APEXDOC_GROUP_NAMES[lowerGroupName];
 	return mappedValue !== undefined ? mappedValue : groupName;
 };
 

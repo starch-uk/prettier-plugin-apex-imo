@@ -4,6 +4,7 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import * as prettier from 'prettier';
+import type { Doc } from 'prettier';
 import type { ApexDocComment, ApexDocAnnotation } from './comments.js';
 import {
 	removeCommentPrefix,
@@ -48,7 +49,7 @@ const extractBeforeText = (line: string, matchIndex: number): string => {
  * Collects continuation lines for an annotation from normalizedComment.
  * @param annotationName - The annotation name.
  * @param content - The initial annotation content.
- * @param line - The current line text.
+ * @param _line - The current line text (unused).
  * @param normalizedComment - The normalized comment text.
  * @param consumedContent - Set to track consumed content.
  * @returns The full annotation content with continuation lines.
@@ -70,7 +71,7 @@ const collectContinuationFromComment = (
 		's',
 	);
 	const continuationMatch = normalizedComment.match(specificAnnotationRegex);
-	if (!continuationMatch || !continuationMatch[INDEX_ONE]) return content;
+	if (!continuationMatch?.[INDEX_ONE]) return content;
 
 	let continuationContent = continuationMatch[INDEX_ONE];
 	continuationContent = continuationContent.replace(/\s*\*\s*$/, '').trim();
@@ -129,7 +130,7 @@ const collectContinuationFromDocLines = (
 
 /**
  * Detects annotations in docs and converts ApexDocContents to ApexDocAnnotations.
- * Scans docs for @param, @return, etc. patterns.
+ * Scans docs for @param, @return, etc. Patterns.
  * @param docs - Array of Doc-based comment docs.
  * @param normalizedComment - The normalized comment text (optional, for continuation detection).
  * @returns Array of Doc docs with annotations detected.
@@ -216,9 +217,9 @@ const detectAnnotationsInDocs = (
 								? (beforeText as Doc)
 								: undefined;
 						newDocs.push({
-							type: 'annotation',
-							name: lowerName,
 							content: annotationContentDoc,
+							name: lowerName,
+							type: 'annotation',
 							...(followingTextDoc !== undefined
 								? { followingText: followingTextDoc }
 								: {}),
@@ -304,8 +305,8 @@ const normalizeAnnotations = (
 				const normalizedContentDoc = normalizedContentString as Doc;
 				return {
 					...doc,
-					name: lowerName,
 					content: normalizedContentDoc,
+					name: lowerName,
 				} satisfies ApexDocAnnotation;
 			}
 		}
@@ -471,7 +472,7 @@ const wrapAnnotations = (
 			};
 
 			const { fill, join: joinBuilders, line, hardline } = docBuilders;
-			let wrappedContent: string | prettier.Doc = firstLineContent;
+			let wrappedContent: prettier.Doc | string = firstLineContent;
 			if (remainingWords.length > 0) {
 				// Use fill for continuation lines with full effectiveWidth
 				const continuationFill = fill(

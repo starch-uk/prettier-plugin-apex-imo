@@ -19,10 +19,10 @@ import {
 	NOT_FOUND_INDEX,
 	getContentString,
 	getContentLines,
-	createDocCodeBlock,
 	createDocContent,
 	removeCommentPrefix,
 } from './comments.js';
+import { createDocCodeBlock } from './apexdoc-code.js';
 import {
 	ARRAY_START_INDEX,
 	calculateEffectiveWidth,
@@ -52,6 +52,50 @@ import { preserveBlankLineAfterClosingBrace } from './utils.js';
 
 const ZERO_INDENT = 0;
 const BODY_INDENT_WHEN_ZERO = 2;
+
+/**
+ * Checks if a comment is an ApexDoc comment.
+ * Uses the same logic as prettier-plugin-apex but is more lenient:
+ * allows malformed comments (lines without asterisks) to be detected as ApexDoc
+ * if they start with slash-asterisk-asterisk and end with asterisk-slash.
+ * @param comment - The comment node to check.
+ * @returns True if the comment is an ApexDoc comment, false otherwise.
+ */
+const isApexDoc = (comment: unknown): boolean => {
+	if (
+		comment === null ||
+		comment === undefined ||
+		typeof comment !== 'object' ||
+		!('value' in comment) ||
+		typeof comment.value !== 'string'
+	) {
+		return false;
+	}
+	const commentValue = (comment as { value: string }).value;
+	const trimmedStart = commentValue.trimStart();
+	const trimmedEnd = commentValue.trimEnd();
+	// Must start with /** and end with */
+	if (!trimmedStart.startsWith('/**') || !trimmedEnd.endsWith('*/')) {
+		return false;
+	}
+	const lines = commentValue.split('\n');
+	// For well-formed ApexDoc, all middle lines should have asterisks
+	// For malformed ApexDoc, we still want to detect it if it starts with /** and ends with */
+	// If it has at least one middle line with an asterisk, treat it as ApexDoc
+	// If it has NO asterisks but starts with /** and ends with */, also treat it as ApexDoc
+	// (so we can normalize it by adding asterisks)
+	if (lines.length <= INDEX_ONE) return false;
+	const middleLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
+	// If at least one middle line has an asterisk, treat it as ApexDoc (even if malformed)
+	for (const commentLine of middleLines) {
+		if (commentLine.trim().startsWith('*')) {
+			return true;
+		}
+	}
+	// If no middle lines have asterisks but comment starts with /** and ends with */,
+	// treat it as ApexDoc so we can normalize it (add asterisks)
+	return middleLines.length > ARRAY_START_INDEX;
+};
 
 /**
  * Calculates comment prefix and effective width for ApexDoc formatting.
@@ -111,6 +155,7 @@ type ReadonlyCodeBlock = Readonly<CodeBlock>;
  * @param commentValue - The comment text (e.g., comment block).
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Parser options including printWidth, tabWidth, and useTabs.
+ * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.
  * @returns The normalized comment value.
  * @example
  * normalizeSingleApexDocComment('  * @param x The parameter', 2, { printWidth: 80, tabWidth: 2, useTabs: false })
@@ -119,7 +164,7 @@ const normalizeSingleApexDocComment = (
 	commentValue: Readonly<string>,
 	commentIndent: number,
 	options: Readonly<ParserOptions>,
-	isEmbedFormatted: boolean = false,
+	isEmbedFormatted = false,
 ): Doc => {
 	const { printWidth, tabWidth } = options;
 	const tabWidthValue = tabWidth;
@@ -201,7 +246,7 @@ const normalizeSingleApexDocComment = (
  */
 const processCodeLines = (
 	codeToUse: string,
-	shouldTrim: boolean = true,
+	shouldTrim = true,
 ): string => {
 	const codeLines = shouldTrim
 		? codeToUse.trim().split('\n')
@@ -232,7 +277,7 @@ const handleAlreadyWrappedCode = (
 	if (codeLinesForProcessing.length === INDEX_ONE) {
 		const [line] = codeLinesForProcessing;
 		if (line !== undefined && line.includes(';') && line.endsWith('}')) {
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- string slice position
+			 
 			codeLinesForProcessing[ARRAY_START_INDEX] =
 				line.slice(0, -1) + ' }';
 		}
@@ -296,7 +341,7 @@ const buildLinesWithPrefixes = (
  * @returns The rendered content doc or null if empty.
  */
 interface RenderedContentToken {
-	readonly type: 'text' | 'paragraph';
+	readonly type: 'paragraph' | 'text';
 	readonly content: string;
 	readonly lines: string[];
 	readonly isContinuation?: boolean;
@@ -393,11 +438,18 @@ const renderTextOrParagraphDoc = (
 	const linesWithPrefix = cleanedLines.map(
 		(line: string) => `${commentPrefix}${line.trim()}`,
 	);
-	return {
-		...doc,
+	const baseResult = {
 		content: cleanedLines.join('\n'),
 		lines: linesWithPrefix,
-	};
+		type: doc.type,
+	} as const;
+	if (doc.isContinuation !== undefined) {
+		return {
+			...baseResult,
+			isContinuation: doc.isContinuation,
+		};
+	}
+	return baseResult;
 };
 
 /**
@@ -560,11 +612,12 @@ const wrapTextContent = (
 
 /**
  * Parses an ApexDoc comment into tokens and calculates effective page width.
- * Effective width accounts for comment prefix: printWidth - (baseIndent + ' * '.length)
+ * Effective width accounts for comment prefix: printWidth - (baseIndent + ' * '.length).
  * @param normalizedComment - The normalized comment string.
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param printWidth - The maximum line width.
  * @param options - Options including tabWidth and useTabs.
+ * @param _options
  * @returns Object with tokens and effective page width.
  */
 const parseApexDocs = (
@@ -589,8 +642,8 @@ const parseApexDocs = (
 	let docs = parseCommentToDocs(normalizedComment);
 
 	return {
-		effectiveWidth,
 		docs,
+		effectiveWidth,
 	};
 };
 
@@ -624,31 +677,30 @@ const hasCompleteCodeBlock = (
  * Creates a merged ApexDocContent from paragraph docs.
  * @param doc - The original Doc content doc.
  * @param mergedContent - The merged content string.
+ * @param _mergedContent
  * @param mergedLines - The merged lines array (without comment prefix).
  * @returns The merged Doc content doc.
  */
 const createMergedDoc = (
 	doc: ApexDocContent,
-	mergedContent: string,
+	_mergedContent: string,
 	mergedLines: string[],
 ): ApexDocContent => {
 	const { join, hardline } = docBuilders;
 	const docLines = mergedLines.map((line) => line as Doc);
-	return {
-		type: 'paragraph',
-		content:
-			docLines.length === 0
-				? ('' as Doc)
-				: docLines.length === 1
-					? docLines[0]
-					: join(hardline, docLines),
+	const contentDoc: Doc =
+		docLines.length === 0
+			? ('' as Doc)
+			: docLines.length === 1
+				? docLines[0] ?? ('' as Doc)
+				: join(hardline, docLines) ?? ('' as Doc);
+	const result: ApexDocContent = {
+		content: contentDoc,
+		isContinuation: doc.isContinuation,
 		lines: docLines,
-		...(doc.isContinuation !== undefined
-			? {
-					isContinuation: doc.isContinuation,
-				}
-			: {}),
+		type: 'paragraph',
 	};
+	return result;
 };
 
 /**
@@ -667,7 +719,7 @@ const mergeIncompleteCodeBlock = (
 ): { mergedDoc: ApexDocContent | null; nextIndex: number } => {
 	let mergedContent = getContentString(doc);
 	let mergedLines = getContentLines(doc);
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- index increment
+	 
 	let j = startIndex + INDEX_ONE;
 
 	while (j < docs.length) {
@@ -688,7 +740,7 @@ const mergeIncompleteCodeBlock = (
 		// Check if the merged content now has a complete block
 		if (hasCompleteCodeBlock(mergedContent, codeTagIndex)) {
 			return {
-				mergedDoc: createMergedDoc(doc, mergedContent, mergedLines),
+				mergedDoc: createMergedDoc(doc, mergedContent, [...mergedLines]),
 				nextIndex: j,
 			};
 		}
@@ -778,7 +830,7 @@ const mergeCodeBlockDocs = (
 const applyDocProcessingPipeline = (
 	docs: readonly ApexDocComment[],
 	normalizedComment?: string,
-	isEmbedFormatted: boolean = false,
+	isEmbedFormatted = false,
 ): readonly ApexDocComment[] => {
 	// Detect code blocks first to separate {@code} content from regular text
 	// Pass isEmbedFormatted flag to preserve formatted code
@@ -805,11 +857,12 @@ const applyDocProcessingPipeline = (
  * Creates a Doc text doc from cleaned text for paragraph docs.
  * @param cleanedText - The cleaned text content.
  * @param doc - The Doc content doc.
+ * @param _doc
  * @returns The created Doc text doc or null if empty.
  */
 const createDocTextFromParagraph = (
 	cleanedText: string,
-	doc: ApexDocContent,
+	_doc: ApexDocContent,
 ): ApexDocContent | null => {
 	const splitLines = cleanedText
 		.split('\n')
@@ -914,10 +967,9 @@ const processTextBeforeCode = (
 const processContentForCodeBlocks = (
 	doc: ApexDocContent,
 	newDocs: ApexDocComment[],
-	isEmbedFormatted: boolean = false,
+	isEmbedFormatted = false,
 ): void => {
-	// Extract string content from Doc for text operations
-	const content = getContentString(doc);
+	// Extract lines from Doc for text operations
 	const lines = getContentLines(doc);
 	// For content docs, work with the lines array to preserve line breaks
 	// Use removeCommentPrefix with preserveIndent=true to preserve code block indentation
@@ -983,7 +1035,7 @@ const processContentForCodeBlocks = (
 const detectCodeBlockDocs = (
 	docs: readonly ApexDocComment[],
 	_originalComment: Readonly<string>,
-	isEmbedFormatted: boolean = false,
+	isEmbedFormatted = false,
 ): readonly ApexDocComment[] => {
 	const newDocs: ApexDocComment[] = [];
 
@@ -1002,15 +1054,16 @@ export {
 	normalizeSingleApexDocComment,
 	detectCodeBlockDocs,
 	removeTrailingEmptyLines,
+	isApexDoc,
 };
 
 /**
  * Processes an ApexDoc comment for printing, including embed formatting, normalization, and indentation.
- * @param commentValue - The raw comment value from the AST
- * @param options - Parser options
- * @param _getCurrentOriginalText - Function to get the original source text
- * @param getFormattedCodeBlock - Function to get cached embed-formatted comments
- * @returns The processed comment ready for printing
+ * @param commentValue - The raw comment value from the AST.
+ * @param options - Parser options.
+ * @param _getCurrentOriginalText - Function to get the original source text.
+ * @param getFormattedCodeBlock - Function to get cached embed-formatted comments.
+ * @returns The processed comment ready for printing.
  */
 
 export type { CodeBlock, ReadonlyCodeBlock };
