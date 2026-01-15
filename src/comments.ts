@@ -25,7 +25,17 @@ import { normalizeAnnotationTokens } from './apexdoc-annotations.js';
 // Doc-based token types for future token-to-Doc conversion
 interface DocContentToken {
 	readonly type: 'text' | 'paragraph';
+	/**
+	 * Doc representation of the token content.
+	 * This should NOT include any leading comment prefix (`*`, whitespace).
+	 * For paragraphs, this is typically `join(hardline, lines)`.
+	 */
 	readonly content: Doc;
+	/**
+	 * Per-line Docs for this token, without comment prefix.
+	 * Consumers that need to reason about individual lines (e.g. wrapping)
+	 * should use this instead of re-splitting strings.
+	 */
 	readonly lines: readonly Doc[];
 	readonly isContinuation: boolean | undefined;
 }
@@ -34,13 +44,35 @@ interface DocCodeBlockToken {
 	readonly type: 'code';
 	readonly startPos: number;
 	readonly endPos: number;
-	readonly content: Doc; // Formatted code as Doc structure
+	/**
+	 * Raw code string between {@code ... } braces, with comment prefixes removed.
+	 * This is kept for interaction with prettier.format and other string-based helpers.
+	 */
+	readonly rawCode: string;
+	/**
+	 * Optional formatted code string as returned from the embed / formatter pipeline.
+	 * When present, this is the canonical string representation of the code block.
+	 */
+	readonly formattedCode?: string;
+	/**
+	 * Doc representation of the final code block content, without comment prefix.
+	 * This is typically built as `join(hardline, codeLines)`.
+	 */
+	readonly content: Doc;
 }
 
 interface DocAnnotationToken {
 	readonly type: 'annotation';
 	readonly name: string;
+	/**
+	 * Doc representation of the annotation body (everything after the name).
+	 * This may contain hardlines for wrapped content.
+	 */
 	readonly content: Doc;
+	/**
+	 * Optional Doc that should appear immediately before the annotation
+	 * on its own line (used for leading summary text).
+	 */
 	readonly followingText?: Doc;
 }
 
@@ -475,16 +507,40 @@ type CommentToken = ContentToken | CodeBlockToken | AnnotationToken;
 /**
  * Removes comment prefix (asterisk and spaces) from a line.
  * @param line - Line to remove prefix from.
- * @param preserveIndent - If true, uses original regex without trim to preserve code indentation. Otherwise trims result.
+ * @param preserveIndent - If true, only removes asterisk and single space after it to preserve code indentation. Otherwise removes all prefix and trims.
  * @returns Line with prefix removed and optionally trimmed.
  */
 const removeCommentPrefix = (
 	line: string,
 	preserveIndent: boolean = false,
 ): string => {
+		if (preserveIndent) {
+			// Only remove asterisk and single space after it, preserving indentation
+			// Pattern: leading whitespace + asterisk(s) + optional single space + rest
+			// We want to remove: leading whitespace + asterisk(s) + exactly one space (if present)
+			// But preserve: any additional spaces after that (indentation) and the content
+			const match = /^(\s*)(\*+)(\s?)(.*)$/.exec(line);
+			if (match) {
+				const [, , , spaceAfterAsterisk, rest] = match;
+				// If there's exactly one space after asterisk, remove it but preserve rest (including indentation)
+				// The rest may start with spaces (indentation) which we want to preserve
+				// Always return rest when spaceAfterAsterisk is exactly one space
+				if (spaceAfterAsterisk === ' ') {
+					// Single space - remove it, preserve rest (which may have indentation spaces)
+					return rest;
+				}
+				// No space - preserve everything after asterisk
+				if (spaceAfterAsterisk === '') {
+					return rest;
+				}
+				// Multiple spaces - preserve as indentation
+				return spaceAfterAsterisk + rest;
+			}
+			return line;
+		}
 	// Use original regex: /^\s*(\*(\s*\*)*)\s*/ - removes leading whitespace, asterisk(s), and all trailing whitespace
 	const result = line.replace(/^\s*(\*(\s*\*)*)\s*/, '');
-	return preserveIndent ? result : result.trim();
+	return result.trim();
 };
 
 /**
@@ -568,9 +624,117 @@ const createParagraphToken = (
 	isContinuation: false,
 });
 
+/**
+ * Converts string lines to Doc array (strings are valid Docs).
+ */
+const linesToDocLines = (lines: readonly string[]): readonly Doc[] =>
+	lines.map((line) => line as Doc);
+
+/**
+ * Converts string content to Doc (string is a valid Doc).
+ * For multi-line content, joins with hardline.
+ */
+const contentToDoc = (
+	content: string,
+	lines: readonly string[],
+): Doc => {
+	const { join, hardline } = prettier.doc.builders;
+	if (lines.length === 0) {
+		return '' as Doc;
+	}
+	if (lines.length === 1) {
+		return lines[0] as Doc;
+	}
+	return join(hardline, linesToDocLines(lines));
+};
+
+/**
+ * Extracts string content from a Doc for text operations.
+ * If Doc is a string, returns it. Otherwise, prints it to string.
+ */
+const docToString = (doc: Doc, options?: { printWidth?: number }): string => {
+	if (typeof doc === 'string') {
+		return doc;
+	}
+	// For complex Docs, print to string
+	return prettier.doc.printer.printDocToString(doc, {
+		printWidth: options?.printWidth ?? 80,
+		tabWidth: 2,
+	}).formatted;
+};
+
+/**
+ * Extracts string content from DocContentToken for text operations.
+ */
+const getContentTokenString = (token: DocContentToken): string =>
+	docToString(token.content);
+
+/**
+ * Extracts string lines from DocContentToken for text operations.
+ */
+const getContentTokenLines = (token: DocContentToken): readonly string[] =>
+	token.lines.map((line) => docToString(line));
+
+/**
+ * Creates a DocContentToken from string content and lines.
+ */
+const createDocContentToken = (
+	type: 'text' | 'paragraph',
+	content: string,
+	lines: readonly string[],
+	isContinuation?: boolean,
+): DocContentToken => {
+	const trimmedLines = lines.map((line) => removeCommentPrefix(line));
+	return {
+		type,
+		content: contentToDoc(content, trimmedLines),
+		lines: linesToDocLines(trimmedLines),
+		isContinuation,
+	};
+};
+
+/**
+ * Creates a DocCodeBlockToken from string code block data.
+ * @param startPos - Start position of the code block.
+ * @param endPos - End position of the code block.
+ * @param rawCode - Raw code string extracted from the comment.
+ * @param formattedCode - Optional formatted code string (if code was already formatted by embed function).
+ */
+const createDocCodeBlockToken = (
+	startPos: number,
+	endPos: number,
+	rawCode: string,
+	formattedCode?: string,
+): DocCodeBlockToken => {
+	// Use formattedCode if available, otherwise use rawCode for Doc content
+	const codeToUse = formattedCode ?? rawCode;
+	const codeLines = codeToUse.split('\n');
+	const { join, hardline } = prettier.doc.builders;
+	return {
+		type: 'code',
+		startPos,
+		endPos,
+		rawCode,
+		...(formattedCode !== undefined ? { formattedCode } : {}),
+		content:
+			codeLines.length === 0
+				? ('' as Doc)
+				: codeLines.length === 1
+					? (codeLines[0] as Doc)
+					: join(hardline, linesToDocLines(codeLines)),
+	};
+};
+
+/**
+ * Parses a normalized comment string into Doc-based tokens.
+ * Detects paragraphs based on empty lines and continuation logic.
+ * Also detects code blocks (pattern: slash-asterisk ... asterisk-slash).
+ * @param normalizedComment - The normalized comment string.
+ * @returns Array of Doc-based tokens.
+ */
 const parseCommentToTokens = (
 	normalizedComment: Readonly<string>,
-): readonly CommentToken[] => {
+): readonly DocCommentToken[] => {
 	const lines = normalizedComment.split('\n');
 	// Skip first line (/**) and last line (*/)
 	if (lines.length <= INDEX_TWO) {
@@ -586,7 +750,7 @@ const parseCommentToTokens = (
 
 	// Detect paragraphs based on empty lines and sentence boundaries
 	// Skip code blocks when detecting paragraphs
-	const tokens: CommentToken[] = [];
+	const tokens: DocCommentToken[] = [];
 	let currentParagraph: string[] = [];
 	let currentParagraphLines: string[] = [];
 	let currentPos = ARRAY_START_INDEX;
@@ -614,9 +778,11 @@ const parseCommentToTokens = (
 		if (isInCodeBlock) {
 			// Finish current paragraph if any, then handle code block
 			if (currentParagraph.length > EMPTY) {
+				const paragraphContent = currentParagraph.join(' ');
 				tokens.push(
-					createParagraphToken(
-						currentParagraph,
+					createDocContentToken(
+						'paragraph',
+						paragraphContent,
 						currentParagraphLines,
 					),
 				);
@@ -630,12 +796,13 @@ const parseCommentToTokens = (
 					.substring(ARRAY_START_INDEX, currentCodeBlock.start)
 					.split('\n').length;
 				if (i === codeBlockStartLine) {
-					tokens.push({
-						type: 'code',
-						startPos: currentCodeBlock.start,
-						endPos: currentCodeBlock.end,
-						rawCode: currentCodeBlock.content,
-					} satisfies CodeBlockToken);
+					tokens.push(
+						createDocCodeBlockToken(
+							currentCodeBlock.start,
+							currentCodeBlock.end,
+							currentCodeBlock.content,
+						),
+					);
 				}
 			}
 			continue;
@@ -647,9 +814,11 @@ const parseCommentToTokens = (
 		if (isEmpty(trimmedLine)) {
 			// Empty line - finish current paragraph if any
 			if (currentParagraph.length > EMPTY) {
+				const paragraphContent = currentParagraph.join(' ');
 				tokens.push(
-					createParagraphToken(
-						currentParagraph,
+					createDocContentToken(
+						'paragraph',
+						paragraphContent,
 						currentParagraphLines,
 					),
 				);
@@ -684,9 +853,11 @@ const parseCommentToTokens = (
 				currentParagraph.length > EMPTY &&
 				!hasUnclosedCodeBlock
 			) {
+				const paragraphContent = currentParagraph.join(' ');
 				tokens.push(
-					createParagraphToken(
-						currentParagraph,
+					createDocContentToken(
+						'paragraph',
+						paragraphContent,
 						currentParagraphLines,
 					),
 				);
@@ -721,9 +892,11 @@ const parseCommentToTokens = (
 					isNotEmpty(nextTrimmed)) ||
 				isAnnotationLine
 			) {
+				const paragraphContent = currentParagraph.join(' ');
 				tokens.push(
-					createParagraphToken(
-						currentParagraph,
+					createDocContentToken(
+						'paragraph',
+						paragraphContent,
 						currentParagraphLines,
 					),
 				);
@@ -735,20 +908,24 @@ const parseCommentToTokens = (
 
 	// Add last paragraph if any
 	if (currentParagraph.length > EMPTY) {
+		const paragraphContent = currentParagraph.join(' ');
 		tokens.push(
-			createParagraphToken(currentParagraph, currentParagraphLines),
+			createDocContentToken(
+				'paragraph',
+				paragraphContent,
+				currentParagraphLines,
+			),
 		);
 	}
 
 	// If no paragraphs were found, create a single text token
 	if (isEmpty(tokens)) {
-		const content = contentLines.join('\n');
+		const content = contentLines
+			.map((line) => removeCommentPrefix(line))
+			.join('\n');
+		const trimmedLines = contentLines.map((line) => removeCommentPrefix(line));
 		return [
-			{
-				type: 'text',
-				content,
-				lines: contentLines,
-			} satisfies ContentToken,
+			createDocContentToken('text', content, trimmedLines),
 		];
 	}
 
@@ -756,18 +933,15 @@ const parseCommentToTokens = (
 };
 
 /**
- * Converts tokens back to a formatted comment string.
+ * Converts Doc tokens back to a formatted comment string.
  * Uses wrapped paragraphs if they've been wrapped.
- * @param tokens - Array of comment tokens.
+ * @param tokens - Array of Doc-based comment tokens.
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
  * @returns The formatted comment string.
- *
- * Note: Currently handles string-based tokens. Future enhancement may support
- * Doc-based tokens using prettier.doc.printer.printDocToString for conversion.
  */
 const tokensToCommentString = (
-	tokens: readonly CommentToken[],
+	tokens: readonly DocCommentToken[],
 	commentIndent: number,
 	options: Readonly<{
 		readonly tabWidth: number;
@@ -788,11 +962,13 @@ const tokensToCommentString = (
 		const nextToken = i + 1 < tokens.length ? tokens[i + 1] : null;
 		const isFollowedByCodeBlock = nextToken?.type === 'code';
 
-		if (token.type === 'text') {
+		if (token.type === 'text' || token.type === 'paragraph') {
+			// Extract string lines from Doc
+			const tokenLines = getContentTokenLines(token);
 			// Filter out empty trailing lines if followed by a code block
 			const linesToProcess = isFollowedByCodeBlock
 				? (() => {
-						const filtered = removeTrailingEmptyLines(token.lines);
+						const filtered = removeTrailingEmptyLines(tokenLines);
 						// Remove trailing newlines from the last line
 						if (filtered.length > 0) {
 							const lastIndex = filtered.length - 1;
@@ -803,7 +979,7 @@ const tokensToCommentString = (
 						}
 						return filtered;
 					})()
-				: token.lines;
+				: tokenLines;
 
 			for (const line of linesToProcess) {
 				// Skip empty lines that would create a blank line before the code block
@@ -811,28 +987,6 @@ const tokensToCommentString = (
 					continue;
 				}
 				// Preserve existing structure if line already has prefix
-				if (line.trimStart().startsWith('*')) {
-					lines.push(line);
-				} else {
-					lines.push(`${commentPrefix}${line.trimStart()}`);
-				}
-			}
-		} else if (token.type === 'paragraph') {
-			// Use wrapped lines if available, otherwise use original lines
-			const paragraphToken = token;
-			for (let j = 0; j < paragraphToken.lines.length; j++) {
-				let line = paragraphToken.lines[j];
-				if (!line) continue;
-				const isLastLine = j === paragraphToken.lines.length - 1;
-				// Remove trailing newline from the last line of a paragraph token if it's followed by a code block
-				// to avoid an extra blank line before the code block
-				if (
-					isLastLine &&
-					isFollowedByCodeBlock &&
-					line.endsWith('\n')
-				) {
-					line = line.slice(0, -1);
-				}
 				if (line.trimStart().startsWith('*')) {
 					lines.push(line);
 				} else {
@@ -859,7 +1013,10 @@ const tokensToCommentString = (
 
 			// Use formatted code if available, otherwise use raw code
 			const codeToken = token;
-			const codeToUse = codeToken.formattedCode !== undefined ? codeToken.formattedCode : codeToken.rawCode;
+			const codeToUse =
+				codeToken.formattedCode !== undefined
+					? codeToken.formattedCode
+					: codeToken.rawCode;
 			// Handle empty code blocks - render {@code} even if content is empty
 			const isEmptyBlock = codeToUse.trim().length === EMPTY;
 			if (isEmptyBlock) {
@@ -1074,13 +1231,15 @@ const customPrintComment = (
 				: null;
 			// Use embed-formatted comment if available, otherwise normalize the original comment
 			// Normalize the embed-formatted comment to match Prettier's indentation (single space before *)
+			// Pass isEmbedFormatted=true to preserve formatted code from embed function
 			const commentDoc = embedFormattedComment
 				? normalizeSingleApexDocComment(
 						embedFormattedComment,
 						0,
 						options,
+						true,
 					)
-				: normalizeSingleApexDocComment(commentValue, 0, options);
+				: normalizeSingleApexDocComment(commentValue, 0, options, false);
 
 			// Return the comment as Prettier documents (already in Doc format)
 			return [commentDoc];
@@ -1195,6 +1354,11 @@ export {
 	INDEX_TWO,
 	MIN_INDENT_LEVEL,
 	NOT_FOUND_INDEX,
+	docToString,
+	getContentTokenString,
+	getContentTokenLines,
+	createDocCodeBlockToken,
+	createDocContentToken,
 };
 export type {
 	ContentToken,

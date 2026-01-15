@@ -19,6 +19,11 @@ import {
 	CommentPrefix,
 	isContentToken,
 	NOT_FOUND_INDEX,
+	getContentTokenString,
+	getContentTokenLines,
+	createDocCodeBlockToken,
+	createDocContentToken,
+	removeCommentPrefix,
 } from './comments.js';
 import {
 	ARRAY_START_INDEX,
@@ -32,6 +37,9 @@ import type {
 	CommentToken,
 	ContentToken,
 	CodeBlockToken,
+	DocCommentToken,
+	DocContentToken,
+	DocCodeBlockToken,
 } from './comments.js';
 import {
 	detectAnnotationsInTokens,
@@ -116,6 +124,7 @@ const normalizeSingleApexDocComment = (
 	commentValue: Readonly<string>,
 	commentIndent: number,
 	options: Readonly<ParserOptions>,
+	isEmbedFormatted: boolean = false,
 ): Doc => {
 	const { printWidth, tabWidth } = options;
 	const tabWidthValue = tabWidth;
@@ -141,7 +150,8 @@ const normalizeSingleApexDocComment = (
 	let tokens = mergeCodeBlockTokens(initialTokens);
 
 	// Apply common token processing pipeline
-	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
+	// Pass isEmbedFormatted flag to preserve formatted code from embed function
+	tokens = applyTokenProcessingPipeline(tokens, normalizedComment, isEmbedFormatted);
 
 	// Cache prefix and width calculations (used in both wrapAnnotationTokens and tokensToApexDocString)
 	const prefixAndWidth = printWidth
@@ -188,12 +198,14 @@ const normalizeSingleApexDocComment = (
 /**
  * Processes code lines with blank line preservation.
  * @param codeToUse - The code string to process.
+ * @param shouldTrim - Whether to trim the entire string before splitting (preserves indentation if false).
  * @returns Processed code with blank lines preserved.
  */
 const processCodeLinesWithBlankLinePreservation = (
 	codeToUse: string,
+	shouldTrim: boolean = true,
 ): string => {
-	const codeLines = codeToUse.trim().split('\n');
+	const codeLines = shouldTrim ? codeToUse.trim().split('\n') : codeToUse.split('\n');
 	const resultLines: string[] = [];
 
 	for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
@@ -282,25 +294,29 @@ const buildLinesWithPrefixes = (
 };
 
 /**
- * Renders a code block token to text token with formatted lines.
- * @param token - The code block token to render.
+ * Renders a Doc code block token to text token with formatted lines.
+ * @param token - The Doc code block token to render.
  * @param commentPrefix - The comment prefix string.
  * @param options - Options including printWidth.
  * @returns The rendered content token or null if empty.
  */
 const renderCodeBlockToken = (
-	token: CodeBlockToken,
+	token: DocCodeBlockToken,
 	commentPrefix: string,
 	options: Readonly<{
 		readonly printWidth?: number;
 	}>,
 ): ContentToken | null => {
 	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
-	const codeToUse =
-		token.formattedCode ?? token.rawCode;
+	// Use formattedCode if available, otherwise use rawCode
+	const codeToUse = token.formattedCode ?? token.rawCode;
 
 	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
-	const processedCode = processCodeLinesWithBlankLinePreservation(codeToUse);
+	// If using formattedCode (already formatted by embed), preserve indentation by not processing
+	const processedCode =
+		token.formattedCode !== undefined
+			? codeToUse // Already formatted, use as-is to preserve indentation
+			: processCodeLinesWithBlankLinePreservation(codeToUse, true);
 	const trimmedCodeToUse = processedCode.trim();
 	const isEmptyBlock = isEmpty(trimmedCodeToUse);
 
@@ -346,15 +362,15 @@ const renderCodeBlockToken = (
 };
 
 /**
- * Renders a text or paragraph token with wrapping applied.
- * @param token - The content token to render.
+ * Renders a Doc text or paragraph token with wrapping applied.
+ * @param token - The Doc content token to render.
  * @param commentPrefix - The comment prefix string.
  * @param effectiveWidth - The effective width for wrapping.
  * @param options - Options including tabWidth and useTabs.
  * @returns The rendered content token.
  */
 const renderTextOrParagraphToken = (
-	token: ContentToken,
+	token: DocContentToken,
 	commentPrefix: string,
 	effectiveWidth: number,
 	options: Readonly<{
@@ -362,9 +378,12 @@ const renderTextOrParagraphToken = (
 		readonly useTabs?: boolean | null | undefined;
 	}>,
 ): ContentToken => {
+	// Extract string content from Doc for wrapping
+	const contentString = getContentTokenString(token);
+	const linesString = getContentTokenLines(token);
 	const wrappedLines = wrapTextContent(
-		token.content,
-		token.lines,
+		contentString,
+		linesString,
 		effectiveWidth,
 		options,
 	);
@@ -385,20 +404,20 @@ const renderTextOrParagraphToken = (
 };
 
 /**
- * Converts ApexDoc comment tokens (including AnnotationTokens) back into a
+ * Converts ApexDoc Doc comment tokens (including DocAnnotationTokens) back into a
  * normalized comment string.
  * This function is ApexDoc-aware and knows how to render annotation tokens,
  * but defers the final comment construction (including the opening and closing
  * comment markers) to the
  * generic tokensToCommentString helper from comments.ts.
- * @param tokens - Array of comment tokens (may include AnnotationTokens).
+ * @param tokens - Array of Doc-based comment tokens (may include DocAnnotationTokens).
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
  * @param cachedPrefixAndWidth - Optional cached prefix and width calculations.
  * @returns The formatted ApexDoc comment string.
  */
 const tokensToApexDocString = (
-	tokens: readonly CommentToken[],
+	tokens: readonly DocCommentToken[],
 	commentIndent: number,
 	options: Readonly<{
 		readonly tabWidth: number;
@@ -411,28 +430,49 @@ const tokensToApexDocString = (
 		cachedPrefixAndWidth ?? calculatePrefixAndWidth(commentIndent, options.printWidth, options);
 	const { commentPrefix, effectiveWidth } = prefixAndWidth;
 
-	const apexDocTokens: CommentToken[] = [];
+	const apexDocTokens: DocCommentToken[] = [];
 
 	for (const token of tokens) {
 		if (token.type === 'annotation') {
 			const rendered = renderAnnotationToken(token, commentPrefix);
-			if (rendered) apexDocTokens.push(rendered);
+			if (rendered) {
+				// Convert ContentToken to DocContentToken
+				apexDocTokens.push(createDocContentToken(
+					rendered.type,
+					rendered.content,
+					rendered.lines,
+					rendered.isContinuation,
+				));
+			}
 		} else if (token.type === 'code') {
 			const rendered = renderCodeBlockToken(
 				token,
 				commentPrefix,
 				options,
 			);
-			if (rendered) apexDocTokens.push(rendered);
+			if (rendered) {
+				// Convert ContentToken to DocContentToken
+				apexDocTokens.push(createDocContentToken(
+					rendered.type,
+					rendered.content,
+					rendered.lines,
+					rendered.isContinuation,
+				));
+			}
 		} else if (token.type === 'text' || token.type === 'paragraph') {
-			apexDocTokens.push(
-				renderTextOrParagraphToken(
-					token,
-					commentPrefix,
-					effectiveWidth,
-					options,
-				),
+			const rendered = renderTextOrParagraphToken(
+				token,
+				commentPrefix,
+				effectiveWidth,
+				options,
 			);
+			// Convert ContentToken to DocContentToken
+			apexDocTokens.push(createDocContentToken(
+				rendered.type,
+				rendered.content,
+				rendered.lines,
+				rendered.isContinuation,
+			));
 		} else {
 			apexDocTokens.push(token);
 		}
@@ -542,13 +582,13 @@ const parseApexDocTokens = (
 		readonly useTabs?: boolean | null | undefined;
 	}>,
 ): {
-	readonly tokens: readonly CommentToken[];
+	readonly tokens: readonly DocCommentToken[];
 	readonly effectiveWidth: number;
 } => {
 	const commentPrefixLength = CommentPrefix.getLength(commentIndent);
 	const effectiveWidth = calculateEffectiveWidth(printWidth, commentPrefixLength);
 
-	// Parse comment to tokens using the basic parser
+	// Parse comment to tokens using the basic parser (now returns DocCommentToken[])
 	let tokens = parseCommentToTokens(normalizedComment);
 
 	return {
@@ -584,21 +624,28 @@ const hasCompleteCodeBlock = (
 };
 
 /**
- * Creates a merged token from paragraph tokens.
- * @param token - The original content token.
+ * Creates a merged DocContentToken from paragraph tokens.
+ * @param token - The original Doc content token.
  * @param mergedContent - The merged content string.
- * @param mergedLines - The merged lines array.
- * @returns The merged content token.
+ * @param mergedLines - The merged lines array (without comment prefix).
+ * @returns The merged Doc content token.
  */
-const createMergedToken = (
-	token: ContentToken,
+const createMergedDocToken = (
+	token: DocContentToken,
 	mergedContent: string,
 	mergedLines: string[],
-): ContentToken => {
+): DocContentToken => {
+	const { join, hardline } = prettier.doc.builders;
+	const docLines = mergedLines.map((line) => line as Doc);
 	return {
-		content: mergedContent,
-		lines: mergedLines,
 		type: 'paragraph',
+		content:
+			docLines.length === 0
+				? ('' as Doc)
+				: docLines.length === 1
+					? docLines[0]
+					: join(hardline, docLines),
+		lines: docLines,
 		...(token.isContinuation !== undefined
 			? {
 					isContinuation: token.isContinuation,
@@ -609,20 +656,20 @@ const createMergedToken = (
 
 /**
  * Attempts to merge tokens with incomplete code blocks.
- * @param token - The content token to merge.
+ * @param token - The Doc content token to merge.
  * @param codeTagIndex - The index where the code tag starts.
- * @param tokens - Array of all comment tokens.
+ * @param tokens - Array of all Doc comment tokens.
  * @param startIndex - The starting index in the tokens array.
  * @returns Object with merged token and next index.
  */
 const mergeIncompleteCodeBlock = (
-	token: ContentToken,
+	token: DocContentToken,
 	codeTagIndex: number,
-	tokens: readonly CommentToken[],
+	tokens: readonly DocCommentToken[],
 	startIndex: number,
-): { mergedToken: ContentToken | null; nextIndex: number } => {
-	let mergedContent = token.content;
-	let mergedLines = [...token.lines];
+): { mergedToken: DocContentToken | null; nextIndex: number } => {
+	let mergedContent = getContentTokenString(token);
+	let mergedLines = getContentTokenLines(token);
 	let hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
 	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- index increment
 	let j = startIndex + INDEX_ONE;
@@ -633,21 +680,21 @@ const mergeIncompleteCodeBlock = (
 			j++;
 			continue;
 		}
-		if (nextToken.type !== 'paragraph') {
-			// Non-paragraph token, stop merging
+		if (nextToken.type !== 'paragraph' && nextToken.type !== 'text') {
+			// Non-content token, stop merging
 			break;
 		}
 
-		const nextContent = nextToken.content;
+		const nextContent = getContentTokenString(nextToken);
 		mergedContent += nextContent;
-		mergedLines.push(...nextToken.lines);
+		mergedLines = [...mergedLines, ...getContentTokenLines(nextToken)];
 
 		// Check if the merged content now has a complete block
 		hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
 
 		if (hasCompleteBlock) {
 			// Found complete block, create merged token
-			const mergedToken = createMergedToken(
+			const mergedToken = createMergedDocToken(
 				token,
 				mergedContent,
 				mergedLines,
@@ -662,13 +709,13 @@ const mergeIncompleteCodeBlock = (
 
 /**
  * Merges paragraph tokens that contain split {@code} blocks to ensure complete blocks are in single tokens.
- * @param tokens - Array of comment tokens.
+ * @param tokens - Array of Doc-based comment tokens.
  * @returns Array of tokens with merged {@code} blocks.
  */
 const mergeCodeBlockTokens = (
-	tokens: readonly CommentToken[],
-): readonly CommentToken[] => {
-	const mergedTokens: CommentToken[] = [];
+	tokens: readonly DocCommentToken[],
+): readonly DocCommentToken[] => {
+	const mergedTokens: DocCommentToken[] = [];
 	let i = 0;
 
 	while (i < tokens.length) {
@@ -678,14 +725,15 @@ const mergeCodeBlockTokens = (
 			continue;
 		}
 
-		if (token.type !== 'paragraph') {
-			// Non-paragraph token, add as-is
+		if (token.type !== 'paragraph' && token.type !== 'text') {
+			// Non-content token, add as-is
 			mergedTokens.push(token);
 			i++;
 			continue;
 		}
 
-		const content = token.content;
+		// Extract string content from Doc for text operations
+		const content = getContentTokenString(token);
 		const codeTagIndex = content.indexOf('{@code');
 
 		if (codeTagIndex === -1) {
@@ -706,12 +754,24 @@ const mergeCodeBlockTokens = (
 		}
 
 		// Need to merge with subsequent tokens
-		const mergeResult = mergeIncompleteCodeBlock(token, codeTagIndex, tokens, i);
-		if (mergeResult.mergedToken) {
-			mergedTokens.push(mergeResult.mergedToken);
-			i = mergeResult.nextIndex + 1;
+		// Type guard: ensure token is DocContentToken
+		if (token.type === 'paragraph' || token.type === 'text') {
+			const mergeResult = mergeIncompleteCodeBlock(
+				token,
+				codeTagIndex,
+				tokens,
+				i,
+			);
+			if (mergeResult.mergedToken) {
+				mergedTokens.push(mergeResult.mergedToken);
+				i = mergeResult.nextIndex + 1;
+			} else {
+				// Couldn't find complete block, add original token
+				mergedTokens.push(token);
+				i++;
+			}
 		} else {
-			// Couldn't find complete block, add original token
+			// Non-content token, shouldn't happen but handle gracefully
 			mergedTokens.push(token);
 			i++;
 		}
@@ -728,18 +788,22 @@ const mergeCodeBlockTokens = (
 
 /**
  * Applies the common token processing pipeline: code block detection, annotation detection, and normalization.
- * @param tokens - Array of comment tokens.
+ * @param tokens - Array of Doc-based comment tokens.
  * @param normalizedComment - The normalized comment text (may be undefined in async contexts).
- * @returns Array of processed tokens.
+ * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.
+ * @returns Array of processed Doc tokens.
  */
 const applyTokenProcessingPipeline = (
-	tokens: readonly CommentToken[],
+	tokens: readonly DocCommentToken[],
 	normalizedComment?: string,
-): readonly CommentToken[] => {
+	isEmbedFormatted: boolean = false,
+): readonly DocCommentToken[] => {
 	// Detect code blocks first to separate {@code} content from regular text
+	// Pass isEmbedFormatted flag to preserve formatted code
 	let processedTokens = detectCodeBlockTokens(
 		tokens,
 		normalizedComment !== undefined ? normalizedComment : '',
+		isEmbedFormatted,
 	);
 
 	// Detect annotations in tokens that contain ApexDoc content
@@ -777,61 +841,52 @@ const extractPrefixFromParagraphToken = (
 };
 
 /**
- * Creates a text token from cleaned text for paragraph tokens.
+ * Creates a Doc text token from cleaned text for paragraph tokens.
  * @param cleanedText - The cleaned text content.
- * @param token - The content token.
- * @returns The created text token or null if empty.
+ * @param token - The Doc content token.
+ * @returns The created Doc text token or null if empty.
  */
-const createTextTokenFromParagraph = (
+const createDocTextTokenFromParagraph = (
 	cleanedText: string,
-	token: ContentToken,
-): ContentToken | null => {
-	const prefix = extractPrefixFromParagraphToken(token);
+	token: DocContentToken,
+): DocContentToken | null => {
 	const splitLines = cleanedText
 		.split('\n')
 		.filter((line: string) => line.trim().length > EMPTY);
 	if (splitLines.length === EMPTY) {
 		return null;
 	}
-	return {
-		content: cleanedText,
-		lines: splitLines.map((line: string) => `${prefix}${line.trim()}`),
-		type: 'text',
-	} satisfies ContentToken;
+	return createDocContentToken('text', cleanedText, splitLines);
 };
 
 /**
- * Creates a text token from cleaned text for text tokens.
+ * Creates a Doc text token from cleaned text for text tokens.
  * @param cleanedText - The cleaned text content.
- * @returns The created text token or null if empty.
+ * @returns The created Doc text token or null if empty.
  */
-const createTextTokenFromText = (
+const createDocTextTokenFromText = (
 	cleanedText: string,
-): ContentToken | null => {
+): DocContentToken | null => {
 	const splitLines = cleanedText.split('\n');
 	const cleanedLines = removeTrailingEmptyLines(splitLines);
 	if (cleanedLines.length === EMPTY) {
 		return null;
 	}
-	return {
-		content: cleanedText,
-		lines: cleanedLines,
-		type: 'text',
-	} satisfies ContentToken;
+	return createDocContentToken('text', cleanedText, cleanedLines);
 };
 
 /**
  * Processes remaining text after last code tag.
  * @param content - The content string.
  * @param currentPos - The current position in content.
- * @param token - The content token.
- * @param newTokens - Array to add new tokens to.
+ * @param token - The Doc content token.
+ * @param newTokens - Array to add new Doc tokens to.
  */
 const processRemainingText = (
 	content: string,
 	currentPos: number,
-	token: ContentToken,
-	newTokens: CommentToken[],
+	token: DocContentToken,
+	newTokens: DocCommentToken[],
 ): void => {
 	if (currentPos >= content.length) {
 		return;
@@ -847,8 +902,8 @@ const processRemainingText = (
 
 	const textToken =
 		token.type === 'paragraph'
-			? createTextTokenFromParagraph(cleanedText, token)
-			: createTextTokenFromText(cleanedText);
+			? createDocTextTokenFromParagraph(cleanedText, token)
+			: createDocTextTokenFromText(cleanedText);
 	if (textToken) {
 		newTokens.push(textToken);
 	}
@@ -859,15 +914,15 @@ const processRemainingText = (
  * @param content - The content string.
  * @param lastMatchEnd - The end position of last match.
  * @param codeTagStart - The start position of code tag.
- * @param token - The content token.
- * @param newTokens - Array to add new tokens to.
+ * @param token - The Doc content token.
+ * @param newTokens - Array to add new Doc tokens to.
  */
 const processTextBeforeCode = (
 	content: string,
 	lastMatchEnd: number,
 	codeTagStart: number,
-	token: ContentToken,
-	newTokens: CommentToken[],
+	token: DocContentToken,
+	newTokens: DocCommentToken[],
 ): void => {
 	if (codeTagStart <= lastMatchEnd) {
 		return;
@@ -883,58 +938,66 @@ const processTextBeforeCode = (
 
 	const textToken =
 		token.type === 'paragraph'
-			? createTextTokenFromParagraph(cleanedText, token)
-			: createTextTokenFromText(cleanedText);
+			? createDocTextTokenFromParagraph(cleanedText, token)
+			: createDocTextTokenFromText(cleanedText);
 	if (textToken) {
 		newTokens.push(textToken);
 	}
 };
 
 /**
- * Processes content token to detect code blocks.
- * @param token - The content token to process.
- * @param newTokens - Array to add new tokens to.
+ * Processes Doc content token to detect code blocks.
+ * @param token - The Doc content token to process.
+ * @param newTokens - Array to add new Doc tokens to.
+ * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.
  */
 const processContentTokenForCodeBlocks = (
-	token: ContentToken,
-	newTokens: CommentToken[],
+	token: DocContentToken,
+	newTokens: DocCommentToken[],
+	isEmbedFormatted: boolean = false,
 ): void => {
+	// Extract string content from Doc for text operations
+	const content = getContentTokenString(token);
+	const lines = getContentTokenLines(token);
 	// For content tokens, work with the lines array to preserve line breaks
-	// Off-by-one fix: only remove " *" or " * " (asterisk + optional single space), preserve extra indentation spaces
-	// Match /^\s*\*\s?/ to remove asterisk and at most one space, preserving code block indentation
-	const content =
+	// Use removeCommentPrefix with preserveIndent=true to preserve code block indentation
+	const processedContent =
 		token.type === 'paragraph'
-			? token.lines
-					.map((line: string) => line.replace(/^\s*\*\s?/, ''))
+			? lines
+					.map((line: string) => removeCommentPrefix(line, true))
 					.join('\n')
-			: token.lines.join('\n');
+			: lines.join('\n');
 	let currentPos = ARRAY_START_INDEX;
 	let lastMatchEnd = ARRAY_START_INDEX;
 
-	while (currentPos < content.length) {
-		const codeTagStart = content.indexOf(CODE_TAG, currentPos);
+	while (currentPos < processedContent.length) {
+		const codeTagStart = processedContent.indexOf(CODE_TAG, currentPos);
 
 		if (codeTagStart === NOT_FOUND_INDEX) {
-			processRemainingText(content, currentPos, token, newTokens);
+			processRemainingText(processedContent, currentPos, token, newTokens);
 			break;
 		}
 
 		processTextBeforeCode(
-			content,
+			processedContent,
 			lastMatchEnd,
 			codeTagStart,
 			token,
 			newTokens,
 		);
 
-		const codeBlockResult = extractCodeFromBlock(content, codeTagStart);
+		const codeBlockResult = extractCodeFromBlock(processedContent, codeTagStart);
 		if (codeBlockResult) {
-			newTokens.push({
-				endPos: codeBlockResult.endPos,
-				rawCode: codeBlockResult.code,
-				startPos: codeTagStart,
-				type: 'code',
-			} satisfies CodeBlockToken);
+			// If comment was already formatted by embed function, treat extracted code as formatted
+			const formattedCode = isEmbedFormatted ? codeBlockResult.code : undefined;
+			newTokens.push(
+				createDocCodeBlockToken(
+					codeTagStart,
+					codeBlockResult.endPos,
+					codeBlockResult.code,
+					formattedCode,
+				),
+			);
 			currentPos = codeBlockResult.endPos;
 			lastMatchEnd = codeBlockResult.endPos;
 		} else {
@@ -946,20 +1009,22 @@ const processContentTokenForCodeBlocks = (
 
 /**
  * Detects code blocks in tokens by scanning for {@code} patterns.
- * Converts TextToken/ParagraphToken content containing {@code} to CodeBlockTokens.
- * @param tokens - Array of comment tokens.
+ * Converts DocContentToken content containing {@code} to DocCodeBlockToken.
+ * @param tokens - Array of Doc-based comment tokens.
  * @param _originalComment - The original comment string for position tracking (unused but kept for API compatibility).
+ * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.
  * @returns Array of tokens with code blocks detected.
  */
 const detectCodeBlockTokens = (
-	tokens: readonly CommentToken[],
+	tokens: readonly DocCommentToken[],
 	_originalComment: Readonly<string>,
-): readonly CommentToken[] => {
-	const newTokens: CommentToken[] = [];
+	isEmbedFormatted: boolean = false,
+): readonly DocCommentToken[] => {
+	const newTokens: DocCommentToken[] = [];
 
 	for (const token of tokens) {
-		if (isContentToken(token)) {
-			processContentTokenForCodeBlocks(token, newTokens);
+		if (token.type === 'text' || token.type === 'paragraph') {
+			processContentTokenForCodeBlocks(token, newTokens, isEmbedFormatted);
 		} else {
 			newTokens.push(token);
 		}
