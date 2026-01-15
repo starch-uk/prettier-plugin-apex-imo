@@ -26,9 +26,6 @@ import {
 	APEXDOC_ANNOTATIONS,
 } from './refs/apexdoc-annotations.js';
 import { normalizeGroupContent } from './apexdoc-group.js';
-import {
-	normalizeAnnotationNamesInTextExcludingApexDoc,
-} from './annotations.js';
 
 // Use Set for O(1) lookup instead of array.includes() O(n)
 const APEXDOC_ANNOTATIONS_SET = new Set(APEXDOC_ANNOTATIONS);
@@ -290,100 +287,6 @@ const normalizeAnnotationTokens = (
 					name: lowerName,
 					content: normalizedContent,
 				} satisfies AnnotationToken;
-			}
-		} else if (isContentToken(token)) {
-			// Content tokens should NOT contain ApexDoc annotations as text after detectAnnotationsInTokens
-			// ApexDoc annotations should have been converted to annotation tokens by detectAnnotationsInTokens
-			// If any annotations remain as text, they're either:
-			// 1. Apex code annotations (should be normalized to PascalCase)
-			// 2. ApexDoc annotations that weren't detected (should remain unchanged, but this shouldn't happen)
-			// Since detectAnnotationsInTokens runs before this, we should NOT normalize ApexDoc annotations here
-			// They should already be converted to annotation tokens and handled separately
-			// Normalize annotations in text/paragraph tokens, but skip {@code} blocks
-			const content = token.content;
-
-			// Check if content contains {@code} blocks using token structure instead of string search
-			// Look for code block tokens in the token array rather than searching content string
-			// For now, use simple string check but prefer token-based detection when available
-			const hasCodeBlock = content.includes('{@code');
-			if (hasCodeBlock) {
-				// Split content by {@code} blocks and normalize each segment
-				const parts: string[] = [];
-				let lastIndex = 0;
-				let startIndex = 0;
-
-				// Use string.indexOf instead of regex for better performance
-				while (
-					(startIndex = content.indexOf('{@code', lastIndex)) !== -1
-				) {
-					// Normalize text before {@code} block - exclude ApexDoc annotations
-					const beforeCode = content.substring(lastIndex, startIndex);
-					if (beforeCode.length > EMPTY) {
-						parts.push(
-							normalizeAnnotationNamesInTextExcludingApexDoc(
-								beforeCode,
-							),
-						);
-					}
-
-					// Find the end of {@code} block
-					const codeTagLength = '{@code'.length;
-					let endIndex = content.indexOf(
-						'}',
-						startIndex + codeTagLength,
-					);
-					if (endIndex === -1) {
-						// Malformed {@code} block, include rest as-is
-						parts.push(content.substring(startIndex));
-						lastIndex = content.length;
-						break;
-					}
-
-					// Include {@code} block unchanged (skip normalization)
-					parts.push(content.substring(startIndex, endIndex + 1));
-					lastIndex = endIndex + 1;
-				}
-
-				// Normalize remaining text after last {@code} block - exclude ApexDoc annotations
-				if (lastIndex < content.length) {
-					const afterCode = content.substring(lastIndex);
-					if (afterCode.length > EMPTY) {
-						parts.push(
-							normalizeAnnotationNamesInTextExcludingApexDoc(
-								afterCode,
-							),
-						);
-					}
-				}
-
-				const normalizedContent = parts.join('');
-
-				// Update lines if content changed
-				if (normalizedContent !== content) {
-					const normalizedLines = normalizedContent.split('\n');
-					if (token.type === 'text' || token.type === 'paragraph') {
-						return {
-							...token,
-							content: normalizedContent,
-							lines: normalizedLines,
-						} satisfies ContentToken;
-					}
-				}
-			} else {
-				// No {@code} blocks - preserve ApexDoc annotations unchanged
-				// Only normalize non-ApexDoc annotations (Apex code annotations)
-				const normalizedContent =
-					normalizeAnnotationNamesInTextExcludingApexDoc(content);
-				if (normalizedContent !== content) {
-					const normalizedLines = normalizedContent.split('\n');
-					if (token.type === 'text' || token.type === 'paragraph') {
-						return {
-							...token,
-							content: normalizedContent,
-							lines: normalizedLines,
-						} satisfies ContentToken;
-					}
-				}
 			}
 		}
 		return token;

@@ -15,11 +15,7 @@ import type {
 } from './types.js';
 
 const { group, indent, softline, ifBreak, line } = doc.builders;
-import {
-	isAnnotation,
-	parseAndReformatAnnotationString,
-	printAnnotation,
-} from './annotations.js';
+import { isAnnotation, printAnnotation } from './annotations.js';
 import {
 	createTypeNormalizingPrint,
 	isIdentifier,
@@ -277,6 +273,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					);
 
 					// Format with prettier, trying apex-anonymous first, then apex
+					// #region agent log
+					fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'printer.ts:276',message:'embed: formatApexCodeWithFallback entry',data:{codePreview:codeContent.substring(0,100),pluginsLength:plugins.length,hasOurPlugin:plugins.some((p:unknown)=>p===pluginInstance?.default)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D'})}).catch(()=>{});
+					// #endregion
 					let formattedCode = await formatApexCodeWithFallback(
 						codeContent,
 						{
@@ -285,61 +284,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 							plugins,
 						},
 					);
+					// #region agent log
+					fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'printer.ts:284',message:'embed: formatApexCodeWithFallback result',data:{formattedPreview:formattedCode.substring(0,150),hasAnnotation:formattedCode.includes('@'),normalized:formattedCode.includes('Label')||formattedCode.includes('label')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,E'})}).catch(()=>{});
+					// #endregion
 
-					// Normalize multiline annotations (2+ parameters) to use the same formatting
-					// as our AST-based printAnnotation logic. This ensures consistency between
-					// regular Apex files and {@code} blocks (which are formatted via string-based path).
-					if (typeof formattedCode === 'string') {
-						const lines = formattedCode.split('\n');
-						let modified = false;
-
-						for (let i = 0; i < lines.length; i++) {
-							const line = lines[i];
-							if (line === undefined) continue;
-							const trimmed = line.trim();
-
-							// Check if this line starts a multiline annotation (any annotation with parameters)
-							if (trimmed.startsWith('@') && trimmed.includes('(')) {
-								const reformatted =
-									parseAndReformatAnnotationString(
-										trimmed,
-										lines,
-										i,
-									);
-
-								if (reformatted) {
-									// Count how many lines the original annotation occupied
-									let originalLineCount = 1;
-									for (let j = i + 1; j < lines.length; j++) {
-										const nextLine = lines[j];
-										if (nextLine === undefined) continue;
-										const nextTrimmed = nextLine.trim();
-										originalLineCount++;
-										if (
-											nextTrimmed.startsWith(')') ||
-											nextTrimmed.endsWith(')')
-										) {
-											break;
-										}
-									}
-
-									// Replace original annotation with reformatted version
-									lines.splice(
-										i,
-										originalLineCount,
-										...reformatted,
-									);
-									modified = true;
-									// Skip past the reformatted annotation
-									i += reformatted.length - 1;
-								}
-							}
-						}
-
-						if (modified) {
-							formattedCode = lines.join('\n');
-						}
-					}
+					// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
 
 					// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
 					// This preserves the structure from original code (blank lines after } before annotations/methods)
@@ -757,6 +706,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc => {
+		// #region agent log
+		fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'printer.ts:704',message:'customPrint: entry',data:{nodeClass:getNodeClassOptional(path.node)||'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+		// #endregion
 		currentPrintOptions = options;
 		currentOriginalText = (options as { originalText?: string })
 			.originalText;
@@ -766,10 +718,21 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const fallback = (): Doc =>
 			originalPrinter.print(path, options, typeNormalizingPrint);
 
+		// #region agent log
+		const isAnnotationNode = isAnnotation(node);
+		if (isAnnotationNode) {
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'printer.ts:712',message:'customPrint: annotation detected',data:{nodeClass:nodeClass||'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C'})}).catch(()=>{});
+		}
+		// #endregion
+
 		if (isAnnotation(node)) {
-			return printAnnotation(
+			const result = printAnnotation(
 				path as Readonly<AstPath<ApexAnnotationNode>>,
 			);
+			// #region agent log
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'printer.ts:714',message:'customPrint: printAnnotation called',data:{resultType:typeof result,isArray:Array.isArray(result)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+			// #endregion
+			return result;
 		}
 		if (isListInit(node) || isMapInit(node)) {
 			return printCollection(

@@ -1,5 +1,4 @@
-@InvocableMethod(
-label="Test",
-description="Test description"
-)
-
+class FormatCodeBlockInvocableMultiline {
+  @invocablemethod(label='Test' description='Test description')
+  public void test() {}
+}

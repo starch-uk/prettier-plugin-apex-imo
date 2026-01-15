@@ -127,17 +127,28 @@ const formatApexCodeWithFallback = async (
 	code: string,
 	options: Readonly<ParserOptions & { plugins?: unknown[] }>,
 ): Promise<string> => {
+	// #region agent log
+	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'utils.ts:129',message:'formatApexCodeWithFallback: entry',data:{hasPlugins:!!options.plugins,pluginsLength:options.plugins?.length||0,codePreview:code.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+	// #endregion
 	try {
-		return await prettier.format(code, {
+		const result = await prettier.format(code, {
 			...options,
 			parser: 'apex-anonymous',
 		});
+		// #region agent log
+		fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'utils.ts:133',message:'formatApexCodeWithFallback: success apex-anonymous',data:{resultPreview:result.substring(0,150),hasAnnotation:result.includes('@')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
+		// #endregion
+		return result;
 	} catch {
 		try {
-			return await prettier.format(code, {
+			const result = await prettier.format(code, {
 				...options,
 				parser: 'apex',
 			});
+			// #region agent log
+			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'utils.ts:139',message:'formatApexCodeWithFallback: success apex',data:{resultPreview:result.substring(0,150),hasAnnotation:result.includes('@')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
+			// #endregion
+			return result;
 		} catch {
 			return code;
 		}

@@ -16,13 +16,6 @@ import {
 } from './refs/annotations.js';
 import { EMPTY, getNodeClass, createNodeClassGuard } from './utils.js';
 
-// Annotation normalization uses regex for preprocessing text before parsing (annotation normalization).
-// AST manipulation isn't feasible at this stage since we're normalizing annotation names
-// in the source text before it reaches the parser.
-const ANNOTATION_REGEX =
-	/@([a-zA-Z_][a-zA-Z0-9_]*)(\s*\(([^)]*)\)|(?![a-zA-Z0-9_(]))/g;
-const ANNOTATION_OPTION_REGEX = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
-
 const { group, indent, hardline, softline, join, ifBreak } = doc.builders;
 
 const ANNOTATION_CLASS = 'apex.jorje.data.ast.Modifier$Annotation';
@@ -101,65 +94,6 @@ const formatAnnotationParam = (
 	return "''";
 };
 
-/**
- * Parses and reformats an annotation from a string representation (e.g., from base plugin output).
- * Extracts parameters and reformats them using our normalization rules to ensure consistency
- * with AST-based formatting.
- * @param annotationString - The annotation string to parse.
- * @param lines - Array of lines containing the annotation (for multiline annotations).
- * @param startLineIndex - Index in lines array where the annotation starts.
- * @returns Reformatted annotation lines using our shared formatting rules, or null if parsing fails.
- */
-const parseAndReformatAnnotationString = (
-	annotationString: string,
-	lines: string[],
-	startLineIndex: number,
-): string[] | null => {
-	const nameMatch = /^@([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/.exec(
-		annotationString.trim(),
-	);
-	if (!nameMatch) return null;
-
-	const [, nameGroup] = nameMatch;
-	const normalizedName = normalizeAnnotationName(nameGroup ?? '');
-
-	const paramLines: string[] = [];
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- offset
-	for (let i = startLineIndex + 1; i < lines.length; i++) {
-		const trimmed = lines[i]?.trim();
-		if (trimmed === undefined) continue;
-		paramLines.push(trimmed);
-		if (trimmed.startsWith(')') || trimmed.endsWith(')')) break;
-	}
-
-	const parsedParams: { key: string; value: string }[] = [];
-	const paramRegex = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']/;
-	for (const pl of paramLines) {
-		const match = paramRegex.exec(pl.replace(/,$/, ''));
-		if (match) {
-			const [, keyGroup, valueGroup] = match;
-			parsedParams.push({
-				key: keyGroup ?? '',
-				value: valueGroup ?? '',
-			});
-		}
-	}
-
-	if (parsedParams.length === EMPTY) return null;
-
-	const formattedParams = parsedParams.map((param, idx) => {
-		const normalizedKey = normalizeAnnotationOptionName(
-			normalizedName,
-			param.key,
-		);
-		const paramStr = `  ${normalizedKey}='${param.value}'`;
-		// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- compare with length
-		return idx < parsedParams.length - 1 ? `${paramStr},` : paramStr;
-	});
-
-	return [`@${normalizedName}(`, ...formattedParams, ')'];
-};
-
 const shouldForceMultiline = (
 	_formattedParams: readonly Doc[],
 ): boolean => {
@@ -224,85 +158,4 @@ const printAnnotation = (
 	]);
 };
 
-const createAnnotationReplacer = () => (
-	_match: string,
-	name: string,
-	params?: string,
-): string => {
-	const normalizedName = normalizeAnnotationName(name);
-	if (params === undefined || params.length === EMPTY)
-		return `@${normalizedName}`;
-	return `@${normalizedName}${params.replace(
-		ANNOTATION_OPTION_REGEX,
-		(m: string, opt: string) => {
-			const normalizedOption = normalizeAnnotationOptionName(
-				normalizedName,
-				opt,
-			);
-			return normalizedOption === opt ? m : `${normalizedOption}=`;
-		},
-	)}`;
-};
-
-/**
- * Normalizes annotation names in source text before parsing.
- * Uses character-based parsing instead of regex for annotation normalization.
- * AST manipulation isn't feasible at this stage since we're normalizing annotation names
- * in the source text before it reaches the parser.
- * Skips ApexDoc comments to avoid interfering with ApexDoc annotation normalization.
- * @param text - The source text containing annotations to normalize.
- * @returns The text with normalized annotation names.
- * @example
- * normalizeAnnotationNamesInText('@invocablemethod(label="Test")');
- * // Returns '@InvocableMethod(label="Test")'
- */
-const normalizeAnnotationNamesInText = (text: string): string => {
-	const replacer = createAnnotationReplacer();
-	return text.replace(ANNOTATION_REGEX, replacer);
-};
-
-/**
- * Normalizes annotation names in text, excluding ApexDoc annotations.
- * ApexDoc annotations (like \@deprecated, \@param) are preserved as-is.
- * Only Apex code annotations are normalized.
- * @param text - The source text containing annotations to normalize.
- * @returns The text with normalized annotation names (excluding ApexDoc annotations).
- */
-const normalizeAnnotationNamesInTextExcludingApexDoc = (
-	text: string,
-): string => {
-	const apexDocAnnotationsSet = new Set([
-		'param',
-		'return',
-		'throws',
-		'see',
-		'since',
-		'author',
-		'version',
-		'deprecated',
-		'group',
-		'example',
-	]);
-	const replacer = createAnnotationReplacer();
-
-	return text.replace(
-		ANNOTATION_REGEX,
-		(match: string, name: string, params?: string): string => {
-			const lowerName = name.toLowerCase();
-			if (apexDocAnnotationsSet.has(lowerName)) {
-				return params === undefined || params.length === EMPTY
-					? `@${lowerName}`
-					: `@${lowerName}${params}`;
-			}
-			return replacer(match, name, params);
-		},
-	);
-};
-
-export {
-	isAnnotation,
-	normalizeAnnotationNamesInText,
-	normalizeAnnotationNamesInTextExcludingApexDoc,
-	parseAndReformatAnnotationString,
-	printAnnotation,
-};
+export { isAnnotation, printAnnotation };

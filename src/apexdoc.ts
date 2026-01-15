@@ -48,7 +48,6 @@ import {
 } from './apexdoc-code.js';
 import { preserveBlankLineAfterClosingBrace } from './utils.js';
 import { removeCommentPrefix } from './comments.js';
-import { normalizeAnnotationNamesInText } from './annotations.js';
 
 const COMMENT_START_MARKER = '/**';
 const COMMENT_END_MARKER = '*/';
@@ -233,10 +232,8 @@ const renderCodeBlockToken = (
 		readonly printWidth?: number;
 	}>,
 ): ContentToken | null => {
+	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
 	let codeToUse = token.formattedCode !== undefined ? token.formattedCode : token.rawCode;
-	if (!token.formattedCode) {
-		codeToUse = normalizeAnnotationNamesInText(codeToUse);
-	}
 
 	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
 	const codeLines = codeToUse.trim().split('\n');

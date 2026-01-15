@@ -1,0 +1,2 @@
+@istest()
+public class TestClass {}
