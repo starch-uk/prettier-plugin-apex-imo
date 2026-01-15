@@ -829,6 +829,26 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
+	describe('Primitive type normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize primitive types to PascalCase in variables, parameters, generics, and attributes',
+				fixture: 'primitive-type-normalization',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
 	describe('Object suffix normalization', () => {
 		it.concurrent.each([
 			{

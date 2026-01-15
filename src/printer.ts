@@ -663,11 +663,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
  */
 export {
 	canAttachComment,
-	clearFormattedCodeBlocks,
 	createWrappedPrinter,
 	getCurrentOriginalText,
 	getCurrentPrintOptions,
-	getCurrentPluginInstance,
 	getFormattedCodeBlock,
 	isBlockComment,
 	setCurrentPluginInstance,

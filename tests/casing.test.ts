@@ -19,6 +19,47 @@ const nodeClassKey = '@class';
 
 describe('casing', () => {
 	describe('normalizeTypeName', () => {
+		it.concurrent('should normalize primitive types to PascalCase', () => {
+			// Test that primitives are normalized first, before standard objects
+			expect(normalizeTypeName('string')).toBe('String');
+			expect(normalizeTypeName('integer')).toBe('Integer');
+			expect(normalizeTypeName('boolean')).toBe('Boolean');
+			expect(normalizeTypeName('blob')).toBe('Blob');
+			expect(normalizeTypeName('date')).toBe('Date');
+			expect(normalizeTypeName('datetime')).toBe('Datetime');
+			expect(normalizeTypeName('decimal')).toBe('Decimal');
+			expect(normalizeTypeName('double')).toBe('Double');
+			expect(normalizeTypeName('id')).toBe('ID');
+			expect(normalizeTypeName('long')).toBe('Long');
+			expect(normalizeTypeName('object')).toBe('Object');
+			expect(normalizeTypeName('time')).toBe('Time');
+			expect(normalizeTypeName('sobject')).toBe('SObject');
+		});
+
+		it.concurrent(
+			'should normalize collection types to PascalCase',
+			() => {
+				expect(normalizeTypeName('list')).toBe('List');
+				expect(normalizeTypeName('set')).toBe('Set');
+				expect(normalizeTypeName('map')).toBe('Map');
+			},
+		);
+
+		it.concurrent(
+			'should normalize primitives regardless of input case',
+			() => {
+				expect(normalizeTypeName('STRING')).toBe('String');
+				expect(normalizeTypeName('String')).toBe('String');
+				expect(normalizeTypeName('sTrInG')).toBe('String');
+				expect(normalizeTypeName('INTEGER')).toBe('Integer');
+				expect(normalizeTypeName('Integer')).toBe('Integer');
+				expect(normalizeTypeName('iNtEgEr')).toBe('Integer');
+				expect(normalizeTypeName('ID')).toBe('ID');
+				expect(normalizeTypeName('Id')).toBe('ID');
+				expect(normalizeTypeName('id')).toBe('ID');
+			},
+		);
+
 		it.concurrent(
 			'should normalize standard objects and then suffixes',
 			() => {
@@ -61,6 +102,7 @@ describe('casing', () => {
 				expect(normalizeTypeName('MyCustomClass')).toBe(
 					'MyCustomClass',
 				);
+				// String is already in correct case, so it returns unchanged
 				expect(normalizeTypeName('String')).toBe('String');
 			},
 		);

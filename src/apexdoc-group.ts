@@ -60,4 +60,4 @@ const normalizeGroupContent = (content: string): string => {
 	return normalizedGroupName;
 };
 
-export { normalizeGroupName, normalizeGroupContent };
+export { normalizeGroupContent };

@@ -7,6 +7,7 @@ import type { AstPath, Doc } from 'prettier';
 import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { SORTED_SUFFIXES } from './refs/object-suffixes.js';
+import { PRIMITIVE_AND_COLLECTION_TYPES } from './refs/primitive-types.js';
 import { getNodeClassOptional, isObject } from './utils.js';
 
 /**
@@ -31,12 +32,14 @@ const normalizeStandardObjectType = (typeName: string): string => {
 };
 
 /**
- * Normalizes a type name by first checking if it's a standard object, then normalizing any object suffix.
+ * Normalizes a type name by first checking if it's a primitive/collection type, then checking if it's a standard object, then normalizing any object suffix.
  * If the type has a suffix, the prefix is normalized as a standard object (if applicable), then the suffix is normalized.
  * @param typeName - The type name to normalize.
  * @returns The normalized type name.
  * @example
  * ```typescript
+ * normalizeTypeName('string'); // Returns 'String'
+ * normalizeTypeName('list'); // Returns 'List'
  * normalizeTypeName('account'); // Returns 'Account'
  * normalizeTypeName('MyCustomObject__C'); // Returns 'MyCustomObject__c'
  * normalizeTypeName('account__c'); // Returns 'Account__c'
@@ -45,10 +48,19 @@ const normalizeStandardObjectType = (typeName: string): string => {
 
 const normalizeTypeName = (typeName: string): string => {
 	if (!typeName) return typeName;
+	
+	// First, check if it's a primitive or collection type (must be normalized to PascalCase)
+	const lowerTypeName = typeName.toLowerCase();
+	const primitiveType = PRIMITIVE_AND_COLLECTION_TYPES[lowerTypeName];
+	if (primitiveType !== undefined) {
+		return primitiveType;
+	}
+	
+	// Then check if it's a standard object
 	const standardNormalized = normalizeStandardObjectType(typeName);
 	if (standardNormalized !== typeName) return standardNormalized;
 
-	const lowerTypeName = typeName.toLowerCase();
+	// Finally, check for object suffixes
 	for (const [, normalizedSuffix] of SORTED_SUFFIXES) {
 		const lowerSuffix = normalizedSuffix.toLowerCase();
 		if (lowerTypeName.endsWith(lowerSuffix)) {

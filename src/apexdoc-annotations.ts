@@ -526,7 +526,4 @@ export {
 	normalizeAnnotations,
 	wrapAnnotations,
 	renderAnnotation,
-	extractBeforeText,
-	collectContinuationFromComment,
-	collectContinuationFromDocLines,
 };
