@@ -6,7 +6,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { doc, type AstPath, type Doc } from 'prettier';
 import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
-import { getNodeClass, isEmpty, isObject } from './utils.js';
+import {
+	getNodeClass,
+	getNodeClassOptional,
+	isEmpty,
+	isObject,
+	isApexNodeLike,
+} from './utils.js';
 import { createTypeNormalizingPrint } from './casing.js';
 
 const MIN_ENTRIES_FOR_MULTILINE = 2;
@@ -223,12 +229,34 @@ const printCollection = (
 	});
 };
 
+/**
+ * Checks if an assignment expression is a collection literal (List, Set, or Map).
+ * @param assignment - The assignment node to check.
+ * @returns True if the assignment is a collection literal.
+ */
+const isCollectionAssignment = (assignment: unknown): boolean => {
+	if (!isObject(assignment) || !('value' in assignment)) return false;
+	const value = (assignment as { value?: unknown }).value;
+	if (!isApexNodeLike(value)) return false;
+	const valueClass = getNodeClassOptional(value as ApexNode);
+	if (valueClass !== 'apex.jorje.data.ast.Expr$NewExpr') return false;
+	const creator = (value as { creator?: unknown }).creator;
+	if (!isApexNodeLike(creator)) return false;
+	const creatorClass = getNodeClassOptional(creator as ApexNode);
+	return (
+		creatorClass === LIST_LITERAL_CLASS ||
+		creatorClass === SET_LITERAL_CLASS ||
+		creatorClass === MAP_LITERAL_CLASS
+	);
+};
+
 export {
 	isListInit,
 	isMapInit,
 	hasMultipleListEntries,
 	hasMultipleMapEntries,
 	printCollection,
+	isCollectionAssignment,
 	LIST_LITERAL_CLASS,
 	SET_LITERAL_CLASS,
 	MAP_LITERAL_CLASS,

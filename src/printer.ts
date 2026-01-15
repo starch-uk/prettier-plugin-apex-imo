@@ -27,9 +27,7 @@ import {
 	isListInit,
 	isMapInit,
 	printCollection,
-	LIST_LITERAL_CLASS,
-	SET_LITERAL_CLASS,
-	MAP_LITERAL_CLASS,
+	isCollectionAssignment,
 } from './collections.js';
 import {
 	calculateEffectiveWidth,
@@ -487,22 +485,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		}
 
 		// Handle case with assignments
-
-		const isCollectionAssignment = (assignment: unknown): boolean => {
-			if (!isObject(assignment) || !('value' in assignment)) return false;
-			const value = (assignment as { value?: unknown }).value;
-			if (!isApexNodeLike(value)) return false;
-			const valueClass = getNodeClassOptional(value as ApexNode);
-			if (valueClass !== 'apex.jorje.data.ast.Expr$NewExpr') return false;
-			const creator = (value as { creator?: unknown }).creator;
-			if (!isApexNodeLike(creator)) return false;
-			const creatorClass = getNodeClassOptional(creator as ApexNode);
-			return (
-				creatorClass === LIST_LITERAL_CLASS ||
-				creatorClass === SET_LITERAL_CLASS ||
-				creatorClass === MAP_LITERAL_CLASS
-			);
-		};
 
 		const { join: joinDocs } = doc.builders;
 		const declDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
