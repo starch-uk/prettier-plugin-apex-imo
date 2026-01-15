@@ -18,7 +18,6 @@ import {
 	wrapTextToWidth,
 	CommentPrefix,
 	isContentToken,
-	INDEX_TWO,
 	NOT_FOUND_INDEX,
 } from './comments.js';
 import {
@@ -26,7 +25,6 @@ import {
 	calculateEffectiveWidth,
 	EMPTY,
 	INDEX_ONE,
-	STRING_OFFSET,
 	isEmpty,
 	isNotEmpty,
 } from './utils.js';
@@ -49,12 +47,8 @@ import {
 import { preserveBlankLineAfterClosingBrace } from './utils.js';
 import { removeCommentPrefix } from './comments.js';
 
-const COMMENT_START_MARKER = '/**';
-const COMMENT_END_MARKER = '*/';
-const COMMENT_START_LENGTH = COMMENT_START_MARKER.length;
 const ZERO_INDENT = 0;
 const BODY_INDENT_WHEN_ZERO = 2;
-const COMMENT_END_LENGTH = COMMENT_END_MARKER.length;
 
 /**
  * Calculates comment prefix and effective width for ApexDoc formatting.
@@ -93,31 +87,7 @@ const calculatePrefixAndWidth = (
 	};
 };
 
-const isCommentStart = (text: string, pos: number): boolean =>
-	text.substring(pos, pos + COMMENT_START_LENGTH) === COMMENT_START_MARKER;
-
-const getCommentEndLength = (text: string, pos: number): number => {
-	// Check for standard */ first
-	if (text.substring(pos, pos + COMMENT_END_LENGTH) === COMMENT_END_MARKER) {
-		return COMMENT_END_LENGTH;
-	}
-	// Check for **/, ***/, etc.
-	let asteriskCount = 0;
-	let checkPos = pos;
-	while (checkPos < text.length && text[checkPos] === '*') {
-		asteriskCount++;
-		checkPos++;
-	}
-	// Must have at least 2 asterisks and then a /
-	if (
-		asteriskCount >= INDEX_TWO &&
-		checkPos < text.length &&
-		text[checkPos] === '/'
-	) {
-		return asteriskCount + STRING_OFFSET; // asterisks + /
-	}
-	return ARRAY_START_INDEX; // Not a valid comment end
-};
+// Removed unused functions: isCommentStart and getCommentEndLength
 
 interface CodeBlock {
 	startPos: number;
@@ -157,7 +127,6 @@ const normalizeSingleApexDocComment = (
 	});
 
 	// Parse to tokens
-	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	const { tokens: initialTokens } = parseApexDocTokens(
 		normalizedComment,
 		commentIndent,
@@ -169,11 +138,9 @@ const normalizeSingleApexDocComment = (
 	);
 
 	// Merge paragraph tokens that contain split {@code} blocks
-	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	let tokens = mergeCodeBlockTokens(initialTokens);
 
 	// Apply common token processing pipeline
-	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	tokens = applyTokenProcessingPipeline(tokens, normalizedComment);
 
 	// Cache prefix and width calculations (used in both wrapAnnotationTokens and tokensToApexDocString)
@@ -187,7 +154,6 @@ const normalizeSingleApexDocComment = (
 	// Wrap annotations if printWidth is available
 	if (prefixAndWidth) {
 		// Pass the actual prefix length to wrapAnnotationTokens so it can calculate first line width correctly
-		// eslint-disable-next-line @typescript-eslint/no-use-before-define
 		tokens = wrapAnnotationTokens(
 			tokens,
 			prefixAndWidth.effectiveWidth,
@@ -201,11 +167,8 @@ const normalizeSingleApexDocComment = (
 	}
 
 	// Convert tokens back to string
-	const finalTokens = tokens;
-
-	// eslint-disable-next-line @typescript-eslint/no-use-before-define
 	const commentString = tokensToApexDocString(
-		finalTokens,
+		tokens,
 		commentIndent,
 		{
 			printWidth: printWidth,
@@ -223,24 +186,18 @@ const normalizeSingleApexDocComment = (
 
 
 /**
- * Renders a code block token to text token with formatted lines.
+ * Processes code lines with blank line preservation.
+ * @param codeToUse - The code string to process.
+ * @returns Processed code with blank lines preserved.
  */
-const renderCodeBlockToken = (
-	token: CodeBlockToken,
-	commentPrefix: string,
-	options: Readonly<{
-		readonly printWidth?: number;
-	}>,
-): ContentToken | null => {
-	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
-	let codeToUse = token.formattedCode !== undefined ? token.formattedCode : token.rawCode;
-
-	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
+const processCodeLinesWithBlankLinePreservation = (
+	codeToUse: string,
+): string => {
 	const codeLines = codeToUse.trim().split('\n');
 	const resultLines: string[] = [];
 
-	for (let i = 0; i < codeLines.length; i++) {
-		if (i < 0 || i >= codeLines.length) {
+	for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
+		if (i < ARRAY_START_INDEX || i >= codeLines.length) {
 			continue;
 		}
 		const codeLine = codeLines[i];
@@ -252,55 +209,132 @@ const renderCodeBlockToken = (
 		}
 	}
 
-	codeToUse = resultLines.join('\n');
-	const trimmedCodeToUse = codeToUse.trim();
-	const isEmptyBlock = isEmpty(trimmedCodeToUse);
-	const lines: string[] = [];
+	return resultLines.join('\n');
+};
 
-	if (isEmptyBlock) {
-		lines.push(`${commentPrefix}{@code}`);
-	} else if (codeToUse.length > EMPTY) {
-		const codeLinesForProcessing = codeToUse.split('\n');
-		const alreadyWrapped = trimmedCodeToUse.startsWith('{@code');
-		let finalCodeLines: string[] = [];
-
-		if (alreadyWrapped) {
-			finalCodeLines = codeLinesForProcessing;
-			if (finalCodeLines.length === 1) {
-				const [line] = finalCodeLines;
-				if (line && line.includes(';') && line.endsWith('}')) {
-					finalCodeLines[0] = line.slice(0, -1) + ' }';
-				}
-			}
-		} else {
-			const isSingleLine = codeLinesForProcessing.length === 1;
-			const singleLineContent = codeLinesForProcessing.length > 0 && codeLinesForProcessing[0] !== undefined ? codeLinesForProcessing[0].trim() : '';
-			const singleLineWithBraces = `{@code ${singleLineContent} }`;
-			if (options.printWidth === undefined) {
-				throw new Error(
-					'prettier-plugin-apex-imo: options.printWidth is required for renderCodeBlockToken',
-				);
-			}
-			const printWidth = options.printWidth;
-			const commentPrefixLength = commentPrefix.length;
-			const fitsOnOneLine =
-				singleLineWithBraces.length <= printWidth - commentPrefixLength;
-
-			finalCodeLines =
-				isSingleLine && fitsOnOneLine
-					? [singleLineWithBraces]
-					: [`{@code`, ...codeLinesForProcessing, `}`];
-		}
-
-		const trimmedCommentPrefix = commentPrefix.trimEnd();
-		for (const codeLine of finalCodeLines) {
-			lines.push(
-				isEmpty(codeLine.trim())
-					? trimmedCommentPrefix
-					: `${commentPrefix}${codeLine}`,
-			);
+/**
+ * Handles already wrapped code blocks.
+ * @param codeLinesForProcessing - Array of code lines to process.
+ * @returns Processed code lines.
+ */
+const handleAlreadyWrappedCode = (
+	codeLinesForProcessing: string[],
+): string[] => {
+	const finalCodeLines = codeLinesForProcessing;
+	if (finalCodeLines.length === INDEX_ONE) {
+		const [line] = finalCodeLines;
+		if (line !== undefined && line.includes(';') && line.endsWith('}')) {
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- string slice position
+			finalCodeLines[ARRAY_START_INDEX] = line.slice(0, -1) + ' }';
 		}
 	}
+	return finalCodeLines;
+};
+
+/**
+ * Handles unwrapped code blocks.
+ * @param codeLinesForProcessing - Array of code lines to process.
+ * @param commentPrefix - The comment prefix string.
+ * @param printWidth - The print width option.
+ * @returns Processed code lines with wrapping applied.
+ */
+const handleUnwrappedCode = (
+	codeLinesForProcessing: string[],
+	commentPrefix: string,
+	printWidth: number,
+): string[] => {
+	const isSingleLine = codeLinesForProcessing.length === INDEX_ONE;
+	const singleLineContent =
+		codeLinesForProcessing.length > EMPTY &&
+		codeLinesForProcessing[ARRAY_START_INDEX] !== undefined
+			? codeLinesForProcessing[ARRAY_START_INDEX]?.trim() ?? ''
+			: '';
+	const singleLineWithBraces = `{@code ${singleLineContent} }`;
+	const commentPrefixLength = commentPrefix.length;
+	const fitsOnOneLine =
+		singleLineWithBraces.length <= printWidth - commentPrefixLength;
+
+	return isSingleLine && fitsOnOneLine
+		? [singleLineWithBraces]
+		: [`{@code`, ...codeLinesForProcessing, `}`];
+};
+
+/**
+ * Builds final lines with comment prefixes.
+ * @param finalCodeLines - Array of final code lines.
+ * @param commentPrefix - The comment prefix string.
+ * @returns Array of lines with prefixes applied.
+ */
+const buildLinesWithPrefixes = (
+	finalCodeLines: string[],
+	commentPrefix: string,
+): string[] => {
+	const trimmedCommentPrefix = commentPrefix.trimEnd();
+	const lines: string[] = [];
+	for (const codeLine of finalCodeLines) {
+		lines.push(
+			isEmpty(codeLine.trim())
+				? trimmedCommentPrefix
+				: `${commentPrefix}${codeLine}`,
+		);
+	}
+	return lines;
+};
+
+/**
+ * Renders a code block token to text token with formatted lines.
+ * @param token - The code block token to render.
+ * @param commentPrefix - The comment prefix string.
+ * @param options - Options including printWidth.
+ * @returns The rendered content token or null if empty.
+ */
+const renderCodeBlockToken = (
+	token: CodeBlockToken,
+	commentPrefix: string,
+	options: Readonly<{
+		readonly printWidth?: number;
+	}>,
+): ContentToken | null => {
+	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
+	const codeToUse =
+		token.formattedCode ?? token.rawCode;
+
+	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
+	const processedCode = processCodeLinesWithBlankLinePreservation(codeToUse);
+	const trimmedCodeToUse = processedCode.trim();
+	const isEmptyBlock = isEmpty(trimmedCodeToUse);
+
+	if (isEmptyBlock) {
+		const lines = [`${commentPrefix}{@code}`];
+		return {
+			content: lines.join('\n'),
+			lines,
+			type: 'text',
+		};
+	}
+
+	if (processedCode.length <= EMPTY) {
+		return null;
+	}
+
+	const codeLinesForProcessing = processedCode.split('\n');
+	const alreadyWrapped = trimmedCodeToUse.startsWith('{@code');
+	const finalCodeLines = alreadyWrapped
+		? handleAlreadyWrappedCode(codeLinesForProcessing)
+		: (() => {
+				if (options.printWidth === undefined) {
+					throw new Error(
+						'prettier-plugin-apex-imo: options.printWidth is required for renderCodeBlockToken',
+					);
+				}
+				return handleUnwrappedCode(
+					codeLinesForProcessing,
+					commentPrefix,
+					options.printWidth,
+				);
+			})();
+
+	const lines = buildLinesWithPrefixes(finalCodeLines, commentPrefix);
 
 	return isNotEmpty(lines)
 		? {
@@ -313,6 +347,11 @@ const renderCodeBlockToken = (
 
 /**
  * Renders a text or paragraph token with wrapping applied.
+ * @param token - The content token to render.
+ * @param commentPrefix - The comment prefix string.
+ * @param effectiveWidth - The effective width for wrapping.
+ * @param options - Options including tabWidth and useTabs.
+ * @returns The rendered content token.
  */
 const renderTextOrParagraphToken = (
 	token: ContentToken,
@@ -355,6 +394,7 @@ const renderTextOrParagraphToken = (
  * @param tokens - Array of comment tokens (may include AnnotationTokens).
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
+ * @param cachedPrefixAndWidth - Optional cached prefix and width calculations.
  * @returns The formatted ApexDoc comment string.
  */
 const tokensToApexDocString = (
@@ -368,9 +408,7 @@ const tokensToApexDocString = (
 	cachedPrefixAndWidth?: ReturnType<typeof calculatePrefixAndWidth> | null,
 ): string => {
 	const prefixAndWidth =
-		cachedPrefixAndWidth !== undefined && cachedPrefixAndWidth !== null
-			? cachedPrefixAndWidth
-			: calculatePrefixAndWidth(commentIndent, options.printWidth, options);
+		cachedPrefixAndWidth ?? calculatePrefixAndWidth(commentIndent, options.printWidth, options);
 	const { commentPrefix, effectiveWidth } = prefixAndWidth;
 
 	const apexDocTokens: CommentToken[] = [];
@@ -454,7 +492,7 @@ const wrapTextContent = (
 		.filter((line) => isNotEmpty(line));
 
 	const joinedParts: string[] = [];
-	for (let i = 0; i < cleanedLines.length; i++) {
+	for (let i = ARRAY_START_INDEX; i < cleanedLines.length; i++) {
 		const currentLine = cleanedLines[i]?.trim();
 		if (currentLine === undefined) continue;
 		const nextLine =
@@ -465,13 +503,13 @@ const wrapTextContent = (
 		// Check if we should join with next line
 		const currentEndsWithPeriod = currentLine.endsWith('.');
 		const nextStartsWithCapital =
-			nextLine.length > 0 && /^[A-Z]/.test(nextLine);
+			nextLine.length > EMPTY && /^[A-Z]/.test(nextLine);
 		const shouldJoin =
 			!currentEndsWithPeriod &&
 			!nextStartsWithCapital &&
-			nextLine.length > 0;
+			nextLine.length > EMPTY;
 
-		if (shouldJoin && i < cleanedLines.length - 1) {
+		if (shouldJoin && i < cleanedLines.length - INDEX_ONE) {
 			// Join current and next line
 			joinedParts.push(`${currentLine} ${nextLine}`);
 			i++; // Skip next line since we joined it
@@ -546,6 +584,83 @@ const hasCompleteCodeBlock = (
 };
 
 /**
+ * Creates a merged token from paragraph tokens.
+ * @param token - The original content token.
+ * @param mergedContent - The merged content string.
+ * @param mergedLines - The merged lines array.
+ * @returns The merged content token.
+ */
+const createMergedToken = (
+	token: ContentToken,
+	mergedContent: string,
+	mergedLines: string[],
+): ContentToken => {
+	return {
+		content: mergedContent,
+		lines: mergedLines,
+		type: 'paragraph',
+		...(token.isContinuation !== undefined
+			? {
+					isContinuation: token.isContinuation,
+				}
+			: {}),
+	};
+};
+
+/**
+ * Attempts to merge tokens with incomplete code blocks.
+ * @param token - The content token to merge.
+ * @param codeTagIndex - The index where the code tag starts.
+ * @param tokens - Array of all comment tokens.
+ * @param startIndex - The starting index in the tokens array.
+ * @returns Object with merged token and next index.
+ */
+const mergeIncompleteCodeBlock = (
+	token: ContentToken,
+	codeTagIndex: number,
+	tokens: readonly CommentToken[],
+	startIndex: number,
+): { mergedToken: ContentToken | null; nextIndex: number } => {
+	let mergedContent = token.content;
+	let mergedLines = [...token.lines];
+	let hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- index increment
+	let j = startIndex + INDEX_ONE;
+
+	while (j < tokens.length && !hasCompleteBlock) {
+		const nextToken = tokens[j];
+		if (!nextToken) {
+			j++;
+			continue;
+		}
+		if (nextToken.type !== 'paragraph') {
+			// Non-paragraph token, stop merging
+			break;
+		}
+
+		const nextContent = nextToken.content;
+		mergedContent += nextContent;
+		mergedLines.push(...nextToken.lines);
+
+		// Check if the merged content now has a complete block
+		hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
+
+		if (hasCompleteBlock) {
+			// Found complete block, create merged token
+			const mergedToken = createMergedToken(
+				token,
+				mergedContent,
+				mergedLines,
+			);
+			return { mergedToken, nextIndex: j };
+		}
+		j++;
+	}
+
+	return { mergedToken: null, nextIndex: startIndex };
+};
+
+/**
  * Merges paragraph tokens that contain split {@code} blocks to ensure complete blocks are in single tokens.
  * @param tokens - Array of comment tokens.
  * @returns Array of tokens with merged {@code} blocks.
@@ -563,81 +678,43 @@ const mergeCodeBlockTokens = (
 			continue;
 		}
 
-		if (token.type === 'paragraph') {
-			const content = token.content;
-			const codeTagIndex = content.indexOf('{@code');
-
-			if (codeTagIndex !== -1) {
-				// Check if this token contains a complete {@code} block
-				let hasCompleteBlock = hasCompleteCodeBlock(
-					content,
-					codeTagIndex,
-				);
-
-				if (!hasCompleteBlock) {
-					// Need to merge with subsequent tokens
-					let mergedContent = content;
-					let mergedLines = [...token.lines];
-					let j = i + 1;
-
-					while (j < tokens.length && !hasCompleteBlock) {
-						const nextToken = tokens[j];
-						if (!nextToken) {
-							j++;
-							continue;
-						}
-						if (nextToken.type === 'paragraph') {
-							const nextContent = nextToken.content;
-							mergedContent += nextContent;
-							mergedLines.push(...nextToken.lines);
-
-							// Check if the merged content now has a complete block
-							hasCompleteBlock = hasCompleteCodeBlock(
-								mergedContent,
-								codeTagIndex,
-							);
-
-							if (hasCompleteBlock) {
-								// Found complete block, create merged token
-								const mergedToken: ContentToken = {
-									content: mergedContent,
-									lines: mergedLines,
-									type: 'paragraph',
-									...(token.isContinuation !== undefined
-										? {
-												isContinuation:
-													token.isContinuation,
-											}
-										: {}),
-								};
-								mergedTokens.push(mergedToken);
-								i = j; // Skip the merged tokens
-							}
-						} else {
-							// Non-paragraph token, stop merging
-							break;
-						}
-						j++;
-					}
-
-					if (!hasCompleteBlock) {
-						// Couldn't find complete block, add original token
-						mergedTokens.push(token);
-					}
-				} else {
-					// Complete block in single token
-					mergedTokens.push(token);
-				}
-			} else {
-				// No {@code} tag, add as-is
-				mergedTokens.push(token);
-			}
-		} else {
+		if (token.type !== 'paragraph') {
 			// Non-paragraph token, add as-is
 			mergedTokens.push(token);
+			i++;
+			continue;
 		}
 
-		i++;
+		const content = token.content;
+		const codeTagIndex = content.indexOf('{@code');
+
+		if (codeTagIndex === -1) {
+			// No {@code} tag, add as-is
+			mergedTokens.push(token);
+			i++;
+			continue;
+		}
+
+		// Check if this token contains a complete {@code} block
+		const hasCompleteBlock = hasCompleteCodeBlock(content, codeTagIndex);
+
+		if (hasCompleteBlock) {
+			// Complete block in single token
+			mergedTokens.push(token);
+			i++;
+			continue;
+		}
+
+		// Need to merge with subsequent tokens
+		const mergeResult = mergeIncompleteCodeBlock(token, codeTagIndex, tokens, i);
+		if (mergeResult.mergedToken) {
+			mergedTokens.push(mergeResult.mergedToken);
+			i = mergeResult.nextIndex + 1;
+		} else {
+			// Couldn't find complete block, add original token
+			mergedTokens.push(token);
+			i++;
+		}
 	}
 
 	return mergedTokens;
@@ -680,6 +757,194 @@ const applyTokenProcessingPipeline = (
 
 
 /**
+ * Extracts prefix from paragraph token lines.
+ * @param token - The content token to extract prefix from.
+ * @returns The extracted prefix string.
+ */
+const extractPrefixFromParagraphToken = (
+	token: ContentToken,
+): string => {
+	const firstLineWithPrefix = token.lines.find((line: string) => {
+		const trimmed = line.trimStart();
+		return trimmed.length > EMPTY && trimmed.startsWith('*');
+	});
+	if (!firstLineWithPrefix) {
+		return ' * '; // Default fallback
+	}
+	const prefixMatch = /^(\s*\*\s*)/.exec(firstLineWithPrefix);
+	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index for regex match
+	return prefixMatch?.[INDEX_ONE] ?? ' * ';
+};
+
+/**
+ * Creates a text token from cleaned text for paragraph tokens.
+ * @param cleanedText - The cleaned text content.
+ * @param token - The content token.
+ * @returns The created text token or null if empty.
+ */
+const createTextTokenFromParagraph = (
+	cleanedText: string,
+	token: ContentToken,
+): ContentToken | null => {
+	const prefix = extractPrefixFromParagraphToken(token);
+	const splitLines = cleanedText
+		.split('\n')
+		.filter((line: string) => line.trim().length > EMPTY);
+	if (splitLines.length === EMPTY) {
+		return null;
+	}
+	return {
+		content: cleanedText,
+		lines: splitLines.map((line: string) => `${prefix}${line.trim()}`),
+		type: 'text',
+	} satisfies ContentToken;
+};
+
+/**
+ * Creates a text token from cleaned text for text tokens.
+ * @param cleanedText - The cleaned text content.
+ * @returns The created text token or null if empty.
+ */
+const createTextTokenFromText = (
+	cleanedText: string,
+): ContentToken | null => {
+	const splitLines = cleanedText.split('\n');
+	const cleanedLines = removeTrailingEmptyLines(splitLines);
+	if (cleanedLines.length === EMPTY) {
+		return null;
+	}
+	return {
+		content: cleanedText,
+		lines: cleanedLines,
+		type: 'text',
+	} satisfies ContentToken;
+};
+
+/**
+ * Processes remaining text after last code tag.
+ * @param content - The content string.
+ * @param currentPos - The current position in content.
+ * @param token - The content token.
+ * @param newTokens - Array to add new tokens to.
+ */
+const processRemainingText = (
+	content: string,
+	currentPos: number,
+	token: ContentToken,
+	newTokens: CommentToken[],
+): void => {
+	if (currentPos >= content.length) {
+		return;
+	}
+	const remainingText = content.substring(currentPos);
+	if (remainingText.length <= EMPTY) {
+		return;
+	}
+	const cleanedText = remainingText.trimEnd();
+	if (cleanedText.length <= EMPTY) {
+		return;
+	}
+
+	const textToken =
+		token.type === 'paragraph'
+			? createTextTokenFromParagraph(cleanedText, token)
+			: createTextTokenFromText(cleanedText);
+	if (textToken) {
+		newTokens.push(textToken);
+	}
+};
+
+/**
+ * Processes text before code tag.
+ * @param content - The content string.
+ * @param lastMatchEnd - The end position of last match.
+ * @param codeTagStart - The start position of code tag.
+ * @param token - The content token.
+ * @param newTokens - Array to add new tokens to.
+ */
+const processTextBeforeCode = (
+	content: string,
+	lastMatchEnd: number,
+	codeTagStart: number,
+	token: ContentToken,
+	newTokens: CommentToken[],
+): void => {
+	if (codeTagStart <= lastMatchEnd) {
+		return;
+	}
+	const textBeforeCode = content.substring(lastMatchEnd, codeTagStart);
+	if (textBeforeCode.length <= EMPTY) {
+		return;
+	}
+	const cleanedText = textBeforeCode.trimEnd();
+	if (cleanedText.length <= EMPTY) {
+		return;
+	}
+
+	const textToken =
+		token.type === 'paragraph'
+			? createTextTokenFromParagraph(cleanedText, token)
+			: createTextTokenFromText(cleanedText);
+	if (textToken) {
+		newTokens.push(textToken);
+	}
+};
+
+/**
+ * Processes content token to detect code blocks.
+ * @param token - The content token to process.
+ * @param newTokens - Array to add new tokens to.
+ */
+const processContentTokenForCodeBlocks = (
+	token: ContentToken,
+	newTokens: CommentToken[],
+): void => {
+	// For content tokens, work with the lines array to preserve line breaks
+	// Off-by-one fix: only remove " *" or " * " (asterisk + optional single space), preserve extra indentation spaces
+	// Match /^\s*\*\s?/ to remove asterisk and at most one space, preserving code block indentation
+	const content =
+		token.type === 'paragraph'
+			? token.lines
+					.map((line: string) => line.replace(/^\s*\*\s?/, ''))
+					.join('\n')
+			: token.lines.join('\n');
+	let currentPos = ARRAY_START_INDEX;
+	let lastMatchEnd = ARRAY_START_INDEX;
+
+	while (currentPos < content.length) {
+		const codeTagStart = content.indexOf(CODE_TAG, currentPos);
+
+		if (codeTagStart === NOT_FOUND_INDEX) {
+			processRemainingText(content, currentPos, token, newTokens);
+			break;
+		}
+
+		processTextBeforeCode(
+			content,
+			lastMatchEnd,
+			codeTagStart,
+			token,
+			newTokens,
+		);
+
+		const codeBlockResult = extractCodeFromBlock(content, codeTagStart);
+		if (codeBlockResult) {
+			newTokens.push({
+				endPos: codeBlockResult.endPos,
+				rawCode: codeBlockResult.code,
+				startPos: codeTagStart,
+				type: 'code',
+			} satisfies CodeBlockToken);
+			currentPos = codeBlockResult.endPos;
+			lastMatchEnd = codeBlockResult.endPos;
+		} else {
+			currentPos = codeTagStart + CODE_TAG.length;
+			lastMatchEnd = currentPos;
+		}
+	}
+};
+
+/**
  * Detects code blocks in tokens by scanning for {@code} patterns.
  * Converts TextToken/ParagraphToken content containing {@code} to CodeBlockTokens.
  * @param tokens - Array of comment tokens.
@@ -694,175 +959,7 @@ const detectCodeBlockTokens = (
 
 	for (const token of tokens) {
 		if (isContentToken(token)) {
-			// For content tokens, work with the lines array to preserve line breaks
-			// Off-by-one fix: only remove " *" or " * " (asterisk + optional single space), preserve extra indentation spaces
-			// Match /^\s*\*\s?/ to remove asterisk and at most one space, preserving code block indentation
-			const content =
-				token.type === 'paragraph'
-					? token.lines
-							.map((line: string) =>
-								line.replace(/^\s*\*\s?/, ''),
-							)
-							.join('\n')
-					: token.lines.join('\n');
-			let currentPos = ARRAY_START_INDEX;
-			let lastMatchEnd = ARRAY_START_INDEX;
-
-			while (currentPos < content.length) {
-				const codeTagStart = content.indexOf(CODE_TAG, currentPos);
-
-				if (codeTagStart === NOT_FOUND_INDEX) {
-					if (currentPos < content.length) {
-						const remainingText = content.substring(currentPos);
-						if (remainingText.length > EMPTY) {
-							// Remove trailing newlines before splitting
-							const cleanedText = remainingText.trimEnd();
-							if (cleanedText.length > EMPTY) {
-								// For paragraph tokens, content has prefixes stripped, so extract prefix from original lines
-								// For text tokens, content now preserves prefixes from token.lines
-								if (token.type === 'paragraph') {
-									// Extract prefix from original lines
-									const firstLineWithPrefix =
-										token.lines.find((line: string) => {
-											const trimmed = line.trimStart();
-											return (
-												trimmed.length > 0 &&
-												trimmed.startsWith('*')
-											);
-										});
-									let prefix = ' * '; // Default fallback
-									if (firstLineWithPrefix) {
-										const prefixMatch =
-											firstLineWithPrefix.match(
-												/^(\s*\*\s*)/,
-											);
-										if (prefixMatch?.[1]) {
-											prefix = prefixMatch[1];
-										}
-									}
-									const splitLines = cleanedText
-										.split('\n')
-										.filter(
-											(line: string) =>
-												line.trim().length > 0,
-										);
-									if (splitLines.length > 0) {
-										newTokens.push({
-											type: 'text',
-											content: cleanedText,
-											lines: splitLines.map(
-												(line: string) =>
-													`${prefix}${line.trim()}`,
-											),
-										} satisfies ContentToken);
-									}
-								} else {
-									// For text tokens, content now preserves prefixes from token.lines
-									const splitLines = cleanedText.split('\n');
-									const cleanedLines =
-										removeTrailingEmptyLines(splitLines);
-									if (cleanedLines.length > 0) {
-										newTokens.push({
-											type: 'text',
-											content: cleanedText,
-											lines: cleanedLines,
-										} satisfies ContentToken);
-									}
-								}
-							}
-						}
-					}
-					break;
-				}
-
-				if (codeTagStart > lastMatchEnd) {
-					const textBeforeCode = content.substring(
-						lastMatchEnd,
-						codeTagStart,
-					);
-					if (textBeforeCode.length > EMPTY) {
-						// Remove trailing newlines from textBeforeCode before splitting to avoid empty trailing lines
-						const cleanedText = textBeforeCode.trimEnd();
-						if (cleanedText.length > EMPTY) {
-							// For paragraph tokens, content has prefixes stripped, so we need to extract prefix from original lines
-							// For text tokens, content now comes from token.lines which preserves prefixes
-							if (token.type === 'paragraph') {
-								// Extract prefix pattern from first non-empty line in token.lines that has a prefix
-								// The prefix should include base indent (spaces) + ' * '
-								const firstLineWithPrefix = token.lines.find(
-									(line: string) => {
-										const trimmed = line.trimStart();
-										return (
-											trimmed.length > 0 &&
-											trimmed.startsWith('*')
-										);
-									},
-								);
-								let prefix = ' * '; // Default fallback
-								if (firstLineWithPrefix) {
-									// Match from start: any whitespace + asterisk + optional space
-									const prefixMatch =
-										firstLineWithPrefix.match(
-											/^(\s*\*\s*)/,
-										);
-									if (prefixMatch?.[1]) {
-										prefix = prefixMatch[1];
-									}
-								}
-
-								const lines = cleanedText
-									.split('\n')
-									.filter(
-										(line: string) =>
-											line.trim().length > 0,
-									);
-								if (lines.length > 0) {
-									const linesWithPrefix = lines.map(
-										(line: string) =>
-											`${prefix}${line.trim()}`,
-									);
-									newTokens.push({
-										type: 'text',
-										content: cleanedText,
-										lines: linesWithPrefix,
-									} satisfies ContentToken);
-								}
-							} else {
-								// For text tokens, content now preserves prefixes from token.lines
-								// Split and filter out empty trailing lines while preserving prefixes
-								const splitLines = cleanedText.split('\n');
-								const cleanedLines =
-									removeTrailingEmptyLines(splitLines);
-								if (cleanedLines.length > 0) {
-									newTokens.push({
-										type: 'text',
-										content: cleanedText,
-										lines: cleanedLines,
-									} satisfies ContentToken);
-								}
-							}
-						}
-					}
-				}
-
-				const codeBlockResult = extractCodeFromBlock(
-					content,
-					codeTagStart,
-				);
-				if (codeBlockResult) {
-					newTokens.push({
-						type: 'code',
-						startPos: codeTagStart,
-						endPos: codeBlockResult.endPos,
-						rawCode: codeBlockResult.code,
-					} satisfies CodeBlockToken);
-					currentPos = codeBlockResult.endPos;
-					lastMatchEnd = codeBlockResult.endPos;
-				} else {
-					currentPos = codeTagStart + CODE_TAG.length;
-					lastMatchEnd = currentPos;
-				}
-			}
+			processContentTokenForCodeBlocks(token, newTokens);
 		} else {
 			newTokens.push(token);
 		}
