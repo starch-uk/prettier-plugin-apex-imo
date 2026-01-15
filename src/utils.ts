@@ -4,7 +4,6 @@
 
 import type { ApexNode } from './types.js';
 import type { ParserOptions } from 'prettier';
-import { APEX_ANNOTATION_OPTION_NAMES } from './refs/annotations.js';
 import * as prettier from 'prettier';
 import { DECLARATION_MODIFIERS_SET } from './refs/reserved-words.js';
 
@@ -131,46 +130,14 @@ const preserveBlankLineAfterClosingBrace = (
 };
 
 /**
- * Normalizes annotation option names in formatted code string.
- * Fallback when parsers don't parse annotation parameters into AST.
- * @param formattedCode - Formatted code that may contain annotations with option names.
- * @returns Code with normalized annotation option names.
- */
-const normalizeAnnotationOptionsInString = (
-	formattedCode: string,
-): string => {
-	// Match @AnnotationName(optionName=value) anywhere in the code
-	// This handles annotations at start of lines, after whitespace, or in comments
-	const result = formattedCode.replace(
-		/@(\w+)\s*\(([^)]+)\)/g,
-		(_match, annotationName, paramsString) => {
-			const annotationKey = annotationName.toLowerCase();
-			const optionMapping = APEX_ANNOTATION_OPTION_NAMES[annotationKey];
-			
-			if (!optionMapping) {
-				return _match; // Unknown annotation, return as-is
-			}
-			
-			// Normalize option names: optionName=value -> NormalizedOption=value
-			const normalizedParams = paramsString.replace(
-				/(\w+)(\s*=\s*)/g,
-				(_optionMatch, optionName, equalsAndSpaces) => {
-					const optionKey = optionName.toLowerCase();
-					const normalizedOption = optionMapping[optionKey] ?? optionName;
-					return `${normalizedOption}${equalsAndSpaces}`;
-				},
-			);
-			
-			return `@${annotationName}(${normalizedParams})`;
-		},
-	);
-	return result;
-};
-
-/**
  * Formats Apex code using prettier with parser fallback.
  * Tries 'apex-anonymous' parser first, then falls back to 'apex' parser.
  * If both fail, returns the original code.
+ * 
+ * Note: Annotations are normalized via AST during printing (see printAnnotation in annotations.ts).
+ * The wrapped printer intercepts annotation nodes and normalizes them, so no string-based
+ * normalization fallback is needed.
+ * 
  * @param code - The code to format.
  * @param options - Parser options including printWidth, tabWidth, useTabs, and plugins.
  * @returns Promise resolving to formatted code string.
@@ -184,16 +151,16 @@ const formatApexCodeWithFallback = async (
 			...options,
 			parser: 'apex-anonymous',
 		});
-		// Normalize annotation options as fallback (parser may not parse parameters into AST)
-		return normalizeAnnotationOptionsInString(result);
+		// Annotations are already normalized via AST during printing (see printAnnotation in annotations.ts)
+		return result;
 	} catch {
 		try {
 			const result = await prettier.format(code, {
 				...options,
 				parser: 'apex',
 			});
-			// Normalize annotation options as fallback (parser may not parse parameters into AST)
-			return normalizeAnnotationOptionsInString(result);
+			// Annotations are already normalized via AST during printing (see printAnnotation in annotations.ts)
+			return result;
 		} catch {
 			return code;
 		}
