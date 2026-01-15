@@ -178,7 +178,9 @@ const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
  * @param comment - The comment node to handle.
  * @returns True if the comment was handled, false otherwise.
  */
-const handleBinaryExpressionTrailingComment = (comment: unknown): boolean => {
+const handleBinaryishExpressionRightChildTrailingComment = (
+	comment: unknown,
+): boolean => {
 	if (!comment || typeof comment !== 'object') return false;
 
 	const commentWithContext = comment as {
@@ -990,7 +992,7 @@ const wrapTextToWidth = (
 };
 
 /**
- * Custom printComment function that preserves our wrapped lines.
+ * PrintComment function that preserves our wrapped lines.
  * The original printApexDocComment trims each line, which removes our carefully
  * calculated wrapping. This version preserves the line structure we created.
  * @param path - The AST path to the comment node.
@@ -1002,7 +1004,7 @@ const wrapTextToWidth = (
  * @param getFormattedCodeBlock - Function to get cached embed-formatted comments.
  * @returns The formatted comment as a Prettier Doc.
  */
-const customPrintComment = (
+const printComment = (
 	path: Readonly<AstPath<ApexNode>>,
 	_options: Readonly<ParserOptions>,
 	_print: (path: Readonly<AstPath<ApexNode>>) => Doc,
@@ -1162,7 +1164,7 @@ const handleEndOfLineComment = (
 ): boolean =>
 	tryHandlers(comment, [
 		handleDanglingComment,
-		handleBinaryExpressionTrailingComment,
+		handleBinaryishExpressionRightChildTrailingComment,
 		handleBlockStatementLeadingComment,
 	]);
 
@@ -1191,7 +1193,7 @@ export {
 	tokensToCommentString,
 	wrapTextToWidth,
 	CommentPrefix,
-	customPrintComment,
+	printComment,
 	removeCommentPrefix,
 	handleOwnLineComment,
 	handleEndOfLineComment,

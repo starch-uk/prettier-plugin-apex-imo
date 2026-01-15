@@ -196,7 +196,7 @@ const normalizeSingleApexDocComment = (
  * @param shouldTrim - Whether to trim the entire string before splitting (preserves indentation if false).
  * @returns Processed code with blank lines preserved.
  */
-const processCodeLinesWithBlankLinePreservation = (
+const processCodeLines = (
 	codeToUse: string,
 	shouldTrim: boolean = true,
 ): string => {
@@ -311,7 +311,7 @@ const renderCodeBlock = (
 
 	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
 	// Apply blank line preservation even for formattedCode to restore blank lines that Prettier removed
-	const processedCode = processCodeLinesWithBlankLinePreservation(codeToUse, true);
+	const processedCode = processCodeLines(codeToUse, true);
 	const trimmedCodeToUse = processedCode.trim();
 	const isEmptyBlock = isEmpty(trimmedCodeToUse);
 

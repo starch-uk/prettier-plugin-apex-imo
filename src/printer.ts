@@ -16,7 +16,6 @@ import type {
 
 const { group, indent, softline, ifBreak, line } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
-import type { ApexAnnotationNode, ApexAnnotationParameter } from './types.js';
 import {
 	createTypeNormalizingPrint,
 	isIdentifier,
@@ -678,7 +677,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		return group([leftPath, ' ', '=', wrappedAssignment, ';']);
 	};
 
-	const customPrint = (
+	const print = (
 		path: Readonly<AstPath<ApexNode>>,
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
@@ -738,7 +737,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		return fallback();
 	};
 
-	result.print = customPrint;
+	result.print = print;
 
 	return result;
 };

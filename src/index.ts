@@ -9,7 +9,7 @@ import * as apexPlugin from 'prettier-plugin-apex';
 import { createWrappedPrinter } from './printer.js';
 import type { ApexNode } from './types.js';
 import {
-	customPrintComment as customPrintCommentFn,
+	printComment as printCommentFn,
 	handleOwnLineComment,
 	handleEndOfLineComment,
 	handleRemainingComment,
@@ -45,7 +45,7 @@ const getApexPrinter = (): Parameters<typeof createWrappedPrinter>[0] => {
 const originalApexPrinter = getApexPrinter();
 
 /**
- * Custom printComment function that preserves our wrapped lines.
+ * PrintComment function that preserves our wrapped lines.
  * The original printApexDocComment trims each line, which removes our carefully
  * calculated wrapping. This version preserves the line structure we created.
  * @param path - The AST path to the comment node.
@@ -55,10 +55,10 @@ const originalApexPrinter = getApexPrinter();
  * @returns The formatted comment as a Prettier Doc.
  * @example
  * ```typescript
- * const doc = customPrintComment(path);
+ * const doc = printComment(path);
  * ```
  */
-const customPrintComment = (
+const printComment = (
 	path: Readonly<AstPath<ApexNode>>,
 	options: Readonly<ParserOptions>,
 	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
@@ -73,12 +73,12 @@ const customPrintComment = (
 	const storedOptions = getCurrentPrintOptions();
 	if (!storedOptions) {
 		throw new Error(
-			'prettier-plugin-apex-imo: storedOptions is required for customPrintComment',
+			'prettier-plugin-apex-imo: storedOptions is required for printComment',
 		);
 	}
 
 	// Use the centralized comment processing logic
-	return customPrintCommentFn(
+	return printCommentFn(
 		path,
 		options,
 		print,
@@ -99,7 +99,7 @@ const wrappedPrinter = {
 		remaining: handleRemainingComment,
 	},
 	isBlockComment,
-	printComment: customPrintComment,
+	printComment,
 };
 
 /**

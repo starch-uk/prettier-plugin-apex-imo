@@ -293,8 +293,8 @@ const createTypeNormalizingPrint =
 		});
 		if (!node) return originalPrint(subPath);
 		const isIdent = isIdentifier(node);
-		// Note: TypeRef nodes are handled in customPrint (printer.ts) using the interception pattern.
-		// When customPrint processes a TypeRef node, it creates namesNormalizingPrint and passes it
+		// Note: TypeRef nodes are handled in print (printer.ts) using the interception pattern.
+		// When print processes a TypeRef node, it creates namesNormalizingPrint and passes it
 		// to originalPrinter.print. The custom print function intercepts when subPath.key === 'names'
 		// and uses namesNormalizingPrint. When namesNormalizingPrint processes identifiers in the
 		// names array, it will normalize them here (in createTypeNormalizingPrint) because
