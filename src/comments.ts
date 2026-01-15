@@ -359,8 +359,16 @@ const normalizeCommentLine = (
 	while (afterAsterisk.startsWith('*')) {
 		afterAsterisk = afterAsterisk.substring(1);
 	}
-	const spaceMatch = afterAsterisk.match(/^\s*/);
-	const spaceAfterAsterisk = spaceMatch?.[0] ?? '';
+	// Count leading whitespace using character scanning (replaces regex /^\s*/)
+	let leadingWhitespaceCount = 0;
+	while (
+		leadingWhitespaceCount < afterAsterisk.length &&
+		(afterAsterisk[leadingWhitespaceCount] === ' ' ||
+			afterAsterisk[leadingWhitespaceCount] === '\t')
+	) {
+		leadingWhitespaceCount++;
+	}
+	const spaceAfterAsterisk = afterAsterisk.substring(0, leadingWhitespaceCount);
 	// Remove first space if present, preserve additional spaces (code indentation)
 	afterAsterisk =
 		spaceAfterAsterisk.length > EMPTY
@@ -472,15 +480,19 @@ const removeCommentPrefix = (
 			// Match: leading whitespace, then asterisks (possibly separated by spaces), then optional single space, then rest
 			const match = /^(\s*)(\*(\s*\*)*)\s?(.*)$/.exec(line);
 			if (match) {
-				const [, , , , rest] = match;
+				const rest = match[4];
+				if (rest === undefined) {
+					return line;
+				}
 				// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
 				// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
 				// But preserve any additional spaces (indentation) - they're part of the content
 				// Check if rest starts with a single space followed by non-space (normal case)
-				// or multiple spaces (indentation case)
-				const spaceMatch = /^(\s+)(.*)$/.exec(rest);
-				if (spaceMatch) {
-					const [, spaces, content] = spaceMatch;
+				// or multiple spaces (indentation case) - using character scanning instead of regex
+				const trimmed = rest.trimStart();
+				if (trimmed.length < rest.length) {
+					const spaces = rest.slice(0, rest.length - trimmed.length);
+					const content = trimmed;
 					// If exactly one space, remove it (it's the separator after asterisk)
 					// If multiple spaces, keep them (they're indentation)
 					if (spaces.length === 1) {

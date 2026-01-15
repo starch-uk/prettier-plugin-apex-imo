@@ -525,8 +525,12 @@ const wrapTextContent = (
 
 		// Check if we should join with next line
 		const currentEndsWithPeriod = currentLine.endsWith('.');
+		// Use character comparison instead of regex to check if line starts with capital letter
 		const nextStartsWithCapital =
-			nextLine.length > EMPTY && /^[A-Z]/.test(nextLine);
+			nextLine.length > EMPTY &&
+			nextLine[0] !== undefined &&
+			nextLine[0] >= 'A' &&
+			nextLine[0] <= 'Z';
 		const shouldJoin =
 			!currentEndsWithPeriod &&
 			!nextStartsWithCapital &&

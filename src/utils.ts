@@ -46,7 +46,15 @@ const createNodeClassGuard = <T extends ApexNode>(
 const startsWithAccessModifier = (line: string): boolean => {
 	const trimmed = line.trim();
 	if (trimmed.length === 0) return false;
-	const spaceIndex = trimmed.search(/\s/);
+	// Use character scanning instead of regex to find first whitespace
+	let spaceIndex = -1;
+	for (let i = 0; i < trimmed.length; i++) {
+		const char = trimmed[i];
+		if (char === ' ' || char === '\t') {
+			spaceIndex = i;
+			break;
+		}
+	}
 	const firstWord = (
 		spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex)
 	).toLowerCase();

@@ -37,7 +37,8 @@ import { normalizeGroupContent } from './apexdoc-group.js';
  */
 const extractBeforeText = (line: string, matchIndex: number): string => {
 	const beforeAnnotation = line.substring(ARRAY_START_INDEX, matchIndex);
-	let beforeText = beforeAnnotation.replace(/^\s*\*\s*/, '').trim();
+	// Use removeCommentPrefix instead of regex to remove comment prefix
+	let beforeText = removeCommentPrefix(beforeAnnotation).trim();
 	// Filter out annotation patterns from beforeText to prevent duplication
 	if (
 		beforeText.length > EMPTY &&
@@ -118,7 +119,8 @@ const collectContinuationFromDocLines = (
 	while (continuationIndex < docLines.length) {
 		const continuationLine = docLines[continuationIndex];
 		if (continuationLine === undefined) break;
-		const trimmedLine = continuationLine.replace(/^\s*\*\s*/, '').trim();
+		// Use removeCommentPrefix instead of regex to remove comment prefix
+		const trimmedLine = removeCommentPrefix(continuationLine).trim();
 		if (
 			trimmedLine.length === EMPTY ||
 			trimmedLine.startsWith('@') ||
@@ -250,8 +252,9 @@ const detectAnnotationsInDocs = (
 				}
 				newDocs.push(doc);
 			} else if (processedLines.length > EMPTY) {
+				// Use removeCommentPrefix instead of regex to remove comment prefix
 				const trimmedLines = processedLines
-					.map((l) => l.replace(/^\s*\*\s*/, '').trim())
+					.map((l) => removeCommentPrefix(l).trim())
 					.filter((l) => l.length > EMPTY && !consumedContent.has(l));
 				if (trimmedLines.length > EMPTY) {
 					const remainingContent = trimmedLines.join(' ');

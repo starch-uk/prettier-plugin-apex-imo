@@ -286,16 +286,12 @@ function processCodeBlock(
 	commentKey: string | null,
 	_embedOptions: ParserOptions,
 ): string[] {
-	const match = /^\{@code\s*([\s\S]*?)\s*\}$/.exec(codeBlock);
-	if (!match) return [codeBlock];
-
-	const CODE_CONTENT_GROUP = 1;
-	const codeContent = match[CODE_CONTENT_GROUP];
-	if (
-		codeContent === null ||
-		codeContent === undefined ||
-		codeContent.length === EMPTY
-	) {
+	// Use extractCodeFromBlock instead of regex to extract code content
+	if (!codeBlock.startsWith(CODE_TAG)) return [codeBlock];
+	const extractResult = extractCodeFromBlock(codeBlock, 0);
+	if (!extractResult) return [codeBlock];
+	const codeContent = extractResult.code;
+	if (codeContent.length === EMPTY) {
 		return [codeBlock];
 	}
 
