@@ -5,16 +5,16 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import * as prettier from 'prettier';
 import type {
-	DocCommentToken,
-	DocContentToken,
-	DocAnnotationToken,
+	ApexDocComment,
+	ApexDocContent,
+	ApexDocAnnotation,
 } from './comments.js';
 import {
 	removeCommentPrefix,
 	INDEX_TWO,
-	getContentTokenString,
-	getContentTokenLines,
-	createDocContentToken,
+	getContentString,
+	getContentLines,
+	createDocContent,
 	docToString,
 } from './comments.js';
 import { removeTrailingEmptyLines } from './apexdoc.js';
@@ -108,19 +108,19 @@ const collectContinuationFromComment = (
 /**
  * Collects continuation lines for an annotation from tokenLines.
  * @param content - The initial annotation content.
- * @param tokenLines - The token lines array.
+ * @param docLines - The doc lines array.
  * @param startIndex - The index to start looking from.
  * @returns Object with annotationContent and the next line index.
  */
-const collectContinuationFromTokenLines = (
+const collectContinuationFromDocLines = (
 	content: string,
-	tokenLines: readonly string[],
+	docLines: readonly string[],
 	startIndex: number,
 ): { annotationContent: string; nextIndex: number } => {
 	let annotationContent = content;
 	let continuationIndex = startIndex;
-	while (continuationIndex < tokenLines.length) {
-		const continuationLine = tokenLines[continuationIndex];
+	while (continuationIndex < docLines.length) {
+		const continuationLine = docLines[continuationIndex];
 		if (continuationLine === undefined) break;
 		const trimmedLine = continuationLine.replace(/^\s*\*\s*/, '').trim();
 		if (
@@ -137,41 +137,41 @@ const collectContinuationFromTokenLines = (
 };
 
 /**
- * Detects annotations in tokens and converts DocTextTokens/DocParagraphTokens to DocAnnotationTokens.
- * Scans tokens for @param, @return, etc. patterns.
- * @param tokens - Array of Doc-based comment tokens.
+ * Detects annotations in docs and converts ApexDocContents to ApexDocAnnotations.
+ * Scans docs for @param, @return, etc. patterns.
+ * @param docs - Array of Doc-based comment docs.
  * @param normalizedComment - The normalized comment text (optional, for continuation detection).
- * @returns Array of Doc tokens with annotations detected.
+ * @returns Array of Doc docs with annotations detected.
  */
-const detectAnnotationsInTokens = (
-	tokens: readonly DocCommentToken[],
+const detectAnnotationsInDocs = (
+	docs: readonly ApexDocComment[],
 	normalizedComment?: string,
-): readonly DocCommentToken[] => {
-	const newTokens: DocCommentToken[] = [];
-	// Track content that has been extracted as annotation continuation to avoid duplicating it as text tokens
+): readonly ApexDocComment[] => {
+	const newDocs: ApexDocComment[] = [];
+	// Track content that has been extracted as annotation continuation to avoid duplicating it as text docs
 	const consumedContent = new Set<string>();
 	// Detect annotations using regex (annotation parsing in comment text is inherently text-based)
 
-	for (const token of tokens) {
-		if (token.type === 'text' || token.type === 'paragraph') {
+	for (const doc of docs) {
+		if (doc.type === 'text' || doc.type === 'paragraph') {
 			// Extract string content from Doc for text operations
-			const contentString = getContentTokenString(token);
-			const linesString = getContentTokenLines(token);
-			// For paragraph tokens, use content (which has all lines joined) and split by original line structure
-			// For text tokens, use lines array directly
+			const contentString = getContentString(doc);
+			const linesString = getContentLines(doc);
+			// For paragraph docs, use content (which has all lines joined) and split by original line structure
+			// For text docs, use lines array directly
 			const isParagraphWithNewlines =
-				token.type === 'paragraph' && contentString.includes('\n');
-			const tokenLines = isParagraphWithNewlines
+				doc.type === 'paragraph' && contentString.includes('\n');
+			const docLines = isParagraphWithNewlines
 				? contentString.split('\n')
 				: linesString;
 			let processedLines: string[] = [];
 			let hasAnnotations = false;
 
-			for (let lineIndex = 0; lineIndex < tokenLines.length; lineIndex++) {
-				const line = tokenLines[lineIndex];
+			for (let lineIndex = 0; lineIndex < docLines.length; lineIndex++) {
+				const line = docLines[lineIndex];
 				if (line === undefined) continue;
 				// Annotation pattern: @ followed by identifier, possibly with content
-				// After detectCodeBlockTokens, lines have their " * " prefix stripped, so we need to match lines with or without prefix
+				// After detectCodeBlockDocs, lines have their " * " prefix stripped, so we need to match lines with or without prefix
 				// Pattern matches: (optional prefix) @ (name) (content)
 				const annotationPattern =
 					/(?:^\s*\*\s*|\s+(?!\{)|\s*\*\s*\.\s*\*\s*|^|\s+)@([a-zA-Z_][a-zA-Z0-9_]*)(\s*[^\n@]*?)(?=\s*@|\s*\*|\s*$)/g;
@@ -191,7 +191,7 @@ const detectAnnotationsInTokens = (
 
 						// Collect continuation lines for this annotation
 						let annotationContent = content;
-						if (tokenLines.length === 1 && normalizedComment) {
+						if (docLines.length === 1 && normalizedComment) {
 							annotationContent = collectContinuationFromComment(
 								annotationName,
 								content,
@@ -201,28 +201,28 @@ const detectAnnotationsInTokens = (
 							);
 						} else {
 							const continuation =
-								collectContinuationFromTokenLines(
+								collectContinuationFromDocLines(
 									content,
-									tokenLines,
+									docLines,
 									lineIndex + 1,
 								);
 							annotationContent = continuation.annotationContent;
 							lineIndex = continuation.nextIndex;
 						}
 
-						// Create DocAnnotationToken with Doc content
+						// Create ApexDocAnnotation with Doc content
 						const { join, hardline } = prettier.doc.builders;
 						const annotationContentDoc = annotationContent as Doc;
 						const followingTextDoc =
 							beforeText.length > EMPTY ? (beforeText as Doc) : undefined;
-						newTokens.push({
+						newDocs.push({
 							type: 'annotation',
 							name: lowerName,
 							content: annotationContentDoc,
 							...(followingTextDoc !== undefined
 								? { followingText: followingTextDoc }
 								: {}),
-						} satisfies DocAnnotationToken);
+						} satisfies ApexDocAnnotation);
 					}
 				} else {
 					processedLines.push(line);
@@ -230,10 +230,10 @@ const detectAnnotationsInTokens = (
 			}
 
 			if (!hasAnnotations) {
-				// Check if this token's content was consumed as annotation continuation
+				// Check if this doc's content was consumed as annotation continuation
 				// Check if all non-empty lines (that aren't annotations or code blocks) were consumed
-				const contentString = getContentTokenString(token);
-				const tokenLinesToCheck = contentString
+				const contentString = getContentString(doc);
+				const docLinesToCheck = contentString
 					.split('\n')
 					.map((line) => removeCommentPrefix(line))
 					.filter(
@@ -243,9 +243,9 @@ const detectAnnotationsInTokens = (
 							!l.startsWith('{@code'),
 					);
 				// Skip if all lines were consumed - use simple loop instead of .every()
-				if (tokenLinesToCheck.length > 0) {
+				if (docLinesToCheck.length > 0) {
 					let allConsumed = true;
-					for (const line of tokenLinesToCheck) {
+					for (const line of docLinesToCheck) {
 						if (!consumedContent.has(line)) {
 							allConsumed = false;
 							break;
@@ -253,46 +253,46 @@ const detectAnnotationsInTokens = (
 					}
 					if (allConsumed) continue;
 				}
-				newTokens.push(token);
+				newDocs.push(doc);
 			} else if (processedLines.length > EMPTY) {
 				const remainingContent = processedLines
 					.map((l) => l.replace(/^\s*\*\s*/, '').trim())
 					.filter((l) => l.length > EMPTY && !consumedContent.has(l))
 					.join(' ');
 				if (remainingContent.length > EMPTY) {
-					// Create DocContentToken for remaining content
+					// Create ApexDocContent for remaining content
 					const trimmedLines = processedLines
 						.map((l) => l.replace(/^\s*\*\s*/, '').trim())
 						.filter((l) => l.length > EMPTY && !consumedContent.has(l));
-					newTokens.push(
-						createDocContentToken('text', remainingContent, trimmedLines),
+					newDocs.push(
+						createDocContent('text', remainingContent, trimmedLines),
 					);
 				}
 			}
 		} else {
-			newTokens.push(token);
+			newDocs.push(doc);
 		}
 	}
-	return newTokens;
+	return newDocs;
 };
 
 /**
- * Normalizes annotation names in tokens (e.g., @Param -> @param).
- * Processes DocAnnotationToken, DocTextToken, and DocParagraphToken types.
+ * Normalizes annotation names in docs (e.g., @Param -> @param).
+ * Processes ApexDocAnnotation, ApexDocContent types.
  * Skips normalization within {@code} blocks.
- * @param tokens - Array of Doc-based comment tokens.
- * @returns Array of Doc tokens with normalized annotation names.
+ * @param docs - Array of Doc-based comment docs.
+ * @returns Array of Doc docs with normalized annotation names.
  */
-const normalizeAnnotationTokens = (
-	tokens: readonly DocCommentToken[],
-): readonly DocCommentToken[] => {
-	return tokens.map((token) => {
-		if (token.type === 'annotation') {
-			const lowerName = token.name.toLowerCase();
+const normalizeAnnotations = (
+	docs: readonly ApexDocComment[],
+): readonly ApexDocComment[] => {
+	return docs.map((doc) => {
+		if (doc.type === 'annotation') {
+			const lowerName = doc.name.toLowerCase();
 			// Use Set lookup instead of array.includes() for better performance
 			if (APEXDOC_ANNOTATIONS_SET.has(lowerName)) {
 				// Extract string content from Doc for normalization
-				const contentString = docToString(token.content);
+				const contentString = docToString(doc.content);
 				let normalizedContentString = contentString;
 				// Special handling for @group annotations - normalize the group name
 				if (lowerName === 'group' && contentString) {
@@ -301,44 +301,44 @@ const normalizeAnnotationTokens = (
 				// Convert back to Doc
 				const normalizedContentDoc = normalizedContentString as Doc;
 				return {
-					...token,
+					...doc,
 					name: lowerName,
 					content: normalizedContentDoc,
-				} satisfies DocAnnotationToken;
+				} satisfies ApexDocAnnotation;
 			}
 		}
-		return token;
+		return doc;
 	});
 };
 
 /**
- * Renders a Doc annotation token to text token with formatted lines.
- * @param token - The Doc annotation token to render.
+ * Renders an ApexDoc annotation doc to text doc with formatted lines.
+ * @param doc - The ApexDoc annotation doc to render.
  * @param commentPrefix - The comment prefix string.
- * @returns The rendered content token, or null if empty.
+ * @returns The rendered content doc, or null if empty.
  */
-interface RenderedAnnotationToken {
+interface RenderedAnnotationDoc {
 	readonly type: 'text';
 	readonly content: string;
 	readonly lines: string[];
 }
 
-const renderAnnotationToken = (
-	token: DocAnnotationToken,
+const renderAnnotation = (
+	doc: ApexDocAnnotation,
 	commentPrefix: string,
-): RenderedAnnotationToken | null => {
+): RenderedAnnotationDoc | null => {
 	// Extract string content from Doc for rendering
-	const contentString = docToString(token.content);
+	const contentString = docToString(doc.content);
 	const contentLines = isNotEmpty(contentString)
 		? contentString.split('\n')
 		: [''];
 	const lines: string[] = [];
-	const annotationName = token.name;
+	const annotationName = doc.name;
 	const trimmedCommentPrefix = commentPrefix.trimEnd();
 
 	// Add followingText before annotation if it exists
-	const followingTextString = token.followingText
-		? docToString(token.followingText)
+	const followingTextString = doc.followingText
+		? docToString(doc.followingText)
 		: undefined;
 	const trimmedFollowingText = followingTextString?.trim();
 	if (trimmedFollowingText !== undefined && isNotEmpty(trimmedFollowingText)) {
@@ -384,16 +384,16 @@ const renderAnnotationToken = (
 };
 
 /**
- * Wraps Doc annotation tokens based on effective page width.
- * @param tokens - Array of Doc-based comment tokens.
+ * Wraps ApexDoc annotation docs based on effective page width.
+ * @param docs - Array of Doc-based comment docs.
  * @param effectiveWidth - The effective page width (printWidth - comment prefix length).
  * @param _commentIndent - The indentation level of the comment (unused but kept for API compatibility).
  * @param actualPrefixLength - The actual prefix length including base indent and comment prefix.
  * @param options - Options including tabWidth and useTabs.
- * @returns Array of Doc tokens with wrapped annotations.
+ * @returns Array of Doc docs with wrapped annotations.
  */
-const wrapAnnotationTokens = (
-	tokens: readonly DocCommentToken[],
+const wrapAnnotations = (
+	docs: readonly ApexDocComment[],
 	effectiveWidth: number,
 	_commentIndent: number,
 	actualPrefixLength: number,
@@ -401,15 +401,15 @@ const wrapAnnotationTokens = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
-): readonly DocCommentToken[] => {
-	const newTokens: DocCommentToken[] = [];
+): readonly ApexDocComment[] => {
+	const newDocs: ApexDocComment[] = [];
 	const printWidth = effectiveWidth + actualPrefixLength;
 
-	for (const token of tokens) {
-		if (token.type === 'annotation') {
+	for (const doc of docs) {
+		if (doc.type === 'annotation') {
 			// Extract string content from Doc for wrapping
-			const annotationContent = docToString(token.content);
-			const annotationPrefixLength = `@${token.name} `.length;
+			const annotationContent = docToString(doc.content);
+			const annotationPrefixLength = `@${doc.name} `.length;
 			// First line includes @annotation name after comment prefix
 			// First line prefix = actualPrefixLength + annotationPrefixLength
 			// First line available = printWidth - firstLinePrefix
@@ -419,7 +419,7 @@ const wrapAnnotationTokens = (
 			const continuationLineAvailableWidth = effectiveWidth;
 
 			if (firstLineAvailableWidth <= EMPTY) {
-				newTokens.push(token);
+				newDocs.push(doc);
 				continue;
 			}
 
@@ -432,7 +432,7 @@ const wrapAnnotationTokens = (
 				.filter((word) => word.length > 0);
 
 			if (words.length === 0) {
-				newTokens.push(token);
+				newDocs.push(doc);
 				continue;
 			}
 
@@ -512,24 +512,24 @@ const wrapAnnotationTokens = (
 			).formatted;
 			// Convert back to Doc
 			const newContentDoc = newContentString as Doc;
-			newTokens.push({
-				...token,
+			newDocs.push({
+				...doc,
 				content: newContentDoc,
-			} satisfies DocAnnotationToken);
+			} satisfies ApexDocAnnotation);
 		} else {
-			newTokens.push(token);
+			newDocs.push(doc);
 		}
 	}
 
-	return newTokens;
+	return newDocs;
 };
 
 export {
-	detectAnnotationsInTokens,
-	normalizeAnnotationTokens,
-	wrapAnnotationTokens,
-	renderAnnotationToken,
+	detectAnnotationsInDocs,
+	normalizeAnnotations,
+	wrapAnnotations,
+	renderAnnotation,
 	extractBeforeText,
 	collectContinuationFromComment,
-	collectContinuationFromTokenLines,
+	collectContinuationFromDocLines,
 };

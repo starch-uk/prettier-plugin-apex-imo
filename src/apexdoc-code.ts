@@ -191,20 +191,12 @@ const formatCodeBlockToken = async ({
 		printWidth: effectiveWidth,
 	};
 
-	// #region agent log
-	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apexdoc-code.ts:192',message:'formatCodeBlockToken: plugin setup',data:{hasPlugin:!!pluginDefault,hasPrinters:!!(pluginDefault as {printers?:unknown})?.printers,codePreview:token.rawCode.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D'})}).catch(()=>{});
-	// #endregion
-
 	// Format with prettier, trying apex-anonymous first, then apex
 	// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
 	const formatted = await formatApexCodeWithFallback(
 		code,
 		optionsWithPlugin,
 	);
-
-	// #region agent log
-	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apexdoc-code.ts:205',message:'formatCodeBlockToken: formatted result',data:{formattedPreview:formatted.substring(0,150),hasAnnotation:formatted.includes('@'),normalized:formatted.includes('Label')||formatted.includes('label')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,E'})}).catch(()=>{});
-	// #endregion
 
 	// Preserve blank lines after closing braces when followed by annotations or access modifiers
 	const formattedLines = formatted.trim().split('\n');

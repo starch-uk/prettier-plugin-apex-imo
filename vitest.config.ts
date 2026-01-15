@@ -18,6 +18,11 @@ export default defineConfig({
 				statements: 100,
 			},
 		},
+		env: {
+			// Suppress deprecation warning from prettier-plugin-apex dependency
+			// DEP0190: prettier-plugin-apex uses child_process.spawn with shell:true
+			NODE_OPTIONS: '--no-deprecation',
+		},
 		globals: true,
 	},
 });

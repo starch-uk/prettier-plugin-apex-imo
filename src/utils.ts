@@ -4,6 +4,7 @@
 
 import type { ApexNode } from './types.js';
 import type { ParserOptions } from 'prettier';
+import { APEX_ANNOTATION_OPTION_NAMES } from './refs/annotations.js';
 import * as prettier from 'prettier';
 import { DECLARATION_MODIFIERS_SET } from './refs/reserved-words.js';
 
@@ -116,6 +117,43 @@ const preserveBlankLineAfterClosingBrace = (
 };
 
 /**
+ * Normalizes annotation option names in formatted code string.
+ * Fallback when parsers don't parse annotation parameters into AST.
+ * @param formattedCode - Formatted code that may contain annotations with option names.
+ * @returns Code with normalized annotation option names.
+ */
+const normalizeAnnotationOptionsInString = (
+	formattedCode: string,
+): string => {
+	// Match @AnnotationName(optionName=value) anywhere in the code
+	// This handles annotations at start of lines, after whitespace, or in comments
+	const result = formattedCode.replace(
+		/@(\w+)\s*\(([^)]+)\)/g,
+		(_match, annotationName, paramsString) => {
+			const annotationKey = annotationName.toLowerCase();
+			const optionMapping = APEX_ANNOTATION_OPTION_NAMES[annotationKey];
+			
+			if (!optionMapping) {
+				return _match; // Unknown annotation, return as-is
+			}
+			
+			// Normalize option names: optionName=value -> NormalizedOption=value
+			const normalizedParams = paramsString.replace(
+				/(\w+)(\s*=\s*)/g,
+				(_optionMatch, optionName, equalsAndSpaces) => {
+					const optionKey = optionName.toLowerCase();
+					const normalizedOption = optionMapping[optionKey] ?? optionName;
+					return `${normalizedOption}${equalsAndSpaces}`;
+				},
+			);
+			
+			return `@${annotationName}(${normalizedParams})`;
+		},
+	);
+	return result;
+};
+
+/**
  * Formats Apex code using prettier with parser fallback.
  * Tries 'apex-anonymous' parser first, then falls back to 'apex' parser.
  * If both fail, returns the original code.
@@ -127,28 +165,21 @@ const formatApexCodeWithFallback = async (
 	code: string,
 	options: Readonly<ParserOptions & { plugins?: unknown[] }>,
 ): Promise<string> => {
-	// #region agent log
-	fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'utils.ts:129',message:'formatApexCodeWithFallback: entry',data:{hasPlugins:!!options.plugins,pluginsLength:options.plugins?.length||0,codePreview:code.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-	// #endregion
 	try {
 		const result = await prettier.format(code, {
 			...options,
 			parser: 'apex-anonymous',
 		});
-		// #region agent log
-		fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'utils.ts:133',message:'formatApexCodeWithFallback: success apex-anonymous',data:{resultPreview:result.substring(0,150),hasAnnotation:result.includes('@')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
-		// #endregion
-		return result;
+		// Normalize annotation options as fallback (parser may not parse parameters into AST)
+		return normalizeAnnotationOptionsInString(result);
 	} catch {
 		try {
 			const result = await prettier.format(code, {
 				...options,
 				parser: 'apex',
 			});
-			// #region agent log
-			fetch('http://127.0.0.1:7243/ingest/5117e7fc-4948-4144-ad32-789429ba513d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'utils.ts:139',message:'formatApexCodeWithFallback: success apex',data:{resultPreview:result.substring(0,150),hasAnnotation:result.includes('@')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
-			// #endregion
-			return result;
+			// Normalize annotation options as fallback (parser may not parse parameters into AST)
+			return normalizeAnnotationOptionsInString(result);
 		} catch {
 			return code;
 		}

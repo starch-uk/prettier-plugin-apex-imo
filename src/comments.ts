@@ -20,19 +20,19 @@ import {
 	normalizeSingleApexDocComment,
 	removeTrailingEmptyLines,
 } from './apexdoc.js';
-import { normalizeAnnotationTokens } from './apexdoc-annotations.js';
+import { normalizeAnnotations } from './apexdoc-annotations.js';
 
-// Doc-based token types for future token-to-Doc conversion
-interface DocContentToken {
+// Doc-based types for ApexDoc processing
+interface ApexDocContent {
 	readonly type: 'text' | 'paragraph';
 	/**
-	 * Doc representation of the token content.
+	 * Doc representation of the content.
 	 * This should NOT include any leading comment prefix (`*`, whitespace).
 	 * For paragraphs, this is typically `join(hardline, lines)`.
 	 */
 	readonly content: Doc;
 	/**
-	 * Per-line Docs for this token, without comment prefix.
+	 * Per-line Docs for this content, without comment prefix.
 	 * Consumers that need to reason about individual lines (e.g. wrapping)
 	 * should use this instead of re-splitting strings.
 	 */
@@ -40,7 +40,7 @@ interface DocContentToken {
 	readonly isContinuation: boolean | undefined;
 }
 
-interface DocCodeBlockToken {
+interface ApexDocCodeBlock {
 	readonly type: 'code';
 	readonly startPos: number;
 	readonly endPos: number;
@@ -61,7 +61,7 @@ interface DocCodeBlockToken {
 	readonly content: Doc;
 }
 
-interface DocAnnotationToken {
+interface ApexDocAnnotation {
 	readonly type: 'annotation';
 	readonly name: string;
 	/**
@@ -76,7 +76,7 @@ interface DocAnnotationToken {
 	readonly followingText?: Doc;
 }
 
-type DocCommentToken = DocContentToken | DocCodeBlockToken | DocAnnotationToken;
+type ApexDocComment = ApexDocContent | ApexDocCodeBlock | ApexDocAnnotation;
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -479,26 +479,32 @@ const removeCommentPrefix = (
 	preserveIndent: boolean = false,
 ): string => {
 		if (preserveIndent) {
-			// Only remove asterisk and single space after it, preserving indentation
-			// Pattern: leading whitespace + asterisk(s) + optional single space + rest
-			// We want to remove: leading whitespace + asterisk(s) + exactly one space (if present)
+			// Remove all asterisks (including multiple asterisks separated by spaces) and single space after, preserving indentation
+			// Pattern: leading whitespace + asterisk(s) (with optional spaces between) + optional single space + rest
+			// We want to remove: leading whitespace + all asterisks (including * * * patterns) + exactly one space (if present)
 			// But preserve: any additional spaces after that (indentation) and the content
-			const match = /^(\s*)(\*+)(\s?)(.*)$/.exec(line);
+			// Match: leading whitespace, then asterisks (possibly separated by spaces), then optional single space, then rest
+			const match = /^(\s*)(\*(\s*\*)*)\s?(.*)$/.exec(line);
 			if (match) {
-				const [, , , spaceAfterAsterisk, rest] = match;
-				// If there's exactly one space after asterisk, remove it but preserve rest (including indentation)
-				// The rest may start with spaces (indentation) which we want to preserve
-				// Always return rest when spaceAfterAsterisk is exactly one space
-				if (spaceAfterAsterisk === ' ') {
-					// Single space - remove it, preserve rest (which may have indentation spaces)
+				const [, , , , rest] = match;
+				// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
+				// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
+				// But preserve any additional spaces (indentation) - they're part of the content
+				// Check if rest starts with a single space followed by non-space (normal case)
+				// or multiple spaces (indentation case)
+				const spaceMatch = /^(\s+)(.*)$/.exec(rest);
+				if (spaceMatch) {
+					const [, spaces, content] = spaceMatch;
+					// If exactly one space, remove it (it's the separator after asterisk)
+					// If multiple spaces, keep them (they're indentation)
+					if (spaces.length === 1) {
+						return content;
+					}
+					// Multiple spaces - preserve as indentation
 					return rest;
 				}
-				// No space - preserve everything after asterisk
-				if (spaceAfterAsterisk === '') {
-					return rest;
-				}
-				// Multiple spaces - preserve as indentation
-				return spaceAfterAsterisk + rest;
+				// No leading space - return as-is
+				return rest;
 			}
 			return line;
 		}
@@ -608,26 +614,26 @@ const docToString = (doc: Doc, options?: { printWidth?: number }): string => {
 };
 
 /**
- * Extracts string content from DocContentToken for text operations.
+ * Extracts string content from ApexDocContent for text operations.
  */
-const getContentTokenString = (token: DocContentToken): string =>
-	docToString(token.content);
+const getContentString = (doc: ApexDocContent): string =>
+	docToString(doc.content);
 
 /**
- * Extracts string lines from DocContentToken for text operations.
+ * Extracts string lines from ApexDocContent for text operations.
  */
-const getContentTokenLines = (token: DocContentToken): readonly string[] =>
-	token.lines.map((line) => docToString(line));
+const getContentLines = (doc: ApexDocContent): readonly string[] =>
+	doc.lines.map((line) => docToString(line));
 
 /**
- * Creates a DocContentToken from string content and lines.
+ * Creates an ApexDocContent from string content and lines.
  */
-const createDocContentToken = (
+const createDocContent = (
 	type: 'text' | 'paragraph',
 	content: string,
 	lines: readonly string[],
 	isContinuation?: boolean,
-): DocContentToken => {
+): ApexDocContent => {
 	// Preserve lines as-is - comment prefix and indentation will be handled later when needed
 	// This preserves code block indentation that would be lost if we strip prefixes here
 	const trimmedLines = lines;
@@ -640,18 +646,18 @@ const createDocContentToken = (
 };
 
 /**
- * Creates a DocCodeBlockToken from string code block data.
+ * Creates an ApexDocCodeBlock from string code block data.
  * @param startPos - Start position of the code block.
  * @param endPos - End position of the code block.
  * @param rawCode - Raw code string extracted from the comment.
  * @param formattedCode - Optional formatted code string (if code was already formatted by embed function).
  */
-const createDocCodeBlockToken = (
+const createDocCodeBlock = (
 	startPos: number,
 	endPos: number,
 	rawCode: string,
 	formattedCode?: string,
-): DocCodeBlockToken => {
+): ApexDocCodeBlock => {
 	// Use formattedCode if available, otherwise use rawCode for Doc content
 	const codeToUse = formattedCode ?? rawCode;
 	const codeLines = codeToUse.split('\n');
@@ -678,9 +684,9 @@ const createDocCodeBlockToken = (
  * @param normalizedComment - The normalized comment string.
  * @returns Array of Doc-based tokens.
  */
-const parseCommentToTokens = (
+const parseCommentToDocs = (
 	normalizedComment: Readonly<string>,
-): readonly DocCommentToken[] => {
+): readonly ApexDocComment[] => {
 	const lines = normalizedComment.split('\n');
 	// Skip first line (/**) and last line (*/)
 	if (lines.length <= INDEX_TWO) {
@@ -696,7 +702,7 @@ const parseCommentToTokens = (
 
 	// Detect paragraphs based on empty lines and sentence boundaries
 	// Skip code blocks when detecting paragraphs
-	const tokens: DocCommentToken[] = [];
+	const docs: ApexDocComment[] = [];
 	let currentParagraph: string[] = [];
 	let currentParagraphLines: string[] = [];
 	let currentPos = ARRAY_START_INDEX;
@@ -725,8 +731,8 @@ const parseCommentToTokens = (
 			// Finish current paragraph if any, then handle code block
 			if (currentParagraph.length > EMPTY) {
 				const paragraphContent = currentParagraph.join(' ');
-				tokens.push(
-					createDocContentToken(
+				docs.push(
+					createDocContent(
 						'paragraph',
 						paragraphContent,
 						currentParagraphLines,
@@ -737,13 +743,13 @@ const parseCommentToTokens = (
 			}
 			// Use cached code block from earlier check
 			if (currentCodeBlock) {
-				// Only add code block token once (on first line)
+				// Only add code block doc once (on first line)
 				const codeBlockStartLine = fullContent
 					.substring(ARRAY_START_INDEX, currentCodeBlock.start)
 					.split('\n').length;
 				if (i === codeBlockStartLine) {
-					tokens.push(
-						createDocCodeBlockToken(
+					docs.push(
+						createDocCodeBlock(
 							currentCodeBlock.start,
 							currentCodeBlock.end,
 							currentCodeBlock.content,
@@ -761,8 +767,8 @@ const parseCommentToTokens = (
 			// Empty line - finish current paragraph if any
 			if (currentParagraph.length > EMPTY) {
 				const paragraphContent = currentParagraph.join(' ');
-				tokens.push(
-					createDocContentToken(
+				docs.push(
+					createDocContent(
 						'paragraph',
 						paragraphContent,
 						currentParagraphLines,
@@ -771,12 +777,12 @@ const parseCommentToTokens = (
 				currentParagraph = [];
 				currentParagraphLines = [];
 			}
-			// Empty lines create paragraph boundaries but aren't tokens themselves
+			// Empty lines create paragraph boundaries but aren't docs themselves
 		} else {
 			// Check if this line starts with @ (annotation)
 			const isAnnotationLine = trimmedLine.startsWith('@');
 
-			// Track code block state using token state instead of regex counting
+			// Track code block state using doc state instead of regex counting
 			// Count {@code openings and } closings in current paragraph content
 			// Cache current content to avoid repeated joins
 			let codeBlockOpenCount = 0;
@@ -800,8 +806,8 @@ const parseCommentToTokens = (
 				!hasUnclosedCodeBlock
 			) {
 				const paragraphContent = currentParagraph.join(' ');
-				tokens.push(
-					createDocContentToken(
+				docs.push(
+					createDocContent(
 						'paragraph',
 						paragraphContent,
 						currentParagraphLines,
@@ -839,8 +845,8 @@ const parseCommentToTokens = (
 				isAnnotationLine
 			) {
 				const paragraphContent = currentParagraph.join(' ');
-				tokens.push(
-					createDocContentToken(
+				docs.push(
+					createDocContent(
 						'paragraph',
 						paragraphContent,
 						currentParagraphLines,
@@ -855,8 +861,8 @@ const parseCommentToTokens = (
 	// Add last paragraph if any
 	if (currentParagraph.length > EMPTY) {
 		const paragraphContent = currentParagraph.join(' ');
-		tokens.push(
-			createDocContentToken(
+		docs.push(
+			createDocContent(
 				'paragraph',
 				paragraphContent,
 				currentParagraphLines,
@@ -864,18 +870,18 @@ const parseCommentToTokens = (
 		);
 	}
 
-	// If no paragraphs were found, create a single text token
-	if (isEmpty(tokens)) {
+	// If no paragraphs were found, create a single text doc
+	if (isEmpty(docs)) {
 		const content = contentLines
 			.map((line) => removeCommentPrefix(line))
 			.join('\n');
 		const trimmedLines = contentLines.map((line) => removeCommentPrefix(line));
 		return [
-			createDocContentToken('text', content, trimmedLines),
+			createDocContent('text', content, trimmedLines),
 		];
 	}
 
-	return tokens;
+	return docs;
 };
 
 /**
@@ -887,7 +893,7 @@ const parseCommentToTokens = (
  * @returns The formatted comment string.
  */
 const tokensToCommentString = (
-	tokens: readonly DocCommentToken[],
+	docs: readonly ApexDocComment[],
 	commentIndent: number,
 	options: Readonly<{
 		readonly tabWidth: number;
@@ -902,19 +908,19 @@ const tokensToCommentString = (
 	);
 	const lines: string[] = [`${baseIndent}/**`];
 
-	for (let i = 0; i < tokens.length; i++) {
-		const token = tokens[i];
-		if (!token) continue;
-		const nextToken = i + 1 < tokens.length ? tokens[i + 1] : null;
-		const isFollowedByCodeBlock = nextToken?.type === 'code';
+	for (let i = 0; i < docs.length; i++) {
+		const doc = docs[i];
+		if (!doc) continue;
+		const nextDoc = i + 1 < docs.length ? docs[i + 1] : null;
+		const isFollowedByCodeBlock = nextDoc?.type === 'code';
 
-		if (token.type === 'text' || token.type === 'paragraph') {
+		if (doc.type === 'text' || doc.type === 'paragraph') {
 			// Extract string lines from Doc
-			const tokenLines = getContentTokenLines(token);
+			const docLines = getContentLines(doc);
 			// Filter out empty trailing lines if followed by a code block
 			const linesToProcess = isFollowedByCodeBlock
 				? (() => {
-						const filtered = removeTrailingEmptyLines(tokenLines);
+						const filtered = removeTrailingEmptyLines(docLines);
 						// Remove trailing newlines from the last line
 						if (filtered.length > 0) {
 							const lastIndex = filtered.length - 1;
@@ -925,7 +931,7 @@ const tokensToCommentString = (
 						}
 						return filtered;
 					})()
-				: tokenLines;
+				: docLines;
 
 			for (const line of linesToProcess) {
 				// Skip empty lines that would create a blank line before the code block
@@ -939,7 +945,7 @@ const tokensToCommentString = (
 					lines.push(`${commentPrefix}${line.trimStart()}`);
 				}
 			}
-		} else if (token.type === 'code') {
+		} else if (doc.type === 'code') {
 			// Remove any trailing empty lines before adding the code block
 			// to avoid an extra blank line before the code block
 			// Keep at least one line (the opening /**)
@@ -958,11 +964,11 @@ const tokensToCommentString = (
 			}
 
 			// Use formatted code if available, otherwise use raw code
-			const codeToken = token;
+			const codeDoc = doc;
 			const codeToUse =
-				codeToken.formattedCode !== undefined
-					? codeToken.formattedCode
-					: codeToken.rawCode;
+				codeDoc.formattedCode !== undefined
+					? codeDoc.formattedCode
+					: codeDoc.rawCode;
 			// Handle empty code blocks - render {@code} even if content is empty
 			const isEmptyBlock = codeToUse.trim().length === EMPTY;
 			if (isEmptyBlock) {
@@ -982,7 +988,7 @@ const tokensToCommentString = (
 				}
 			}
 		}
-		// Annotation tokens will be handled later
+		// Annotation docs will be handled later
 	}
 
 	lines.push(`${baseIndent} */`);
@@ -1142,11 +1148,11 @@ const customPrintComment = (
 			}
 
 			// Non-ApexDoc block comments: normalize annotations in text
-			// Parse to tokens, normalize annotations, then convert back
-			const tokens = parseCommentToTokens(commentValue);
-			const normalizedTokens = normalizeAnnotationTokens(tokens);
+			// Parse to docs, normalize annotations, then convert back
+			const docs = parseCommentToDocs(commentValue);
+			const normalizedDocs = normalizeAnnotations(docs);
 			const normalizedComment = tokensToCommentString(
-				normalizedTokens,
+				normalizedDocs,
 				0,
 				{
 					tabWidth: options.tabWidth,
@@ -1228,7 +1234,7 @@ export {
 	createIndent,
 	getCommentIndent,
 	normalizeBlockComment,
-	parseCommentToTokens,
+	parseCommentToDocs,
 	tokensToCommentString,
 	wrapTextToWidth,
 	CommentPrefix,
@@ -1242,15 +1248,15 @@ export {
 	MIN_INDENT_LEVEL,
 	NOT_FOUND_INDEX,
 	docToString,
-	getContentTokenString,
-	getContentTokenLines,
-	createDocCodeBlockToken,
-	createDocContentToken,
+	getContentString,
+	getContentLines,
+	createDocCodeBlock,
+	createDocContent,
 };
 export type {
-	// New Doc-based token types
-	DocContentToken,
-	DocCodeBlockToken,
-	DocAnnotationToken,
-	DocCommentToken,
+	// Doc-based types for ApexDoc processing
+	ApexDocContent,
+	ApexDocCodeBlock,
+	ApexDocAnnotation,
+	ApexDocComment,
 };

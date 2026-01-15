@@ -34,10 +34,13 @@ const normalizeAnnotationName = (name: string): string =>
 const normalizeAnnotationOptionName = (
 	annotationName: string,
 	optionName: string,
-): string =>
-	APEX_ANNOTATION_OPTION_NAMES[annotationName.toLowerCase()]?.[
-		optionName.toLowerCase()
-	] ?? optionName;
+): string => {
+	const annotationKey = annotationName.toLowerCase();
+	const optionKey = optionName.toLowerCase();
+	const mapping = APEX_ANNOTATION_OPTION_NAMES[annotationKey];
+	const normalized = mapping?.[optionKey] ?? optionName;
+	return normalized;
+};
 
 const isAnnotationKeyValue = (
 	param: Readonly<ApexAnnotationParameter>,
@@ -78,8 +81,10 @@ const formatAnnotationParam = (
 	originalName: string,
 ): Doc => {
 	if (isAnnotationKeyValue(param)) {
+		const optionKey = param.key.value;
+		const normalizedOption = normalizeAnnotationOptionName(originalName, optionKey);
 		return [
-			normalizeAnnotationOptionName(originalName, param.key.value),
+			normalizedOption,
 			'=',
 			formatAnnotationValue(param.value),
 		];
@@ -110,9 +115,9 @@ const printAnnotation = (
 	const parametersLength = node.parameters.length;
 	if (parametersLength === EMPTY)
 		return ['@', normalizedName, hardline];
-	const formattedParams: Doc[] = node.parameters.map((param) =>
-		formatAnnotationParam(param, originalName),
-	);
+	const formattedParams: Doc[] = node.parameters.map((param) => {
+		return formatAnnotationParam(param, originalName);
+	});
 
 	const forceMultiline = shouldForceMultiline(formattedParams);
 

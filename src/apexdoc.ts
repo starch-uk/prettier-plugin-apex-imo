@@ -1,8 +1,8 @@
 /**
- * @file Unified token-based processing system for ApexDoc comments.
+ * @file Unified Doc-based processing system for ApexDoc comments.
  *
  * This module provides a consolidated approach to handling ApexDoc comments through:
- * - Token parsing and processing (async-first).
+ * - Doc parsing and processing (async-first).
  * - Code block detection and formatting.
  * - Annotation normalization and wrapping.
  * - Integration with Prettier's document building system.
@@ -13,15 +13,15 @@ import type { ParserOptions, Doc } from 'prettier';
 import * as prettier from 'prettier';
 import {
 	normalizeBlockComment,
-	parseCommentToTokens,
+	parseCommentToDocs,
 	tokensToCommentString,
 	wrapTextToWidth,
 	CommentPrefix,
 	NOT_FOUND_INDEX,
-	getContentTokenString,
-	getContentTokenLines,
-	createDocCodeBlockToken,
-	createDocContentToken,
+	getContentString,
+	getContentLines,
+	createDocCodeBlock,
+	createDocContent,
 	removeCommentPrefix,
 } from './comments.js';
 import {
@@ -33,15 +33,15 @@ import {
 	isNotEmpty,
 } from './utils.js';
 import type {
-	DocCommentToken,
-	DocContentToken,
-	DocCodeBlockToken,
+	ApexDocComment,
+	ApexDocContent,
+	ApexDocCodeBlock,
 } from './comments.js';
 import {
-	detectAnnotationsInTokens,
-	normalizeAnnotationTokens,
-	wrapAnnotationTokens,
-	renderAnnotationToken,
+	detectAnnotationsInDocs,
+	normalizeAnnotations,
+	wrapAnnotations,
+	renderAnnotation,
 } from './apexdoc-annotations.js';
 import {
 	extractCodeFromBlock,
@@ -131,8 +131,8 @@ const normalizeSingleApexDocComment = (
 		useTabs: options.useTabs,
 	});
 
-	// Parse to tokens
-	const { tokens: initialTokens } = parseApexDocTokens(
+	// Parse to docs
+	const { docs: initialDocs } = parseApexDocs(
 		normalizedComment,
 		commentIndent,
 		printWidth,
@@ -142,14 +142,14 @@ const normalizeSingleApexDocComment = (
 		},
 	);
 
-	// Merge paragraph tokens that contain split {@code} blocks
-	let tokens = mergeCodeBlockTokens(initialTokens);
+	// Merge paragraph docs that contain split {@code} blocks
+	let docs = mergeCodeBlockDocs(initialDocs);
 
-	// Apply common token processing pipeline
+	// Apply common doc processing pipeline
 	// Pass isEmbedFormatted flag to preserve formatted code from embed function
-	tokens = applyTokenProcessingPipeline(tokens, normalizedComment, isEmbedFormatted);
+	docs = applyDocProcessingPipeline(docs, normalizedComment, isEmbedFormatted);
 
-	// Cache prefix and width calculations (used in both wrapAnnotationTokens and tokensToApexDocString)
+	// Cache prefix and width calculations (used in both wrapAnnotations and docsToApexDocString)
 	const prefixAndWidth = printWidth
 		? calculatePrefixAndWidth(commentIndent, printWidth, {
 				tabWidth: tabWidthValue,
@@ -159,9 +159,9 @@ const normalizeSingleApexDocComment = (
 
 	// Wrap annotations if printWidth is available
 	if (prefixAndWidth) {
-		// Pass the actual prefix length to wrapAnnotationTokens so it can calculate first line width correctly
-		tokens = wrapAnnotationTokens(
-			tokens,
+		// Pass the actual prefix length to wrapAnnotations so it can calculate first line width correctly
+		docs = wrapAnnotations(
+			docs,
 			prefixAndWidth.effectiveWidth,
 			commentIndent,
 			prefixAndWidth.actualPrefixLength,
@@ -172,9 +172,9 @@ const normalizeSingleApexDocComment = (
 		);
 	}
 
-	// Convert tokens back to string
-	const commentString = tokensToApexDocString(
-		tokens,
+	// Convert docs back to string
+	const commentString = docsToApexDocString(
+		docs,
 		commentIndent,
 		{
 			printWidth: printWidth,
@@ -290,11 +290,11 @@ const buildLinesWithPrefixes = (
 };
 
 /**
- * Renders a Doc code block token to text token with formatted lines.
- * @param token - The Doc code block token to render.
+ * Renders an ApexDoc code block doc to text doc with formatted lines.
+ * @param doc - The ApexDoc code block doc to render.
  * @param commentPrefix - The comment prefix string.
  * @param options - Options including printWidth.
- * @returns The rendered content token or null if empty.
+ * @returns The rendered content doc or null if empty.
  */
 interface RenderedContentToken {
 	readonly type: 'text' | 'paragraph';
@@ -303,8 +303,8 @@ interface RenderedContentToken {
 	readonly isContinuation?: boolean;
 }
 
-const renderCodeBlockToken = (
-	token: DocCodeBlockToken,
+const renderCodeBlock = (
+	doc: ApexDocCodeBlock,
 	commentPrefix: string,
 	options: Readonly<{
 		readonly printWidth?: number;
@@ -312,14 +312,11 @@ const renderCodeBlockToken = (
 ): RenderedContentToken | null => {
 	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
 	// Use formattedCode if available, otherwise use rawCode
-	const codeToUse = token.formattedCode ?? token.rawCode;
+	const codeToUse = doc.formattedCode ?? doc.rawCode;
 
 	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
-	// If using formattedCode (already formatted by embed), preserve indentation by not processing
-	const processedCode =
-		token.formattedCode !== undefined
-			? codeToUse // Already formatted, use as-is to preserve indentation
-			: processCodeLinesWithBlankLinePreservation(codeToUse, true);
+	// Apply blank line preservation even for formattedCode to restore blank lines that Prettier removed
+	const processedCode = processCodeLinesWithBlankLinePreservation(codeToUse, true);
 	const trimmedCodeToUse = processedCode.trim();
 	const isEmptyBlock = isEmpty(trimmedCodeToUse);
 
@@ -343,7 +340,7 @@ const renderCodeBlockToken = (
 		: (() => {
 				if (options.printWidth === undefined) {
 					throw new Error(
-						'prettier-plugin-apex-imo: options.printWidth is required for renderCodeBlockToken',
+						'prettier-plugin-apex-imo: options.printWidth is required for renderCodeBlock',
 					);
 				}
 				return handleUnwrappedCode(
@@ -365,15 +362,15 @@ const renderCodeBlockToken = (
 };
 
 /**
- * Renders a Doc text or paragraph token with wrapping applied.
- * @param token - The Doc content token to render.
+ * Renders an ApexDoc text or paragraph doc with wrapping applied.
+ * @param doc - The ApexDoc content doc to render.
  * @param commentPrefix - The comment prefix string.
  * @param effectiveWidth - The effective width for wrapping.
  * @param options - Options including tabWidth and useTabs.
- * @returns The rendered content token.
+ * @returns The rendered content doc.
  */
-const renderTextOrParagraphToken = (
-	token: DocContentToken,
+const renderTextOrParagraphDoc = (
+	doc: ApexDocContent,
 	commentPrefix: string,
 	effectiveWidth: number,
 	options: Readonly<{
@@ -382,8 +379,8 @@ const renderTextOrParagraphToken = (
 	}>,
 ): RenderedContentToken => {
 	// Extract string content from Doc for wrapping
-	const contentString = getContentTokenString(token);
-	const linesString = getContentTokenLines(token);
+	const contentString = getContentString(doc);
+	const linesString = getContentLines(doc);
 	const wrappedLines = wrapTextContent(
 		contentString,
 		linesString,
@@ -400,27 +397,27 @@ const renderTextOrParagraphToken = (
 		(line: string) => `${trimmedCommentPrefix}${line.trim()}`,
 	);
 	return {
-		...token,
+		...doc,
 		content: cleanedLines.join('\n'),
 		lines: linesWithPrefix,
 	};
 };
 
 /**
- * Converts ApexDoc Doc comment tokens (including DocAnnotationTokens) back into a
+ * Converts ApexDoc Doc comment docs (including ApexDocAnnotations) back into a
  * normalized comment string.
- * This function is ApexDoc-aware and knows how to render annotation tokens,
+ * This function is ApexDoc-aware and knows how to render annotation docs,
  * but defers the final comment construction (including the opening and closing
  * comment markers) to the
- * generic tokensToCommentString helper from comments.ts.
- * @param tokens - Array of Doc-based comment tokens (may include DocAnnotationTokens).
+ * generic tokensToCommentString helper from comments.ts (which works with ApexDocComment[]).
+ * @param docs - Array of Doc-based comment docs (may include ApexDocAnnotations).
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
  * @param cachedPrefixAndWidth - Optional cached prefix and width calculations.
  * @returns The formatted ApexDoc comment string.
  */
-const tokensToApexDocString = (
-	tokens: readonly DocCommentToken[],
+const docsToApexDocString = (
+	docs: readonly ApexDocComment[],
 	commentIndent: number,
 	options: Readonly<{
 		readonly tabWidth: number;
@@ -433,55 +430,55 @@ const tokensToApexDocString = (
 		cachedPrefixAndWidth ?? calculatePrefixAndWidth(commentIndent, options.printWidth, options);
 	const { commentPrefix, effectiveWidth } = prefixAndWidth;
 
-	const apexDocTokens: DocCommentToken[] = [];
+	const apexDocs: ApexDocComment[] = [];
 
-	for (const token of tokens) {
-		if (token.type === 'annotation') {
-			const rendered = renderAnnotationToken(token, commentPrefix);
+	for (const doc of docs) {
+		if (doc.type === 'annotation') {
+			const rendered = renderAnnotation(doc, commentPrefix);
 			if (rendered) {
-				// Convert rendered content to DocContentToken
-				apexDocTokens.push(createDocContentToken(
+				// Convert rendered content to ApexDocContent
+				apexDocs.push(createDocContent(
 					rendered.type,
 					rendered.content,
 					rendered.lines,
 					rendered.isContinuation,
 				));
 			}
-		} else if (token.type === 'code') {
-			const rendered = renderCodeBlockToken(
-				token,
+		} else if (doc.type === 'code') {
+			const rendered = renderCodeBlock(
+				doc,
 				commentPrefix,
 				options,
 			);
 			if (rendered) {
-				// Convert rendered content to DocContentToken
-				apexDocTokens.push(createDocContentToken(
+				// Convert rendered content to ApexDocContent
+				apexDocs.push(createDocContent(
 					rendered.type,
 					rendered.content,
 					rendered.lines,
 					rendered.isContinuation,
 				));
 			}
-		} else if (token.type === 'text' || token.type === 'paragraph') {
-			const rendered = renderTextOrParagraphToken(
-				token,
+		} else if (doc.type === 'text' || doc.type === 'paragraph') {
+			const rendered = renderTextOrParagraphDoc(
+				doc,
 				commentPrefix,
 				effectiveWidth,
 				options,
 			);
-			// Convert rendered content to DocContentToken
-			apexDocTokens.push(createDocContentToken(
+			// Convert rendered content to ApexDocContent
+			apexDocs.push(createDocContent(
 				rendered.type,
 				rendered.content,
 				rendered.lines,
 				rendered.isContinuation,
 			));
 		} else {
-			apexDocTokens.push(token);
+			apexDocs.push(doc);
 		}
 	}
 
-	return tokensToCommentString(apexDocTokens, commentIndent, {
+	return tokensToCommentString(apexDocs, commentIndent, {
 		tabWidth: options.tabWidth,
 		useTabs: options.useTabs,
 	});
@@ -576,7 +573,7 @@ const wrapTextContent = (
  * @param options - Options including tabWidth and useTabs.
  * @returns Object with tokens and effective page width.
  */
-const parseApexDocTokens = (
+const parseApexDocs = (
 	normalizedComment: Readonly<string>,
 	commentIndent: number,
 	printWidth: number,
@@ -585,18 +582,18 @@ const parseApexDocTokens = (
 		readonly useTabs?: boolean | null | undefined;
 	}>,
 ): {
-	readonly tokens: readonly DocCommentToken[];
+	readonly docs: readonly ApexDocComment[];
 	readonly effectiveWidth: number;
 } => {
 	const commentPrefixLength = CommentPrefix.getLength(commentIndent);
 	const effectiveWidth = calculateEffectiveWidth(printWidth, commentPrefixLength);
 
-	// Parse comment to tokens using the basic parser (now returns DocCommentToken[])
-	let tokens = parseCommentToTokens(normalizedComment);
+	// Parse comment to docs using the basic parser (now returns ApexDocComment[])
+	let docs = parseCommentToDocs(normalizedComment);
 
 	return {
 		effectiveWidth,
-		tokens,
+		docs,
 	};
 };
 
@@ -627,17 +624,17 @@ const hasCompleteCodeBlock = (
 };
 
 /**
- * Creates a merged DocContentToken from paragraph tokens.
- * @param token - The original Doc content token.
+ * Creates a merged ApexDocContent from paragraph docs.
+ * @param doc - The original Doc content doc.
  * @param mergedContent - The merged content string.
  * @param mergedLines - The merged lines array (without comment prefix).
- * @returns The merged Doc content token.
+ * @returns The merged Doc content doc.
  */
-const createMergedDocToken = (
-	token: DocContentToken,
+const createMergedDoc = (
+	doc: ApexDocContent,
 	mergedContent: string,
 	mergedLines: string[],
-): DocContentToken => {
+): ApexDocContent => {
 	const { join, hardline } = prettier.doc.builders;
 	const docLines = mergedLines.map((line) => line as Doc);
 	return {
@@ -649,138 +646,138 @@ const createMergedDocToken = (
 					? docLines[0]
 					: join(hardline, docLines),
 		lines: docLines,
-		...(token.isContinuation !== undefined
+		...(doc.isContinuation !== undefined
 			? {
-					isContinuation: token.isContinuation,
+					isContinuation: doc.isContinuation,
 				}
 			: {}),
 	};
 };
 
 /**
- * Attempts to merge tokens with incomplete code blocks.
- * @param token - The Doc content token to merge.
+ * Attempts to merge docs with incomplete code blocks.
+ * @param doc - The Doc content doc to merge.
  * @param codeTagIndex - The index where the code tag starts.
- * @param tokens - Array of all Doc comment tokens.
- * @param startIndex - The starting index in the tokens array.
- * @returns Object with merged token and next index.
+ * @param docs - Array of all Doc comment docs.
+ * @param startIndex - The starting index in the docs array.
+ * @returns Object with merged doc and next index.
  */
 const mergeIncompleteCodeBlock = (
-	token: DocContentToken,
+	doc: ApexDocContent,
 	codeTagIndex: number,
-	tokens: readonly DocCommentToken[],
+	docs: readonly ApexDocComment[],
 	startIndex: number,
-): { mergedToken: DocContentToken | null; nextIndex: number } => {
-	let mergedContent = getContentTokenString(token);
-	let mergedLines = getContentTokenLines(token);
+): { mergedDoc: ApexDocContent | null; nextIndex: number } => {
+	let mergedContent = getContentString(doc);
+	let mergedLines = getContentLines(doc);
 	let hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
 	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- index increment
 	let j = startIndex + INDEX_ONE;
 
-	while (j < tokens.length && !hasCompleteBlock) {
-		const nextToken = tokens[j];
-		if (!nextToken) {
+	while (j < docs.length && !hasCompleteBlock) {
+		const nextDoc = docs[j];
+		if (!nextDoc) {
 			j++;
 			continue;
 		}
-		if (nextToken.type !== 'paragraph' && nextToken.type !== 'text') {
-			// Non-content token, stop merging
+		if (nextDoc.type !== 'paragraph' && nextDoc.type !== 'text') {
+			// Non-content doc, stop merging
 			break;
 		}
 
-		const nextContent = getContentTokenString(nextToken);
+		const nextContent = getContentString(nextDoc);
 		mergedContent += nextContent;
-		mergedLines = [...mergedLines, ...getContentTokenLines(nextToken)];
+		mergedLines = [...mergedLines, ...getContentLines(nextDoc)];
 
 		// Check if the merged content now has a complete block
 		hasCompleteBlock = hasCompleteCodeBlock(mergedContent, codeTagIndex);
 
 		if (hasCompleteBlock) {
-			// Found complete block, create merged token
-			const mergedToken = createMergedDocToken(
-				token,
+			// Found complete block, create merged doc
+			const mergedDoc = createMergedDoc(
+				doc,
 				mergedContent,
 				mergedLines,
 			);
-			return { mergedToken, nextIndex: j };
+			return { mergedDoc, nextIndex: j };
 		}
 		j++;
 	}
 
-	return { mergedToken: null, nextIndex: startIndex };
+	return { mergedDoc: null, nextIndex: startIndex };
 };
 
 /**
- * Merges paragraph tokens that contain split {@code} blocks to ensure complete blocks are in single tokens.
- * @param tokens - Array of Doc-based comment tokens.
- * @returns Array of tokens with merged {@code} blocks.
+ * Merges paragraph docs that contain split {@code} blocks to ensure complete blocks are in single docs.
+ * @param docs - Array of Doc-based comment docs.
+ * @returns Array of docs with merged {@code} blocks.
  */
-const mergeCodeBlockTokens = (
-	tokens: readonly DocCommentToken[],
-): readonly DocCommentToken[] => {
-	const mergedTokens: DocCommentToken[] = [];
+const mergeCodeBlockDocs = (
+	docs: readonly ApexDocComment[],
+): readonly ApexDocComment[] => {
+	const mergedDocs: ApexDocComment[] = [];
 	let i = 0;
 
-	while (i < tokens.length) {
-		const token = tokens[i];
-		if (!token) {
+	while (i < docs.length) {
+		const doc = docs[i];
+		if (!doc) {
 			i++;
 			continue;
 		}
 
-		if (token.type !== 'paragraph' && token.type !== 'text') {
-			// Non-content token, add as-is
-			mergedTokens.push(token);
+		if (doc.type !== 'paragraph' && doc.type !== 'text') {
+			// Non-content doc, add as-is
+			mergedDocs.push(doc);
 			i++;
 			continue;
 		}
 
 		// Extract string content from Doc for text operations
-		const content = getContentTokenString(token);
+		const content = getContentString(doc);
 		const codeTagIndex = content.indexOf('{@code');
 
 		if (codeTagIndex === -1) {
 			// No {@code} tag, add as-is
-			mergedTokens.push(token);
+			mergedDocs.push(doc);
 			i++;
 			continue;
 		}
 
-		// Check if this token contains a complete {@code} block
+		// Check if this doc contains a complete {@code} block
 		const hasCompleteBlock = hasCompleteCodeBlock(content, codeTagIndex);
 
 		if (hasCompleteBlock) {
-			// Complete block in single token
-			mergedTokens.push(token);
+			// Complete block in single doc
+			mergedDocs.push(doc);
 			i++;
 			continue;
 		}
 
-		// Need to merge with subsequent tokens
-		// Type guard: ensure token is DocContentToken
-		if (token.type === 'paragraph' || token.type === 'text') {
+		// Need to merge with subsequent docs
+		// Type guard: ensure doc is ApexDocContent
+		if (doc.type === 'paragraph' || doc.type === 'text') {
 			const mergeResult = mergeIncompleteCodeBlock(
-				token,
+				doc,
 				codeTagIndex,
-				tokens,
+				docs,
 				i,
 			);
-			if (mergeResult.mergedToken) {
-				mergedTokens.push(mergeResult.mergedToken);
+			if (mergeResult.mergedDoc) {
+				mergedDocs.push(mergeResult.mergedDoc);
 				i = mergeResult.nextIndex + 1;
 			} else {
-				// Couldn't find complete block, add original token
-				mergedTokens.push(token);
+				// Couldn't find complete block, add original doc
+				mergedDocs.push(doc);
 				i++;
 			}
 		} else {
-			// Non-content token, shouldn't happen but handle gracefully
-			mergedTokens.push(token);
+			// Non-content doc, shouldn't happen but handle gracefully
+			mergedDocs.push(doc);
 			i++;
 		}
 	}
 
-	return mergedTokens;
+	return mergedDocs;
 };
 
 /**
@@ -790,86 +787,86 @@ const mergeCodeBlockTokens = (
  */
 
 /**
- * Applies the common token processing pipeline: code block detection, annotation detection, and normalization.
- * @param tokens - Array of Doc-based comment tokens.
+ * Applies the common doc processing pipeline: code block detection, annotation detection, and normalization.
+ * @param docs - Array of Doc-based comment docs.
  * @param normalizedComment - The normalized comment text (may be undefined in async contexts).
  * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.
- * @returns Array of processed Doc tokens.
+ * @returns Array of processed Doc docs.
  */
-const applyTokenProcessingPipeline = (
-	tokens: readonly DocCommentToken[],
+const applyDocProcessingPipeline = (
+	docs: readonly ApexDocComment[],
 	normalizedComment?: string,
 	isEmbedFormatted: boolean = false,
-): readonly DocCommentToken[] => {
+): readonly ApexDocComment[] => {
 	// Detect code blocks first to separate {@code} content from regular text
 	// Pass isEmbedFormatted flag to preserve formatted code
-	let processedTokens = detectCodeBlockTokens(
-		tokens,
+	let processedDocs = detectCodeBlockDocs(
+		docs,
 		normalizedComment !== undefined ? normalizedComment : '',
 		isEmbedFormatted,
 	);
 
-	// Detect annotations in tokens that contain ApexDoc content
-	// Code blocks are now handled as separate tokens
-	processedTokens = detectAnnotationsInTokens(
-		processedTokens,
+	// Detect annotations in docs that contain ApexDoc content
+	// Code blocks are now handled as separate docs
+	processedDocs = detectAnnotationsInDocs(
+		processedDocs,
 		normalizedComment !== undefined ? normalizedComment : '',
 	);
 
 	// Normalize annotations
-	processedTokens = normalizeAnnotationTokens(processedTokens);
+	processedDocs = normalizeAnnotations(processedDocs);
 
-	return processedTokens;
+	return processedDocs;
 };
 
 
 /**
- * Creates a Doc text token from cleaned text for paragraph tokens.
+ * Creates a Doc text doc from cleaned text for paragraph docs.
  * @param cleanedText - The cleaned text content.
- * @param token - The Doc content token.
- * @returns The created Doc text token or null if empty.
+ * @param doc - The Doc content doc.
+ * @returns The created Doc text doc or null if empty.
  */
-const createDocTextTokenFromParagraph = (
+const createDocTextFromParagraph = (
 	cleanedText: string,
-	token: DocContentToken,
-): DocContentToken | null => {
+	doc: ApexDocContent,
+): ApexDocContent | null => {
 	const splitLines = cleanedText
 		.split('\n')
 		.filter((line: string) => line.trim().length > EMPTY);
 	if (splitLines.length === EMPTY) {
 		return null;
 	}
-	return createDocContentToken('text', cleanedText, splitLines);
+	return createDocContent('text', cleanedText, splitLines);
 };
 
 /**
- * Creates a Doc text token from cleaned text for text tokens.
+ * Creates a Doc text doc from cleaned text for text docs.
  * @param cleanedText - The cleaned text content.
- * @returns The created Doc text token or null if empty.
+ * @returns The created Doc text doc or null if empty.
  */
-const createDocTextTokenFromText = (
+const createDocTextFromText = (
 	cleanedText: string,
-): DocContentToken | null => {
+): ApexDocContent | null => {
 	const splitLines = cleanedText.split('\n');
 	const cleanedLines = removeTrailingEmptyLines(splitLines);
 	if (cleanedLines.length === EMPTY) {
 		return null;
 	}
-	return createDocContentToken('text', cleanedText, cleanedLines);
+	return createDocContent('text', cleanedText, cleanedLines);
 };
 
 /**
  * Processes remaining text after last code tag.
  * @param content - The content string.
  * @param currentPos - The current position in content.
- * @param token - The Doc content token.
- * @param newTokens - Array to add new Doc tokens to.
+ * @param doc - The Doc content doc.
+ * @param newDocs - Array to add new Doc docs to.
  */
 const processRemainingText = (
 	content: string,
 	currentPos: number,
-	token: DocContentToken,
-	newTokens: DocCommentToken[],
+	doc: ApexDocContent,
+	newDocs: ApexDocComment[],
 ): void => {
 	if (currentPos >= content.length) {
 		return;
@@ -883,12 +880,12 @@ const processRemainingText = (
 		return;
 	}
 
-	const textToken =
-		token.type === 'paragraph'
-			? createDocTextTokenFromParagraph(cleanedText, token)
-			: createDocTextTokenFromText(cleanedText);
-	if (textToken) {
-		newTokens.push(textToken);
+	const textDoc =
+		doc.type === 'paragraph'
+			? createDocTextFromParagraph(cleanedText, doc)
+			: createDocTextFromText(cleanedText);
+	if (textDoc) {
+		newDocs.push(textDoc);
 	}
 };
 
@@ -897,15 +894,15 @@ const processRemainingText = (
  * @param content - The content string.
  * @param lastMatchEnd - The end position of last match.
  * @param codeTagStart - The start position of code tag.
- * @param token - The Doc content token.
- * @param newTokens - Array to add new Doc tokens to.
+ * @param doc - The Doc content doc.
+ * @param newDocs - Array to add new Doc docs to.
  */
 const processTextBeforeCode = (
 	content: string,
 	lastMatchEnd: number,
 	codeTagStart: number,
-	token: DocContentToken,
-	newTokens: DocCommentToken[],
+	doc: ApexDocContent,
+	newDocs: ApexDocComment[],
 ): void => {
 	if (codeTagStart <= lastMatchEnd) {
 		return;
@@ -919,33 +916,33 @@ const processTextBeforeCode = (
 		return;
 	}
 
-	const textToken =
-		token.type === 'paragraph'
-			? createDocTextTokenFromParagraph(cleanedText, token)
-			: createDocTextTokenFromText(cleanedText);
-	if (textToken) {
-		newTokens.push(textToken);
+	const textDoc =
+		doc.type === 'paragraph'
+			? createDocTextFromParagraph(cleanedText, doc)
+			: createDocTextFromText(cleanedText);
+	if (textDoc) {
+		newDocs.push(textDoc);
 	}
 };
 
 /**
- * Processes Doc content token to detect code blocks.
- * @param token - The Doc content token to process.
- * @param newTokens - Array to add new Doc tokens to.
+ * Processes ApexDoc content doc to detect code blocks.
+ * @param doc - The ApexDoc content doc to process.
+ * @param newDocs - Array to add new Doc docs to.
  * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.
  */
-const processContentTokenForCodeBlocks = (
-	token: DocContentToken,
-	newTokens: DocCommentToken[],
+const processContentForCodeBlocks = (
+	doc: ApexDocContent,
+	newDocs: ApexDocComment[],
 	isEmbedFormatted: boolean = false,
 ): void => {
 	// Extract string content from Doc for text operations
-	const content = getContentTokenString(token);
-	const lines = getContentTokenLines(token);
-	// For content tokens, work with the lines array to preserve line breaks
+	const content = getContentString(doc);
+	const lines = getContentLines(doc);
+	// For content docs, work with the lines array to preserve line breaks
 	// Use removeCommentPrefix with preserveIndent=true to preserve code block indentation
 	const processedContent =
-		token.type === 'paragraph'
+		doc.type === 'paragraph'
 			? lines
 					.map((line: string) => removeCommentPrefix(line, true))
 					.join('\n')
@@ -957,7 +954,7 @@ const processContentTokenForCodeBlocks = (
 		const codeTagStart = processedContent.indexOf(CODE_TAG, currentPos);
 
 		if (codeTagStart === NOT_FOUND_INDEX) {
-			processRemainingText(processedContent, currentPos, token, newTokens);
+			processRemainingText(processedContent, currentPos, doc, newDocs);
 			break;
 		}
 
@@ -965,16 +962,16 @@ const processContentTokenForCodeBlocks = (
 			processedContent,
 			lastMatchEnd,
 			codeTagStart,
-			token,
-			newTokens,
+			doc,
+			newDocs,
 		);
 
 		const codeBlockResult = extractCodeFromBlock(processedContent, codeTagStart);
 		if (codeBlockResult) {
 			// If comment was already formatted by embed function, treat extracted code as formatted
 			const formattedCode = isEmbedFormatted ? codeBlockResult.code : undefined;
-			newTokens.push(
-				createDocCodeBlockToken(
+			newDocs.push(
+				createDocCodeBlock(
 					codeTagStart,
 					codeBlockResult.endPos,
 					codeBlockResult.code,
@@ -991,35 +988,35 @@ const processContentTokenForCodeBlocks = (
 };
 
 /**
- * Detects code blocks in tokens by scanning for {@code} patterns.
- * Converts DocContentToken content containing {@code} to DocCodeBlockToken.
- * @param tokens - Array of Doc-based comment tokens.
+ * Detects code blocks in docs by scanning for {@code} patterns.
+ * Converts ApexDocContent content containing {@code} to ApexDocCodeBlock.
+ * @param docs - Array of Doc-based comment docs.
  * @param _originalComment - The original comment string for position tracking (unused but kept for API compatibility).
  * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.
- * @returns Array of tokens with code blocks detected.
+ * @returns Array of docs with code blocks detected.
  */
-const detectCodeBlockTokens = (
-	tokens: readonly DocCommentToken[],
+const detectCodeBlockDocs = (
+	docs: readonly ApexDocComment[],
 	_originalComment: Readonly<string>,
 	isEmbedFormatted: boolean = false,
-): readonly DocCommentToken[] => {
-	const newTokens: DocCommentToken[] = [];
+): readonly ApexDocComment[] => {
+	const newDocs: ApexDocComment[] = [];
 
-	for (const token of tokens) {
-		if (token.type === 'text' || token.type === 'paragraph') {
-			processContentTokenForCodeBlocks(token, newTokens, isEmbedFormatted);
+	for (const doc of docs) {
+		if (doc.type === 'text' || doc.type === 'paragraph') {
+			processContentForCodeBlocks(doc, newDocs, isEmbedFormatted);
 		} else {
-			newTokens.push(token);
+			newDocs.push(doc);
 		}
 	}
-	return newTokens;
+	return newDocs;
 };
 
 
 export {
 	EMPTY_CODE_TAG,
 	normalizeSingleApexDocComment,
-	detectCodeBlockTokens,
+	detectCodeBlockDocs,
 	removeTrailingEmptyLines,
 };
 
