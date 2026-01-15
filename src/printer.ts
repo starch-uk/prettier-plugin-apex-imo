@@ -30,15 +30,12 @@ import {
 	isCollectionAssignment,
 } from './collections.js';
 import {
-	calculateEffectiveWidth,
-	formatApexCodeWithFallback,
 	getNodeClassOptional,
 	createNodeClassGuard,
-	preserveBlankLineAfterClosingBrace,
 	isObject,
 	isApexNodeLike,
 } from './utils.js';
-import { extractCodeFromBlock } from './apexdoc-code.js';
+import { processAllCodeBlocksInComment } from './apexdoc-code.js';
 
 const isTypeRef = createNodeClassGuard<ApexNode>(
 	(cls) =>
@@ -233,7 +230,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					);
 				}
 				const tabWidthValue = options.tabWidth;
-				const printWidthValue = options.printWidth;
 				const basePlugins = options.plugins;
 				const pluginInstance = getCurrentPluginInstance();
 				const plugins: (string | URL | prettier.Plugin<ApexNode>)[] =
@@ -247,101 +243,25 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 						: basePlugins;
 				const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
 
-				const codeTag = '{@code';
-				const codeTagLength = codeTag.length;
-				let result = commentText;
-				let startIndex = 0;
-				let hasChanges = false;
+				// Process all code blocks in the comment
+				const formattedComment = await processAllCodeBlocksInComment({
+					commentText,
+					options,
+					plugins: plugins as readonly (
+						| string
+						| URL
+						| prettier.Plugin<unknown>
+					)[],
+					commentPrefixLength,
+					setFormattedCodeBlock,
+				});
 
-				while (
-					(startIndex = result.indexOf(codeTag, startIndex)) !== -1
-				) {
-					// Use extractCodeFromBlock for proper brace-counting extraction
-					const extraction = extractCodeFromBlock(result, startIndex);
-					if (!extraction) {
-						startIndex += codeTagLength;
-						continue;
-					}
-
-					const codeContent = extraction.code;
-
-					// Format code using prettier.format to get a formatted string
-					// Ensure our plugin is LAST in the plugins array so our wrapped printer
-					// takes precedence over the base apex printers for shared parser names.
-					const effectiveWidth = calculateEffectiveWidth(
-						printWidthValue,
-						commentPrefixLength,
-					);
-
-					// Format with prettier, trying apex-anonymous first, then apex
-					let formattedCode = await formatApexCodeWithFallback(
-						codeContent,
-						{
-							...options,
-							printWidth: effectiveWidth,
-							plugins,
-						},
-					);
-
-					// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
-
-					// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
-					// This preserves the structure from original code (blank lines after } before annotations/methods)
-					const formattedLines = formattedCode.trim().split('\n');
-					const resultLines: string[] = [];
-
-					for (let i = 0; i < formattedLines.length; i++) {
-						const formattedLine = formattedLines[i];
-						if (formattedLine === undefined) continue;
-						resultLines.push(formattedLine);
-						// Insert blank line after } when followed by annotations or access modifiers
-						if (
-							preserveBlankLineAfterClosingBrace(
-								formattedLines as readonly string[],
-								i,
-							)
-						) {
-							resultLines.push('');
-						}
-					}
-
-					formattedCode = resultLines.join('\n');
-
-					// Replace the code block with formatted version
-					const beforeCode = result.substring(0, startIndex);
-					const afterCode = result.substring(extraction.endPos);
-					const formattedCodeLines = formattedCode.trim().split('\n');
-					const prefixedCodeLines = formattedCodeLines.map((line) =>
-						line ? ` * ${line}` : ' *',
-					);
-					const needsLeadingNewline = !beforeCode.endsWith('\n');
-					const isEmptyBlock = codeContent.trim().length === 0;
-					const newCodeBlock = isEmptyBlock
-						? (needsLeadingNewline ? '\n' : '') + ` * ${codeTag}}\n`
-						: (needsLeadingNewline ? '\n' : '') +
-							` * ${codeTag}\n` +
-							prefixedCodeLines.join('\n') +
-							'\n * }\n';
-					result = beforeCode + newCodeBlock + afterCode;
-					hasChanges = true;
-					startIndex = beforeCode.length + newCodeBlock.length;
-				}
-
-				if (!hasChanges) {
+				if (!formattedComment) {
 					return undefined;
 				}
 
-				// Store formatted comment in cache for retrieval by processApexDocCommentLines
-				const codeTagPos = commentText.indexOf('{@code');
-				if (codeTagPos !== -1) {
-					setFormattedCodeBlock(
-						`${String(commentText.length)}-${String(codeTagPos)}`,
-						result,
-					);
-				}
-
 				// Return formatted comment as Doc (split into lines)
-				const lines = result.split('\n');
+				const lines = formattedComment.split('\n');
 				const { join, hardline } = doc.builders;
 				return join(hardline, lines) as Doc;
 			};

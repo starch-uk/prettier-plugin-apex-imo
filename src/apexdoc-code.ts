@@ -10,6 +10,7 @@ import { NOT_FOUND_INDEX, removeCommentPrefix } from './comments.js';
 import {
 	EMPTY,
 	INDEX_ONE,
+	calculateEffectiveWidth,
 	formatApexCodeWithFallback,
 	preserveBlankLineAfterClosingBrace,
 } from './utils.js';
@@ -311,6 +312,119 @@ function processCodeBlock(
 	return [`{@code`, ...codeLines, `}`];
 }
 
+/**
+ * Processes all {@code} blocks in a comment text, formats them, and returns the formatted comment.
+ * This is used by the Prettier embed function to process code blocks in comments.
+ * @param root0 - The parameters object.
+ * @param root0.commentText - The comment text containing {@code} blocks.
+ * @param root0.options - Parser options.
+ * @param root0.plugins - Array of plugins to use for formatting.
+ * @param root0.commentPrefixLength - Length of the comment prefix (tabWidth + 3).
+ * @param root0.setFormattedCodeBlock - Function to cache formatted code blocks.
+ * @returns The formatted comment text with all code blocks processed, or undefined if no changes.
+ */
+const processAllCodeBlocksInComment = async ({
+	commentText,
+	options,
+	plugins,
+	commentPrefixLength,
+	setFormattedCodeBlock,
+}: {
+	readonly commentText: string;
+	readonly options: ParserOptions;
+	readonly plugins: readonly (string | URL | prettier.Plugin<unknown>)[];
+	readonly commentPrefixLength: number;
+	readonly setFormattedCodeBlock: (key: string, value: string) => void;
+}): Promise<string | undefined> => {
+	const printWidthValue = options.printWidth;
+	const effectiveWidth = calculateEffectiveWidth(
+		printWidthValue,
+		commentPrefixLength,
+	);
+
+	let result = commentText;
+	let startIndex = 0;
+	let hasChanges = false;
+
+	while ((startIndex = result.indexOf(CODE_TAG, startIndex)) !== -1) {
+		// Use extractCodeFromBlock for proper brace-counting extraction
+		const extraction = extractCodeFromBlock(result, startIndex);
+		if (!extraction) {
+			startIndex += CODE_TAG_LENGTH;
+			continue;
+		}
+
+		const codeContent = extraction.code;
+
+		// Format code using prettier.format to get a formatted string
+		// Ensure our plugin is LAST in the plugins array so our wrapped printer
+		// takes precedence over the base apex printers for shared parser names.
+		let formattedCode = await formatApexCodeWithFallback(codeContent, {
+			...options,
+			printWidth: effectiveWidth,
+			plugins,
+		});
+
+		// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
+
+		// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
+		// This preserves the structure from original code (blank lines after } before annotations/methods)
+		const formattedLines = formattedCode.trim().split('\n');
+		const resultLines: string[] = [];
+
+		for (let i = 0; i < formattedLines.length; i++) {
+			const formattedLine = formattedLines[i];
+			if (formattedLine === undefined) continue;
+			resultLines.push(formattedLine);
+			// Insert blank line after } when followed by annotations or access modifiers
+			if (
+				preserveBlankLineAfterClosingBrace(
+					formattedLines as readonly string[],
+					i,
+				)
+			) {
+				resultLines.push('');
+			}
+		}
+
+		formattedCode = resultLines.join('\n');
+
+		// Replace the code block with formatted version
+		const beforeCode = result.substring(0, startIndex);
+		const afterCode = result.substring(extraction.endPos);
+		const formattedCodeLines = formattedCode.trim().split('\n');
+		const prefixedCodeLines = formattedCodeLines.map((line) =>
+			line ? ` * ${line}` : ' *',
+		);
+		const needsLeadingNewline = !beforeCode.endsWith('\n');
+		const isEmptyBlock = codeContent.trim().length === 0;
+		const newCodeBlock = isEmptyBlock
+			? (needsLeadingNewline ? '\n' : '') + ` * ${CODE_TAG}}\n`
+			: (needsLeadingNewline ? '\n' : '') +
+				` * ${CODE_TAG}\n` +
+				prefixedCodeLines.join('\n') +
+				'\n * }\n';
+		result = beforeCode + newCodeBlock + afterCode;
+		hasChanges = true;
+		startIndex = beforeCode.length + newCodeBlock.length;
+	}
+
+	if (!hasChanges) {
+		return undefined;
+	}
+
+	// Store formatted comment in cache for retrieval by processApexDocCommentLines
+	const codeTagPos = commentText.indexOf(CODE_TAG);
+	if (codeTagPos !== -1) {
+		setFormattedCodeBlock(
+			`${String(commentText.length)}-${String(codeTagPos)}`,
+			result,
+		);
+	}
+
+	return result;
+};
+
 export {
 	CODE_TAG,
 	CODE_TAG_LENGTH,
@@ -319,4 +433,5 @@ export {
 	formatCodeBlockToken,
 	processCodeBlock,
 	processCodeBlockLines,
+	processAllCodeBlocksInComment,
 };
