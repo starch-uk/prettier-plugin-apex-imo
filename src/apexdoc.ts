@@ -17,7 +17,6 @@ import {
 	tokensToCommentString,
 	wrapTextToWidth,
 	CommentPrefix,
-	isContentToken,
 	NOT_FOUND_INDEX,
 	getContentTokenString,
 	getContentTokenLines,
@@ -34,9 +33,6 @@ import {
 	isNotEmpty,
 } from './utils.js';
 import type {
-	CommentToken,
-	ContentToken,
-	CodeBlockToken,
 	DocCommentToken,
 	DocContentToken,
 	DocCodeBlockToken,
@@ -300,13 +296,20 @@ const buildLinesWithPrefixes = (
  * @param options - Options including printWidth.
  * @returns The rendered content token or null if empty.
  */
+interface RenderedContentToken {
+	readonly type: 'text' | 'paragraph';
+	readonly content: string;
+	readonly lines: string[];
+	readonly isContinuation?: boolean;
+}
+
 const renderCodeBlockToken = (
 	token: DocCodeBlockToken,
 	commentPrefix: string,
 	options: Readonly<{
 		readonly printWidth?: number;
 	}>,
-): ContentToken | null => {
+): RenderedContentToken | null => {
 	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
 	// Use formattedCode if available, otherwise use rawCode
 	const codeToUse = token.formattedCode ?? token.rawCode;
@@ -377,7 +380,7 @@ const renderTextOrParagraphToken = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
-): ContentToken => {
+): RenderedContentToken => {
 	// Extract string content from Doc for wrapping
 	const contentString = getContentTokenString(token);
 	const linesString = getContentTokenLines(token);
@@ -436,7 +439,7 @@ const tokensToApexDocString = (
 		if (token.type === 'annotation') {
 			const rendered = renderAnnotationToken(token, commentPrefix);
 			if (rendered) {
-				// Convert ContentToken to DocContentToken
+				// Convert rendered content to DocContentToken
 				apexDocTokens.push(createDocContentToken(
 					rendered.type,
 					rendered.content,
@@ -451,7 +454,7 @@ const tokensToApexDocString = (
 				options,
 			);
 			if (rendered) {
-				// Convert ContentToken to DocContentToken
+				// Convert rendered content to DocContentToken
 				apexDocTokens.push(createDocContentToken(
 					rendered.type,
 					rendered.content,
@@ -466,7 +469,7 @@ const tokensToApexDocString = (
 				effectiveWidth,
 				options,
 			);
-			// Convert ContentToken to DocContentToken
+			// Convert rendered content to DocContentToken
 			apexDocTokens.push(createDocContentToken(
 				rendered.type,
 				rendered.content,
@@ -819,26 +822,6 @@ const applyTokenProcessingPipeline = (
 	return processedTokens;
 };
 
-
-/**
- * Extracts prefix from paragraph token lines.
- * @param token - The content token to extract prefix from.
- * @returns The extracted prefix string.
- */
-const extractPrefixFromParagraphToken = (
-	token: ContentToken,
-): string => {
-	const firstLineWithPrefix = token.lines.find((line: string) => {
-		const trimmed = line.trimStart();
-		return trimmed.length > EMPTY && trimmed.startsWith('*');
-	});
-	if (!firstLineWithPrefix) {
-		return ' * '; // Default fallback
-	}
-	const prefixMatch = /^(\s*\*\s*)/.exec(firstLineWithPrefix);
-	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index for regex match
-	return prefixMatch?.[INDEX_ONE] ?? ' * ';
-};
 
 /**
  * Creates a Doc text token from cleaned text for paragraph tokens.

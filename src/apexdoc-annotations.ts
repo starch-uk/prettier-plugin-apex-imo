@@ -5,20 +5,12 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import * as prettier from 'prettier';
 import type {
-	CommentToken,
-	ContentToken,
-	AnnotationToken,
 	DocCommentToken,
 	DocContentToken,
 	DocAnnotationToken,
 } from './comments.js';
 import {
-	getContentTokenString,
-	getContentTokenLines,
-} from './comments.js';
-import {
 	removeCommentPrefix,
-	isContentToken,
 	INDEX_TWO,
 	getContentTokenString,
 	getContentTokenLines,
@@ -325,10 +317,16 @@ const normalizeAnnotationTokens = (
  * @param commentPrefix - The comment prefix string.
  * @returns The rendered content token, or null if empty.
  */
+interface RenderedAnnotationToken {
+	readonly type: 'text';
+	readonly content: string;
+	readonly lines: string[];
+}
+
 const renderAnnotationToken = (
 	token: DocAnnotationToken,
 	commentPrefix: string,
-): ContentToken | null => {
+): RenderedAnnotationToken | null => {
 	// Extract string content from Doc for rendering
 	const contentString = docToString(token.content);
 	const contentLines = isNotEmpty(contentString)

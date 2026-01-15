@@ -420,15 +420,6 @@ const normalizeBlockComment = (
 const NOT_FOUND_INDEX = -1;
 
 /**
- * Type guard to check if a token is a ContentToken (text or paragraph).
- * @param token - The token to check.
- * @returns True if the token is a ContentToken.
- */
-const isContentToken = (token: CommentToken): token is ContentToken => {
-	return token.type === 'text' || token.type === 'paragraph';
-};
-
-/**
  * Comment prefix utilities for consistent handling of comment formatting.
  */
 const CommentPrefix = {
@@ -462,47 +453,6 @@ const CommentPrefix = {
 		return indentLevel + ' * '.length;
 	},
 };
-
-// Token type definitions for comment processing
-//
-/**
- * Token-based comment processing system for ApexDoc comments.
- *
- * The system uses a unified token architecture:
- * - ContentToken: Unified token for text/paragraph content with optional isContinuation flag
- * - CodeBlockToken: Specialized for {@code} blocks
- * - AnnotationToken: Specialized for ApexDoc annotations (@param, @return, etc.)
- *
- * All token processing is async-first and integrated into Prettier's main processing flow.
- */
-//
-/** @deprecated Use DocContentToken instead - legacy string-based token */
-interface ContentToken {
-	readonly type: 'text' | 'paragraph';
-	readonly content: string;
-	readonly lines: readonly string[];
-	readonly isContinuation?: boolean;
-}
-
-/** @deprecated Use DocCodeBlockToken instead - legacy string-based token */
-interface CodeBlockToken {
-	readonly type: 'code';
-	readonly startPos: number;
-	readonly endPos: number;
-	readonly rawCode: string;
-	readonly formattedCode?: string;
-}
-
-/** @deprecated Use DocAnnotationToken instead - legacy string-based token */
-interface AnnotationToken {
-	readonly type: 'annotation';
-	readonly name: string;
-	readonly content: string;
-	readonly followingText?: string;
-}
-
-/** @deprecated Use DocCommentToken instead - legacy string-based token union */
-type CommentToken = ContentToken | CodeBlockToken | AnnotationToken;
 
 /**
  * Removes comment prefix (asterisk and spaces) from a line.
@@ -603,26 +553,6 @@ const detectCodeBlocks = (
 
 	return codeBlocks;
 };
-
-/**
- * Parses a normalized comment string into basic tokens.
- * Detects paragraphs based on empty lines and continuation logic.
- * Also detects code blocks (pattern: slash-asterisk ... asterisk-slash).
- * @param normalizedComment - The normalized comment string.
- * @returns Array of tokens.
- */
-/**
- * Creates a paragraph token from accumulated paragraph data.
- */
-const createParagraphToken = (
-	paragraph: readonly string[],
-	lines: readonly string[],
-): ContentToken => ({
-	type: 'paragraph',
-	content: paragraph.join(' '),
-	lines: [...lines],
-	isContinuation: false,
-});
 
 /**
  * Converts string lines to Doc array (strings are valid Docs).
@@ -1085,63 +1015,6 @@ const wrapTextToWidth = (
 };
 
 /**
- * Wraps content tokens based on effective page width.
- * Effective width accounts for comment prefix: printWidth - (baseIndent + ' * '.length)
- * @param tokens - Array of tokens (should be ContentTokens).
- * @param printWidth - The maximum line width.
- * @param baseIndent - The base indentation level in spaces.
- * @param options - Options including tabWidth and useTabs.
- * @returns Array of wrapped content tokens.
- */
-const wrapParagraphTokens = (
-	tokens: readonly CommentToken[],
-	printWidth: number,
-	baseIndent: number,
-	options: Readonly<{
-		readonly tabWidth: number;
-		readonly useTabs?: boolean | null | undefined;
-	}>,
-): readonly ContentToken[] => {
-	const commentPrefixLength = CommentPrefix.getLength(baseIndent);
-	const effectiveWidth = calculateEffectiveWidth(printWidth, commentPrefixLength);
-
-	const wrappedTokens: ContentToken[] = [];
-
-	for (const token of tokens) {
-		if (token.type !== 'paragraph') {
-			// For non-paragraph tokens, wrap them as-is (they'll be handled separately)
-			continue;
-		}
-
-		// Use unified wrapping function
-		const wrappedLines = wrapTextToWidth(
-			token.content,
-			effectiveWidth,
-			options,
-		);
-
-		// Create new paragraph token with wrapped lines
-		// Need to reconstruct lines with comment prefix
-		const commentPrefix = CommentPrefix.create(baseIndent, options);
-		const wrappedTokenLines = wrappedLines.map(
-			(line) => `${commentPrefix}${line}`,
-		);
-
-		const wrappedToken = {
-			type: 'paragraph' as const,
-			content: wrappedLines.join(' '),
-			lines: wrappedTokenLines,
-			...(token.isContinuation !== undefined
-				? { isContinuation: token.isContinuation }
-				: {}),
-		} satisfies ContentToken;
-		wrappedTokens.push(wrappedToken);
-	}
-
-	return wrappedTokens;
-};
-
-/**
  * Custom printComment function that preserves our wrapped lines.
  * The original printApexDocComment trims each line, which removes our carefully
  * calculated wrapping. This version preserves the line structure we created.
@@ -1341,10 +1214,8 @@ export {
 	normalizeBlockComment,
 	parseCommentToTokens,
 	tokensToCommentString,
-	wrapParagraphTokens,
 	wrapTextToWidth,
 	CommentPrefix,
-	isContentToken,
 	customPrintComment,
 	removeCommentPrefix,
 	handleOwnLineComment,
@@ -1361,10 +1232,6 @@ export {
 	createDocContentToken,
 };
 export type {
-	ContentToken,
-	CodeBlockToken,
-	AnnotationToken,
-	CommentToken,
 	// New Doc-based token types
 	DocContentToken,
 	DocCodeBlockToken,

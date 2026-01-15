@@ -13,7 +13,6 @@ import {
 	formatApexCodeWithFallback,
 	preserveBlankLineAfterClosingBrace,
 } from './utils.js';
-import type { CodeBlockToken } from './comments.js';
 
 const CODE_TAG = '{@code';
 const CODE_TAG_LENGTH = CODE_TAG.length;
@@ -156,28 +155,25 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
  * @returns The formatted code string.
  */
 /**
- * Formats a CodeBlockToken using prettier with our plugin and effective page width.
+ * Formats a code block using prettier with our plugin and effective page width.
  * @param root0 - The parameters object.
- * @param root0.token - The code block token to format.
+ * @param root0.code - The code string to format.
  * @param root0.effectiveWidth - The effective page width (reduced from printWidth).
  * @param root0.embedOptions - Parser options for formatting.
  * @param root0.currentPluginInstance - Plugin instance to ensure wrapped printer is used.
- * @returns Updated CodeBlockToken with formattedCode populated.
+ * @returns Formatted code string with preserved blank lines.
  */
-// eslint-disable-next-line @typescript-eslint/no-deprecated -- Legacy token type still in use
 const formatCodeBlockToken = async ({
-	token,
+	code,
 	effectiveWidth,
 	embedOptions,
 	currentPluginInstance,
 }: {
-	// eslint-disable-next-line @typescript-eslint/no-deprecated -- Legacy token type still in use
-	readonly token: CodeBlockToken;
+	readonly code: string;
 	readonly effectiveWidth: number;
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
-	// eslint-disable-next-line @typescript-eslint/no-deprecated -- Legacy token type still in use
-}): Promise<CodeBlockToken> => {
+}): Promise<string> => {
 	if (currentPluginInstance === undefined || currentPluginInstance.default === undefined) {
 		throw new Error(
 			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
@@ -202,7 +198,7 @@ const formatCodeBlockToken = async ({
 	// Format with prettier, trying apex-anonymous first, then apex
 	// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
 	const formatted = await formatApexCodeWithFallback(
-		token.rawCode,
+		code,
 		optionsWithPlugin,
 	);
 
@@ -226,10 +222,7 @@ const formatCodeBlockToken = async ({
 		}
 	}
 
-	return {
-		...token,
-		formattedCode: resultLines.join('\n').trimEnd(),
-	};
+	return resultLines.join('\n').trimEnd();
 };
 
 /**
