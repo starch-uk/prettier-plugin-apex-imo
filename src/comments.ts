@@ -517,34 +517,33 @@ const detectCodeBlocks = (
 		if (
 			text[i] === '/' &&
 			text[i + 1] === '*' &&
-			(i + 2 >= text.length || text[i + 2] !== '*')
+			text[i + 2] !== '*'
 		) {
 			const start = i;
 			i += 2;
 			let depth = 1;
-			let contentStart = i;
-			let foundEnd = false;
+			const contentStart = i;
 
-			while (i < text.length - 1 && !foundEnd) {
+			while (i < text.length - 1 && depth > 0) {
 				if (text[i] === '/' && text[i + 1] === '*') {
 					depth++;
 					i += 2;
 				} else if (text[i] === '*' && text[i + 1] === '/') {
 					depth--;
+					i += 2;
 					if (depth === 0) {
 						codeBlocks.push({
 							start,
-							end: i + 2,
-							content: text.substring(contentStart, i),
+							end: i,
+							content: text.substring(contentStart, i - 2),
 						});
-						foundEnd = true;
 					}
-					i += 2;
 				} else {
 					i++;
 				}
 			}
-			if (!foundEnd) {
+			// If block wasn't closed, continue from next position to avoid infinite loop
+			if (depth > 0) {
 				i = start + 1;
 			}
 		} else {
