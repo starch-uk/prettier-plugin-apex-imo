@@ -174,7 +174,10 @@ const formatCodeBlockToken = async ({
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<string> => {
-	if (currentPluginInstance === undefined || currentPluginInstance.default === undefined) {
+	if (
+		currentPluginInstance === undefined ||
+		currentPluginInstance.default === undefined
+	) {
 		throw new Error(
 			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
 		);
@@ -193,10 +196,7 @@ const formatCodeBlockToken = async ({
 
 	// Format with prettier, trying apex-anonymous first, then apex
 	// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
-	const formatted = await formatApexCodeWithFallback(
-		code,
-		optionsWithPlugin,
-	);
+	const formatted = await formatApexCodeWithFallback(code, optionsWithPlugin);
 
 	// Preserve blank lines after closing braces when followed by annotations or access modifiers
 	const formattedLines = formatted.trim().split('\n');

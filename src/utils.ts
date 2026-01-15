@@ -133,11 +133,11 @@ const preserveBlankLineAfterClosingBrace = (
  * Formats Apex code using prettier with parser fallback.
  * Tries 'apex-anonymous' parser first, then falls back to 'apex' parser.
  * If both fail, returns the original code.
- * 
+ *
  * Note: Annotations are normalized via AST during printing (see printAnnotation in annotations.ts).
  * The wrapped printer intercepts annotation nodes and normalizes them, so no string-based
  * normalization fallback is needed.
- * 
+ *
  * @param code - The code to format.
  * @param options - Parser options including printWidth, tabWidth, useTabs, and plugins.
  * @returns Promise resolving to formatted code string.

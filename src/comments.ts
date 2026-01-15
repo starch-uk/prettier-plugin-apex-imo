@@ -122,7 +122,10 @@ const handleDanglingComment = (comment: unknown): boolean => {
 	const { enclosingNode } = commentWithContext;
 	if (!enclosingNode) return false;
 	const enclosingNodeClass = getNodeClassOptional(enclosingNode);
-	if (!enclosingNodeClass || !ALLOW_DANGLING_COMMENTS.includes(enclosingNodeClass)) {
+	if (
+		!enclosingNodeClass ||
+		!ALLOW_DANGLING_COMMENTS.includes(enclosingNodeClass)
+	) {
 		return false;
 	}
 	const enclosingNodeWithMembers = enclosingNode as {
@@ -370,7 +373,10 @@ const normalizeCommentLine = (
 	) {
 		leadingWhitespaceCount++;
 	}
-	const spaceAfterAsterisk = afterAsterisk.substring(0, leadingWhitespaceCount);
+	const spaceAfterAsterisk = afterAsterisk.substring(
+		0,
+		leadingWhitespaceCount,
+	);
 	// Remove first space if present, preserve additional spaces (code indentation)
 	afterAsterisk =
 		spaceAfterAsterisk.length > EMPTY
@@ -474,40 +480,40 @@ const removeCommentPrefix = (
 	line: string,
 	preserveIndent: boolean = false,
 ): string => {
-		if (preserveIndent) {
-			// Remove all asterisks (including multiple asterisks separated by spaces) and single space after, preserving indentation
-			// Pattern: leading whitespace + asterisk(s) (with optional spaces between) + optional single space + rest
-			// We want to remove: leading whitespace + all asterisks (including * * * patterns) + exactly one space (if present)
-			// But preserve: any additional spaces after that (indentation) and the content
-			// Match: leading whitespace, then asterisks (possibly separated by spaces), then optional single space, then rest
-			const match = /^(\s*)(\*(\s*\*)*)\s?(.*)$/.exec(line);
-			if (match) {
-				const rest = match[4];
-				if (rest === undefined) {
-					return line;
+	if (preserveIndent) {
+		// Remove all asterisks (including multiple asterisks separated by spaces) and single space after, preserving indentation
+		// Pattern: leading whitespace + asterisk(s) (with optional spaces between) + optional single space + rest
+		// We want to remove: leading whitespace + all asterisks (including * * * patterns) + exactly one space (if present)
+		// But preserve: any additional spaces after that (indentation) and the content
+		// Match: leading whitespace, then asterisks (possibly separated by spaces), then optional single space, then rest
+		const match = /^(\s*)(\*(\s*\*)*)\s?(.*)$/.exec(line);
+		if (match) {
+			const rest = match[4];
+			if (rest === undefined) {
+				return line;
+			}
+			// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
+			// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
+			// But preserve any additional spaces (indentation) - they're part of the content
+			// Check if rest starts with a single space followed by non-space (normal case)
+			// or multiple spaces (indentation case) - using character scanning instead of regex
+			const trimmed = rest.trimStart();
+			if (trimmed.length < rest.length) {
+				const spaces = rest.slice(0, rest.length - trimmed.length);
+				const content = trimmed;
+				// If exactly one space, remove it (it's the separator after asterisk)
+				// If multiple spaces, keep them (they're indentation)
+				if (spaces.length === 1) {
+					return content;
 				}
-				// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
-				// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
-				// But preserve any additional spaces (indentation) - they're part of the content
-				// Check if rest starts with a single space followed by non-space (normal case)
-				// or multiple spaces (indentation case) - using character scanning instead of regex
-				const trimmed = rest.trimStart();
-				if (trimmed.length < rest.length) {
-					const spaces = rest.slice(0, rest.length - trimmed.length);
-					const content = trimmed;
-					// If exactly one space, remove it (it's the separator after asterisk)
-					// If multiple spaces, keep them (they're indentation)
-					if (spaces.length === 1) {
-						return content;
-					}
-					// Multiple spaces - preserve as indentation
-					return rest;
-				}
-				// No leading space - return as-is
+				// Multiple spaces - preserve as indentation
 				return rest;
 			}
-			return line;
+			// No leading space - return as-is
+			return rest;
 		}
+		return line;
+	}
 	// Use original regex: /^\s*(\*(\s*\*)*)\s*/ - removes leading whitespace, asterisk(s), and all trailing whitespace
 	const result = line.replace(/^\s*(\*(\s*\*)*)\s*/, '');
 	return result.trim();
@@ -528,11 +534,7 @@ const detectCodeBlocks = (
 
 	while (i < text.length - 1) {
 		// Look for /* but not /**
-		if (
-			text[i] === '/' &&
-			text[i + 1] === '*' &&
-			text[i + 2] !== '*'
-		) {
+		if (text[i] === '/' && text[i + 1] === '*' && text[i + 2] !== '*') {
 			const start = i;
 			i += 2;
 			let depth = 1;
@@ -578,10 +580,7 @@ const linesToDocLines = (lines: readonly string[]): readonly Doc[] =>
  * Converts string content to Doc (string is a valid Doc).
  * For multi-line content, joins with hardline.
  */
-const contentToDoc = (
-	content: string,
-	lines: readonly string[],
-): Doc => {
+const contentToDoc = (content: string, lines: readonly string[]): Doc => {
 	const { join, hardline } = docBuilders;
 	if (lines.length === 0) {
 		return '' as Doc;
@@ -835,10 +834,10 @@ const parseCommentToDocs = (
 		const content = contentLines
 			.map((line) => removeCommentPrefix(line))
 			.join('\n');
-		const trimmedLines = contentLines.map((line) => removeCommentPrefix(line));
-		return [
-			createDocContent('text', content, trimmedLines),
-		];
+		const trimmedLines = contentLines.map((line) =>
+			removeCommentPrefix(line),
+		);
+		return [createDocContent('text', content, trimmedLines)];
 	}
 
 	return docs;
@@ -1089,7 +1088,12 @@ const printComment = (
 						options,
 						true,
 					)
-				: normalizeSingleApexDocComment(commentValue, 0, options, false);
+				: normalizeSingleApexDocComment(
+						commentValue,
+						0,
+						options,
+						false,
+					);
 
 			// Return the comment as Prettier documents (already in Doc format)
 			return [commentDoc];
@@ -1106,14 +1110,10 @@ const printComment = (
 			// Parse to docs, normalize annotations, then convert back
 			const docs = parseCommentToDocs(commentValue);
 			const normalizedDocs = normalizeAnnotations(docs);
-			const normalizedComment = tokensToCommentString(
-				normalizedDocs,
-				0,
-				{
-					tabWidth: options.tabWidth,
-					useTabs: options.useTabs,
-				},
-			);
+			const normalizedComment = tokensToCommentString(normalizedDocs, 0, {
+				tabWidth: options.tabWidth,
+				useTabs: options.useTabs,
+			});
 
 			// Return the normalized comment as Prettier documents
 			const lines = normalizedComment.split('\n');

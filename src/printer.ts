@@ -47,7 +47,7 @@ const processTypeParams = (params: unknown[]): Doc[] => {
 	const processedParams: Doc[] = [];
 	for (let j = 0; j < params.length; j++) {
 		const param = params[j] as Doc;
-		if (param === ', ' && j === processedParams.length && j + 1 < params.length) {
+		if (param === ', ' && j + 1 < params.length) {
 			processedParams.push(', ');
 			const remainingParams = params.slice(j + 1) as Doc[];
 			processedParams.push(
@@ -102,8 +102,10 @@ const makeTypeDocBreakable = (
 };
 
 // Store current options and originalText for use in printComment
-let currentPrintOptions: Readonly<ParserOptions> | undefined = undefined;
-let currentOriginalText: string | undefined = undefined;
+let currentPrintState: {
+	options?: Readonly<ParserOptions>;
+	originalText?: string | undefined;
+} = {};
 
 // Store formatted code blocks keyed by comment value hash
 // This allows embed to format code blocks and printComment to retrieve them
@@ -124,9 +126,10 @@ const setCurrentPluginInstance = (plugin: { default: unknown }): void => {
 };
 
 const getCurrentPrintOptions = (): Readonly<ParserOptions> | undefined =>
-	currentPrintOptions;
+	currentPrintState.options;
 
-const getCurrentOriginalText = (): string | undefined => currentOriginalText;
+const getCurrentOriginalText = (): string | undefined =>
+	currentPrintState.originalText;
 
 const getCurrentPluginInstance = (): { default: unknown } | undefined =>
 	currentPluginInstance;
@@ -178,11 +181,12 @@ const canAttachComment = (node: unknown): boolean => {
  * @param comment - The comment node to check.
  * @returns True if the comment is a block comment.
  */
-	const isBlockComment = (comment: unknown): boolean => {
-		if (!comment || typeof comment !== 'object') return false;
-		const commentClass = (comment as { '@class'?: unknown })['@class'];
-		return commentClass === BLOCK_COMMENT_CLASS;
-	};
+const isBlockComment = (comment: unknown): boolean => {
+	if (!comment || typeof comment !== 'object') return false;
+	return (
+		(comment as { '@class'?: unknown })['@class'] === BLOCK_COMMENT_CLASS
+	);
+};
 
 const createWrappedPrinter = (originalPrinter: any): any => {
 	const result = { ...originalPrinter };
@@ -213,35 +217,31 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				) => Promise<Doc>,
 			): Promise<Doc | undefined> => {
 				// Cache options values early
-				if (options.plugins === undefined) {
+				if (
+					options.plugins === undefined ||
+					options.tabWidth === undefined
+				) {
 					throw new Error(
-						'prettier-plugin-apex-imo: options.plugins is required',
-					);
-				}
-				if (options.tabWidth === undefined) {
-					throw new Error(
-						'prettier-plugin-apex-imo: options.tabWidth is required',
+						'prettier-plugin-apex-imo: options.plugins and options.tabWidth are required',
 					);
 				}
 				const tabWidthValue = options.tabWidth;
 				const printWidthValue = options.printWidth;
 				const basePlugins = options.plugins;
 				const pluginInstance = getCurrentPluginInstance();
-				const plugins: (
-					| string
-					| URL
-					| prettier.Plugin<ApexNode>
-				)[] = pluginInstance
-					? [
-							...basePlugins.filter(
-								(p) => p !== pluginInstance.default,
-							),
-							pluginInstance.default as prettier.Plugin<ApexNode>,
-						]
-					: basePlugins;
+				const plugins: (string | URL | prettier.Plugin<ApexNode>)[] =
+					pluginInstance
+						? [
+								...basePlugins.filter(
+									(p) => p !== pluginInstance.default,
+								),
+								pluginInstance.default as prettier.Plugin<ApexNode>,
+							]
+						: basePlugins;
 				const commentPrefixLength = tabWidthValue + 3; // base indent + " * " prefix
 
 				const codeTag = '{@code';
+				const codeTagLength = codeTag.length;
 				let result = commentText;
 				let startIndex = 0;
 				let hasChanges = false;
@@ -252,7 +252,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					// Use extractCodeFromBlock for proper brace-counting extraction
 					const extraction = extractCodeFromBlock(result, startIndex);
 					if (!extraction) {
-						startIndex += codeTag.length;
+						startIndex += codeTagLength;
 						continue;
 					}
 
@@ -304,8 +304,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					const beforeCode = result.substring(0, startIndex);
 					const afterCode = result.substring(extraction.endPos);
 					const formattedCodeLines = formattedCode.trim().split('\n');
-					const prefixedCodeLines = formattedCodeLines.map(
-						(line) => (line ? ` * ${line}` : ' *'),
+					const prefixedCodeLines = formattedCodeLines.map((line) =>
+						line ? ` * ${line}` : ' *',
 					);
 					const needsLeadingNewline = !beforeCode.endsWith('\n');
 					const isEmptyBlock = codeContent.trim().length === 0;
@@ -350,7 +350,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc | null => {
-		if (!isTypeRef(node) || !('names' in node)) return null;
+		if (!isTypeRef(node)) return null;
 		const namesField = (node as { names?: unknown }).names;
 		if (!Array.isArray(namesField) || namesField.length === 0) return null;
 
@@ -394,24 +394,19 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	/**
 	 * Checks if VariableDecls has assignments using AST traversal.
 	 */
-	const hasVariableAssignments = (decls: unknown[]): boolean => {
-		for (const decl of decls) {
-			if (!decl || typeof decl !== 'object') continue;
+	const hasVariableAssignments = (decls: unknown[]): boolean =>
+		decls.some((decl) => {
+			if (!decl || typeof decl !== 'object') return false;
 			const assignment = (decl as { assignment?: unknown }).assignment;
-			if (
+			return (
 				assignment !== null &&
 				assignment !== undefined &&
 				typeof assignment === 'object' &&
-				'value' in assignment
-			) {
-				const assignmentValue = (assignment as { value?: unknown }).value;
-				if (assignmentValue !== null && assignmentValue !== undefined) {
-					return true;
-				}
-			}
-		}
-		return false;
-	};
+				'value' in assignment &&
+				(assignment as { value?: unknown }).value !== null &&
+				(assignment as { value?: unknown }).value !== undefined
+			);
+		});
 
 	/**
 	 * Handles VariableDecls nodes (with or without assignments).
@@ -486,6 +481,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		// Handle case with assignments
 
+		const LIST_LITERAL_CLASS =
+			'apex.jorje.data.ast.NewObject$NewListLiteral';
+		const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
+		const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
+
 		const isCollectionAssignment = (assignment: unknown): boolean => {
 			if (
 				!assignment ||
@@ -505,12 +505,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				!('@class' in creator)
 			)
 				return false;
-			const LIST_LITERAL_CLASS =
-				'apex.jorje.data.ast.NewObject$NewListLiteral';
-			const SET_LITERAL_CLASS =
-				'apex.jorje.data.ast.NewObject$NewSetLiteral';
-			const MAP_LITERAL_CLASS =
-				'apex.jorje.data.ast.NewObject$NewMapLiteral';
 			const creatorClass = getNodeClassOptional(creator as ApexNode);
 			return (
 				creatorClass === LIST_LITERAL_CLASS ||
@@ -560,19 +554,39 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		}
 		resultParts.push(breakableTypeDoc);
 
+		const isMapTypeDoc = (doc: unknown): boolean => {
+			if (typeof doc === 'string') return doc.includes('Map<');
+			if (!Array.isArray(doc)) return false;
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+			const first = doc[0];
+			return (
+				first === 'Map' ||
+				(Array.isArray(first) &&
+					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+					first[0] === 'Map')
+			);
+		};
+
+		const hasNestedMap = (param: unknown): boolean => {
+			if (typeof param === 'string') return param.includes('Map<');
+			if (!Array.isArray(param)) return false;
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+			const paramFirst = param[0];
+			return (
+				paramFirst === 'Map' ||
+				(Array.isArray(paramFirst) &&
+					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
+					paramFirst[0] === 'Map') ||
+				param.some((item) => hasNestedMap(item))
+			);
+		};
+
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
 			if (typeof typeDocToCheck === 'string') {
 				return typeDocToCheck.includes('Map<');
 			}
 			if (!Array.isArray(typeDocToCheck)) return false;
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-			const first = typeDocToCheck[0];
-			const isMap =
-				first === 'Map' ||
-				(Array.isArray(first) &&
-					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-					first[0] === 'Map');
-			if (!isMap) return false;
+			if (!isMapTypeDoc(typeDocToCheck)) return false;
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 			const paramsIndex = 2;
 			if (
@@ -583,19 +597,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			}
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 			const params = typeDocToCheck[paramsIndex] as unknown[];
-			const hasNestedMap = (param: unknown): boolean => {
-				if (typeof param === 'string') return param.includes('Map<');
-				if (!Array.isArray(param)) return false;
-				// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-				const paramFirst = param[0];
-				return (
-					paramFirst === 'Map' ||
-					(Array.isArray(paramFirst) &&
-						// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-						paramFirst[0] === 'Map') ||
-					param.some((item) => hasNestedMap(item))
-				);
-			};
 			return params.some((param) => hasNestedMap(param));
 		};
 
@@ -682,9 +683,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc => {
-		currentPrintOptions = options;
-		currentOriginalText = (options as { originalText?: string })
+		const originalText = (options as { originalText?: string })
 			.originalText;
+		currentPrintState = {
+			options,
+			...(originalText !== undefined && { originalText }),
+		};
 		const { node } = path;
 		const nodeClass = getNodeClassOptional(node);
 		const typeNormalizingPrint = createTypeNormalizingPrint(print);

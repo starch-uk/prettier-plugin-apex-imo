@@ -146,7 +146,11 @@ const normalizeSingleApexDocComment = (
 
 	// Apply common doc processing pipeline
 	// Pass isEmbedFormatted flag to preserve formatted code from embed function
-	docs = applyDocProcessingPipeline(docs, normalizedComment, isEmbedFormatted);
+	docs = applyDocProcessingPipeline(
+		docs,
+		normalizedComment,
+		isEmbedFormatted,
+	);
 
 	// Cache prefix and width calculations (used in both wrapAnnotations and docsToApexDocString)
 	const prefixAndWidth = printWidth
@@ -189,7 +193,6 @@ const normalizeSingleApexDocComment = (
 	return join(hardline, lines);
 };
 
-
 /**
  * Processes code lines with blank line preservation.
  * @param codeToUse - The code string to process.
@@ -200,7 +203,9 @@ const processCodeLines = (
 	codeToUse: string,
 	shouldTrim: boolean = true,
 ): string => {
-	const codeLines = shouldTrim ? codeToUse.trim().split('\n') : codeToUse.split('\n');
+	const codeLines = shouldTrim
+		? codeToUse.trim().split('\n')
+		: codeToUse.split('\n');
 	const resultLines: string[] = [];
 
 	for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
@@ -228,7 +233,8 @@ const handleAlreadyWrappedCode = (
 		const [line] = codeLinesForProcessing;
 		if (line !== undefined && line.includes(';') && line.endsWith('}')) {
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- string slice position
-			codeLinesForProcessing[ARRAY_START_INDEX] = line.slice(0, -1) + ' }';
+			codeLinesForProcessing[ARRAY_START_INDEX] =
+				line.slice(0, -1) + ' }';
 		}
 	}
 	return codeLinesForProcessing;
@@ -248,7 +254,7 @@ const handleUnwrappedCode = (
 ): string[] => {
 	const isSingleLine = codeLinesForProcessing.length === INDEX_ONE;
 	const singleLineContent = isSingleLine
-		? codeLinesForProcessing[ARRAY_START_INDEX]?.trim() ?? ''
+		? (codeLinesForProcessing[ARRAY_START_INDEX]?.trim() ?? '')
 		: '';
 	const singleLineWithBraces = `{@code ${singleLineContent} }`;
 	const commentPrefixLength = commentPrefix.length;
@@ -418,7 +424,8 @@ const docsToApexDocString = (
 	cachedPrefixAndWidth?: ReturnType<typeof calculatePrefixAndWidth> | null,
 ): string => {
 	const prefixAndWidth =
-		cachedPrefixAndWidth ?? calculatePrefixAndWidth(commentIndent, options.printWidth, options);
+		cachedPrefixAndWidth ??
+		calculatePrefixAndWidth(commentIndent, options.printWidth, options);
 	const { commentPrefix, effectiveWidth } = prefixAndWidth;
 
 	const apexDocs: ApexDocComment[] = [];
@@ -520,7 +527,7 @@ const wrapTextContent = (
 		if (currentLine === undefined) continue;
 		const nextLine =
 			i + INDEX_ONE < cleanedLines.length
-				? cleanedLines[i + INDEX_ONE]?.trim() ?? ''
+				? (cleanedLines[i + INDEX_ONE]?.trim() ?? '')
 				: '';
 
 		// Check if we should join with next line
@@ -573,7 +580,10 @@ const parseApexDocs = (
 	readonly effectiveWidth: number;
 } => {
 	const commentPrefixLength = CommentPrefix.getLength(commentIndent);
-	const effectiveWidth = calculateEffectiveWidth(printWidth, commentPrefixLength);
+	const effectiveWidth = calculateEffectiveWidth(
+		printWidth,
+		commentPrefixLength,
+	);
 
 	// Parse comment to docs using the basic parser (now returns ApexDocComment[])
 	let docs = parseCommentToDocs(normalizedComment);
@@ -662,7 +672,10 @@ const mergeIncompleteCodeBlock = (
 
 	while (j < docs.length) {
 		const nextDoc = docs[j];
-		if (!nextDoc || (nextDoc.type !== 'paragraph' && nextDoc.type !== 'text')) {
+		if (
+			!nextDoc ||
+			(nextDoc.type !== 'paragraph' && nextDoc.type !== 'text')
+		) {
 			// Non-content doc or missing doc, stop merging
 			j++;
 			continue;
@@ -730,7 +743,12 @@ const mergeCodeBlockDocs = (
 		}
 
 		// Need to merge with subsequent docs
-		const mergeResult = mergeIncompleteCodeBlock(doc, codeTagIndex, docs, i);
+		const mergeResult = mergeIncompleteCodeBlock(
+			doc,
+			codeTagIndex,
+			docs,
+			i,
+		);
 		if (mergeResult.mergedDoc) {
 			mergedDocs.push(mergeResult.mergedDoc);
 			i = mergeResult.nextIndex + 1;
@@ -783,7 +801,6 @@ const applyDocProcessingPipeline = (
 	return processedDocs;
 };
 
-
 /**
  * Creates a Doc text doc from cleaned text for paragraph docs.
  * @param cleanedText - The cleaned text content.
@@ -808,9 +825,7 @@ const createDocTextFromParagraph = (
  * @param cleanedText - The cleaned text content.
  * @returns The created Doc text doc or null if empty.
  */
-const createDocTextFromText = (
-	cleanedText: string,
-): ApexDocContent | null => {
+const createDocTextFromText = (cleanedText: string): ApexDocContent | null => {
 	const splitLines = cleanedText.split('\n');
 	const cleanedLines = removeTrailingEmptyLines(splitLines);
 	if (cleanedLines.length === EMPTY) {
@@ -931,10 +946,15 @@ const processContentForCodeBlocks = (
 			newDocs,
 		);
 
-		const codeBlockResult = extractCodeFromBlock(processedContent, codeTagStart);
+		const codeBlockResult = extractCodeFromBlock(
+			processedContent,
+			codeTagStart,
+		);
 		if (codeBlockResult) {
 			// If comment was already formatted by embed function, treat extracted code as formatted
-			const formattedCode = isEmbedFormatted ? codeBlockResult.code : undefined;
+			const formattedCode = isEmbedFormatted
+				? codeBlockResult.code
+				: undefined;
 			newDocs.push(
 				createDocCodeBlock(
 					codeTagStart,
@@ -976,7 +996,6 @@ const detectCodeBlockDocs = (
 	}
 	return newDocs;
 };
-
 
 export {
 	EMPTY_CODE_TAG,

@@ -4,10 +4,7 @@
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import * as prettier from 'prettier';
-import type {
-	ApexDocComment,
-	ApexDocAnnotation,
-} from './comments.js';
+import type { ApexDocComment, ApexDocAnnotation } from './comments.js';
 import {
 	removeCommentPrefix,
 	INDEX_TWO,
@@ -24,9 +21,7 @@ import {
 	INDEX_ONE,
 	isNotEmpty,
 } from './utils.js';
-import {
-	APEXDOC_ANNOTATIONS_SET,
-} from './refs/apexdoc-annotations.js';
+import { APEXDOC_ANNOTATIONS_SET } from './refs/apexdoc-annotations.js';
 import { normalizeGroupContent } from './apexdoc-group.js';
 
 /**
@@ -89,9 +84,7 @@ const collectContinuationFromComment = (
 		.map((line) => removeCommentPrefix(line))
 		.filter(
 			(l) =>
-				isNotEmpty(l) &&
-				!l.startsWith('@') &&
-				!l.startsWith('{@code'),
+				isNotEmpty(l) && !l.startsWith('@') && !l.startsWith('{@code'),
 		);
 	if (continuationLines.length > EMPTY) {
 		for (const continuationLine of continuationLines) {
@@ -179,12 +172,20 @@ const detectAnnotationsInDocs = (
 					hasAnnotations = true;
 					// Process each annotation match
 					for (const match of matches) {
-						const annotationName = match[INDEX_ONE] !== undefined ? match[INDEX_ONE] : '';
-						const content = match[INDEX_TWO] !== undefined ? match[INDEX_TWO].trim() : '';
+						const annotationName =
+							match[INDEX_ONE] !== undefined
+								? match[INDEX_ONE]
+								: '';
+						const content =
+							match[INDEX_TWO] !== undefined
+								? match[INDEX_TWO].trim()
+								: '';
 						const lowerName = annotationName.toLowerCase();
 						const beforeText = extractBeforeText(
 							line,
-							match.index !== undefined ? match.index : ARRAY_START_INDEX,
+							match.index !== undefined
+								? match.index
+								: ARRAY_START_INDEX,
 						);
 
 						// Collect continuation lines for this annotation
@@ -211,7 +212,9 @@ const detectAnnotationsInDocs = (
 						// Create ApexDocAnnotation with Doc content
 						const annotationContentDoc = annotationContent as Doc;
 						const followingTextDoc =
-							beforeText.length > EMPTY ? (beforeText as Doc) : undefined;
+							beforeText.length > EMPTY
+								? (beforeText as Doc)
+								: undefined;
 						newDocs.push({
 							type: 'annotation',
 							name: lowerName,
@@ -259,7 +262,11 @@ const detectAnnotationsInDocs = (
 				if (trimmedLines.length > EMPTY) {
 					const remainingContent = trimmedLines.join(' ');
 					newDocs.push(
-						createDocContent('text', remainingContent, trimmedLines),
+						createDocContent(
+							'text',
+							remainingContent,
+							trimmedLines,
+						),
 					);
 				}
 			}
@@ -290,7 +297,8 @@ const normalizeAnnotations = (
 				let normalizedContentString = contentString;
 				// Special handling for @group annotations - normalize the group name
 				if (lowerName === 'group' && contentString) {
-					normalizedContentString = normalizeGroupContent(contentString);
+					normalizedContentString =
+						normalizeGroupContent(contentString);
 				}
 				// Convert back to Doc
 				const normalizedContentDoc = normalizedContentString as Doc;
@@ -335,7 +343,10 @@ const renderAnnotation = (
 		? docToString(doc.followingText)
 		: undefined;
 	const trimmedFollowingText = followingTextString?.trim();
-	if (trimmedFollowingText !== undefined && isNotEmpty(trimmedFollowingText)) {
+	if (
+		trimmedFollowingText !== undefined &&
+		isNotEmpty(trimmedFollowingText)
+	) {
 		const followingLines = followingTextString!
 			.split('\n')
 			.map((line: string) => line.trim())
@@ -463,7 +474,9 @@ const wrapAnnotations = (
 			let wrappedContent: string | prettier.Doc = firstLineContent;
 			if (remainingWords.length > 0) {
 				// Use fill for continuation lines with full effectiveWidth
-				const continuationFill = fill(joinBuilders(line, remainingWords));
+				const continuationFill = fill(
+					joinBuilders(line, remainingWords),
+				);
 				const continuationText = prettier.doc.printer.printDocToString(
 					continuationFill,
 					{

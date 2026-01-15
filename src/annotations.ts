@@ -82,12 +82,11 @@ const formatAnnotationParam = (
 ): Doc => {
 	if (isAnnotationKeyValue(param)) {
 		const optionKey = param.key.value;
-		const normalizedOption = normalizeAnnotationOptionName(originalName, optionKey);
-		return [
-			normalizedOption,
-			'=',
-			formatAnnotationValue(param.value),
-		];
+		const normalizedOption = normalizeAnnotationOptionName(
+			originalName,
+			optionKey,
+		);
+		return [normalizedOption, '=', formatAnnotationValue(param.value)];
 	}
 	if ('value' in param) {
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AST type access
@@ -99,9 +98,7 @@ const formatAnnotationParam = (
 	return "''";
 };
 
-const shouldForceMultiline = (
-	_formattedParams: readonly Doc[],
-): boolean => {
+const shouldForceMultiline = (_formattedParams: readonly Doc[]): boolean => {
 	// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- minimum count
 	return _formattedParams.length > 1;
 };
@@ -113,8 +110,7 @@ const printAnnotation = (
 	const originalName = node.name.value;
 	const normalizedName = normalizeAnnotationName(originalName);
 	const parametersLength = node.parameters.length;
-	if (parametersLength === EMPTY)
-		return ['@', normalizedName, hardline];
+	if (parametersLength === EMPTY) return ['@', normalizedName, hardline];
 	const formattedParams: Doc[] = node.parameters.map((param) =>
 		formatAnnotationParam(param, originalName),
 	);

@@ -5,10 +5,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { describe, it, expect } from 'vitest';
 import type { AstPath } from 'prettier';
-import {
-	isAnnotation,
-	printAnnotation,
-} from '../src/annotations.js';
+import { isAnnotation, printAnnotation } from '../src/annotations.js';
 import type {
 	ApexNode,
 	ApexAnnotationNode,
@@ -87,7 +84,8 @@ describe('annotations', () => {
 			{
 				description:
 					'should handle annotation with option name that matches preferred case',
-				fixture: 'annotation-normalize-option-name-matches-preferred-case',
+				fixture:
+					'annotation-normalize-option-name-matches-preferred-case',
 			},
 		])(
 			'$description',

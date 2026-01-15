@@ -48,7 +48,9 @@ const normalizeGroupContent = (content: string): string => {
 			? contentTrimmed.substring(0, firstSpaceIndex)
 			: contentTrimmed;
 	const description =
-		firstSpaceIndex > 0 ? contentTrimmed.substring(firstSpaceIndex + 1) : '';
+		firstSpaceIndex > 0
+			? contentTrimmed.substring(firstSpaceIndex + 1)
+			: '';
 
 	const normalizedGroupName = normalizeGroupName(groupName);
 
