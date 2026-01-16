@@ -4,6 +4,8 @@
 
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-magic-numbers -- Test file needs type assertions and magic numbers for testing edge cases */
 import { describe, it, expect, vi } from 'vitest';
+import type { Plugin } from 'prettier';
+import type { ApexNode } from '../src/types.js';
 import plugin, {
 	languages,
 	parsers,
@@ -11,6 +13,7 @@ import plugin, {
 	options,
 	defaultOptions,
 	isApexParser,
+	wrapParsers,
 } from '../src/index.js';
 import { loadFixture } from './test-utils.js';
 
@@ -75,20 +78,34 @@ describe('index', () => {
 
 	describe('wrappedParsers', () => {
 		it.concurrent('should skip invalid parsers (missing parse method)', () => {
-			// The parsers object may contain entries without a parse method
-			// The code should skip these with continue (line 133)
-			// Since parsers is created from the plugin structure, we can't easily inject invalid parsers
-			// But we can verify the valid parsers are wrapped correctly
-			expect(parsers).toBeDefined();
-			expect(typeof parsers).toBe('object');
-			if (parsers) {
-				// Verify that apex parsers have parse methods
-				const apexParser = parsers['apex'];
-				if (apexParser) {
-					expect(typeof apexParser).toBe('object');
-					expect(typeof (apexParser as { parse?: unknown }).parse).toBe('function');
-				}
-			}
+			// Create mock parsers object with invalid entries to test continue statement (line 127)
+			const mockParsers = {
+				valid: {
+					parse: async () => ({}),
+				},
+				invalid1: undefined, // undefined entry
+				invalid2: {}, // missing parse method
+				invalid3: {
+					parse: 'not a function', // parse is not a function
+				},
+			} as unknown as Readonly<Plugin<ApexNode>['parsers']>;
+			
+			const wrapped = wrapParsers(mockParsers, {} as Plugin<ApexNode>);
+			
+			// Should only wrap valid parsers
+			expect(wrapped).toBeDefined();
+			expect(wrapped?.valid).toBeDefined();
+			expect(typeof (wrapped?.valid as { parse?: unknown }).parse).toBe('function');
+			// Invalid parsers should be skipped (line 127 continue statement)
+			expect(wrapped?.invalid1).toBeUndefined();
+			expect(wrapped?.invalid2).toBeUndefined();
+			expect(wrapped?.invalid3).toBeUndefined();
+		});
+
+		it.concurrent('should handle null/undefined parsers', () => {
+			// Test with null/undefined parsers
+			expect(wrapParsers(null, {} as Plugin<ApexNode>)).toBeNull();
+			expect(wrapParsers(undefined, {} as Plugin<ApexNode>)).toBeUndefined();
 		});
 	});
 

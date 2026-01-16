@@ -155,4 +155,4 @@ export default plugin;
 // eslint-disable-next-line import/group-exports -- Destructuring export and function exports need separate declarations
 export const { languages, parsers, printers, options, defaultOptions } = plugin;
 // eslint-disable-next-line import/group-exports -- Functions and types need separate export
-export { isApexParser };
+export { isApexParser, wrapParsers };
