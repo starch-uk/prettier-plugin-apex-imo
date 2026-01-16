@@ -407,8 +407,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		const { join: joinDocs } = doc.builders;
 		const declDocs = path.map((declPath: Readonly<AstPath<ApexNode>>) => {
+			// decls in VariableDecls are always object nodes in well-formed AST
 			const declNode = declPath.node;
-			if (!isObject(declNode)) return print(declPath);
 
 			const {assignment} = (declNode as { assignment?: unknown });
 			// In Apex, all declarations in a VariableDecls statement must have the same structure
@@ -426,7 +426,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				'value' as never,
 			) as unknown as Doc;
 
-			if (!assignmentDoc) return print(declPath);
+			// hasVariableAssignments already verified all declarations have assignments
+			// assignmentDoc is always defined for well-formed AST
 
 			if (isCollectionAssignment(assignment)) {
 				return [nameDoc, ' ', '=', ' ', assignmentDoc];
@@ -448,9 +449,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		const isMapTypeDoc = (doc: unknown): boolean => {
 			// typeDoc from printer for Map types is always an array, not a string
-			// String check kept for defensive purposes but unreachable in practice
-			if (typeof doc === 'string') return doc.includes('Map<');
-			// For Map types, doc is always an array
 			if (!Array.isArray(doc)) return false;
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 			const first = doc[0];
@@ -464,6 +462,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		const hasNestedMap = (param: unknown): boolean => {
 			if (typeof param === 'string') return param.includes('Map<');
+			// Type parameters are always strings or arrays in well-formed type Docs
 			if (!Array.isArray(param)) return false;
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 			const paramFirst = param[0];
