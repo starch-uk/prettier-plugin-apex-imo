@@ -3,7 +3,8 @@
  */
 
 /* eslint-disable @typescript-eslint/no-magic-numbers */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { ParserOptions } from 'prettier';
 import {
 	getIndentLevel,
 	createIndent,
@@ -12,7 +13,11 @@ import {
 	handleOwnLineComment,
 	handleEndOfLineComment,
 	handleRemainingComment,
+	wrapTextToWidth,
+	printComment,
 } from '../src/comments.js';
+import { PrettierMockSuite } from './prettier-mock.js';
+import { createMockPath } from './test-utils.js';
 import { loadFixture } from './test-utils.js';
 
 describe('comments', () => {
@@ -460,5 +465,104 @@ describe('comments', () => {
 				expect(result).toBe(true);
 			});
 		});
+	});
+
+	describe('wrapTextToWidth', () => {
+		it.concurrent(
+			'should handle whitespace-only textContent longer than width (comments.ts line 818)',
+			() => {
+				// Test the isEmpty(words) guard clause when textContent is only whitespace
+				// This covers line 818: if (isEmpty(words)) return [textContent]
+				// Need textContent.length > effectiveWidth to pass the first check (line 811)
+				const whitespaceOnly = '   '.repeat(30); // 90 spaces, longer than effectiveWidth
+				const result = wrapTextToWidth(
+					whitespaceOnly,
+					10, // effectiveWidth - must be less than textContent.length
+					{ tabWidth: 2 },
+				);
+				// Should return original textContent when words array is empty (only whitespace)
+				expect(result).toEqual([whitespaceOnly]);
+			},
+		);
+
+		it.concurrent(
+			'should handle useTabs null/undefined (comments.ts line 823 else branch)',
+			() => {
+				// Test the else branch when useTabs is null or undefined
+				// This covers line 823: else branch (empty object {})
+				const longText = 'word '.repeat(50); // Long text that needs wrapping
+				const result = wrapTextToWidth(
+					longText,
+					10, // effectiveWidth
+					{ tabWidth: 2, useTabs: null }, // useTabs is null
+				);
+				// Should wrap successfully without useTabs option
+				expect(result.length).toBeGreaterThan(1);
+			},
+		);
+
+		it.concurrent(
+			'should handle useTabs undefined (comments.ts line 823 else branch)',
+			() => {
+				// Test the else branch when useTabs is undefined
+				// This covers line 823: else branch (empty object {})
+				const longText = 'word '.repeat(50); // Long text that needs wrapping
+				const result = wrapTextToWidth(
+					longText,
+					10, // effectiveWidth
+					{ tabWidth: 2 }, // useTabs is undefined
+				);
+				// Should wrap successfully without useTabs option
+				expect(result.length).toBeGreaterThan(1);
+			},
+		);
+
+		it.concurrent(
+			'should handle useTabs true (comments.ts line 823 true branch)',
+			() => {
+				// Test the true branch when useTabs is explicitly true
+				// This covers line 823: true branch { useTabs: options.useTabs }
+				const longText = 'word '.repeat(50); // Long text that needs wrapping
+				const result = wrapTextToWidth(
+					longText,
+					10, // effectiveWidth
+					{ tabWidth: 2, useTabs: true }, // useTabs is true
+				);
+				// Should wrap successfully with useTabs option
+				expect(result.length).toBeGreaterThan(1);
+			},
+		);
+	});
+
+	describe('printComment', () => {
+		it.concurrent(
+			'should handle empty comment value (comments.ts line 868)',
+			() => {
+				// Test the guard clause when commentValue is empty string
+				// This covers line 868: if (commentValue === '') return ''
+				// Create a comment node with empty value
+				const emptyCommentNode = {
+					'@class': 'apex.jorje.parser.impl.HiddenTokens$BlockComment',
+					value: '', // Empty comment value
+				};
+				const mockPath = {
+					...createMockPath(emptyCommentNode),
+					getNode: () => emptyCommentNode,
+				};
+				const options = { printWidth: 80, tabWidth: 2 } as ParserOptions;
+
+				// Call printComment directly - it should handle empty value
+				const result = printComment(
+					mockPath,
+					options,
+					() => '',
+					() => '',
+					(_key: string) => undefined,
+				);
+
+				// Should return empty string for empty comment value
+				expect(result).toBe('');
+			},
+		);
 	});
 });
