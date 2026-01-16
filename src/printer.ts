@@ -70,7 +70,7 @@ const processTypeParams = (params: unknown[]): Doc[] => {
  * Make a typeDoc breakable by adding break points at the first comma in generic types.
  * Structure: [baseType, '<', [param1, ', ', param2, ...], '>']
  * We make the first ', ' in the params array breakable.
- * @param typeDoc - The type document to make breakable.
+ * @param typeDoc - The type document to make breakable (string or array, as Prettier printers return for type nodes).
  * @param _options - Parser options (unused but required for consistency).
  * @returns The breakable type document.
  */
@@ -82,28 +82,26 @@ const makeTypeDocBreakable = (
 		return typeDoc;
 	}
 
-	if (Array.isArray(typeDoc)) {
-		const result: Doc[] = [];
-		for (let i = 0; i < typeDoc.length; i++) {
-			const item = typeDoc[i]!;
-			const nextItem = typeDoc[i + 1];
-			if (
-				item === '<' &&
-				// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-				i + 1 < typeDoc.length &&
-				Array.isArray(nextItem)
-			) {
-				result.push(item);
-				result.push(processTypeParams(nextItem as unknown[]));
-				i++;
-			} else {
-				result.push(item);
-			}
+	// Type nodes from Prettier printers always return arrays (never object Docs)
+	// If typeDoc is not a string, it must be an array
+	const result: Doc[] = [];
+	for (let i = 0; i < typeDoc.length; i++) {
+		const item = typeDoc[i]!;
+		const nextItem = typeDoc[i + 1];
+		if (
+			item === '<' &&
+			// eslint-disable-next-line @typescript-eslint/no-magic-numbers
+			i + 1 < typeDoc.length &&
+			Array.isArray(nextItem)
+		) {
+			result.push(item);
+			result.push(processTypeParams(nextItem as unknown[]));
+			i++;
+		} else {
+			result.push(item);
 		}
-		return result;
 	}
-
-	return typeDoc;
+	return result;
 };
 
 // Store current options and originalText for use in printComment
