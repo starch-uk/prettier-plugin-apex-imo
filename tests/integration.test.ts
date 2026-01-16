@@ -656,6 +656,22 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 
 		it.concurrent(
+			'should handle incomplete code block that cannot be merged (apexdoc.ts line 731)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-incomplete-code-block-merge',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-incomplete-code-block-merge',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
 			'should handle code block that ends inline (apexdoc-code.ts lines 138-142)',
 			async () => {
 				const input = loadFixture('apexdoc-code-block-ends-inline', 'input');

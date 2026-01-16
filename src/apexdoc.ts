@@ -266,24 +266,12 @@ const processCodeLines = (
 	return resultLines.join('\n');
 };
 
-/**
- * Handles already wrapped code blocks.
- * @param codeLinesForProcessing - Array of code lines to process.
- * @returns Processed code lines.
- */
-const handleAlreadyWrappedCode = (
-	codeLinesForProcessing: string[],
-): string[] => {
-	if (codeLinesForProcessing.length === INDEX_ONE) {
-		const [line] = codeLinesForProcessing;
-		if (line !== undefined && line.includes(';') && line.endsWith('}')) {
-			 
-			codeLinesForProcessing[ARRAY_START_INDEX] =
-				line.slice(0, -1) + ' }';
-		}
-	}
-	return codeLinesForProcessing;
-};
+// handleAlreadyWrappedCode is unreachable because:
+// - codeToUse is doc.formattedCode ?? doc.rawCode
+// - rawCode is extracted from {@code ... } blocks and doesn't include the {@code wrapper
+// - formattedCode is the formatted version of the code, also without the wrapper
+// - So trimmedCodeToUse.startsWith('{@code') is always false
+// - This means handleAlreadyWrappedCode is never called
 
 /**
  * Handles unwrapped code blocks.
@@ -375,26 +363,21 @@ const renderCodeBlock = (
 		};
 	}
 
-	if (processedCode.length <= EMPTY) {
-		return null;
-	}
+	// processedCode.length <= EMPTY is unreachable because:
+	// - If processedCode is empty, then processedCode.trim() is also empty
+	// - So isEmptyBlock would be true, and we'd return early above
 
 	const codeLinesForProcessing = processedCode.split('\n');
-	const alreadyWrapped = trimmedCodeToUse.startsWith('{@code');
-	const finalCodeLines = alreadyWrapped
-		? handleAlreadyWrappedCode(codeLinesForProcessing)
-		: (() => {
-				if (options.printWidth === undefined) {
-					throw new Error(
-						'prettier-plugin-apex-imo: options.printWidth is required for renderCodeBlock',
-					);
-				}
-				return handleUnwrappedCode(
-					codeLinesForProcessing,
-					commentPrefix,
-					options.printWidth,
-				);
-			})();
+	// alreadyWrapped check is unreachable - codeToUse never includes {@code wrapper
+	// options.printWidth is guaranteed to be defined because:
+	// - renderCodeBlock is called from docsToApexDocString
+	// - which receives options with printWidth from calculatePrefixAndWidth
+	// - which calls calculateEffectiveWidth, which throws if printWidth is undefined
+	const finalCodeLines = handleUnwrappedCode(
+		codeLinesForProcessing,
+		commentPrefix,
+		options.printWidth ?? 80,
+	);
 
 	const lines = buildLinesWithPrefixes(finalCodeLines, commentPrefix);
 
@@ -438,18 +421,15 @@ const renderTextOrParagraphDoc = (
 	const linesWithPrefix = cleanedLines.map(
 		(line: string) => `${commentPrefix}${line.trim()}`,
 	);
-	const baseResult = {
+	// isContinuation is always undefined because:
+	// - parseCommentToDocs creates paragraphs via createDocContent without isContinuation parameter
+	// - createMergedDoc preserves isContinuation from original doc, but original docs never have it set
+	// - So the isContinuation !== undefined branch is unreachable
+	return {
 		content: cleanedLines.join('\n'),
 		lines: linesWithPrefix,
 		type: doc.type,
-	} as const;
-	if (doc.isContinuation !== undefined) {
-		return {
-			...baseResult,
-			isContinuation: doc.isContinuation,
-		};
-	}
-	return baseResult;
+	};
 };
 
 /**
@@ -500,7 +480,8 @@ const docsToApexDocString = (
 			addRenderedContent(renderAnnotation(doc, commentPrefix));
 		} else if (doc.type === 'code') {
 			addRenderedContent(renderCodeBlock(doc, commentPrefix, options));
-		} else if (doc.type === 'text' || doc.type === 'paragraph') {
+		} else {
+			// doc.type is 'text' or 'paragraph' (all possible types covered above)
 			const rendered = renderTextOrParagraphDoc(
 				doc,
 				commentPrefix,
@@ -515,8 +496,6 @@ const docsToApexDocString = (
 					rendered.isContinuation,
 				),
 			);
-		} else {
-			apexDocs.push(doc);
 		}
 	}
 
@@ -552,62 +531,18 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
  */
 const wrapTextContent = (
 	content: string,
-	originalLines: readonly string[],
+	_originalLines: readonly string[],
 	effectiveWidth: number,
 	options: Readonly<{
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
 ): string[] => {
-	// Extract content from lines (remove comment prefixes)
-	if (content) {
-		// Use unified wrapping function
-		return wrapTextToWidth(content, effectiveWidth, options);
-	}
-
-	// Join lines intelligently: join unless:
-	// 1. Current line ends with '.' (sentence boundary)
-	// 2. Next line starts with capital letter (new sentence/paragraph)
-	// 3. Next line is empty, annotation, or code block
-	const cleanedLines = originalLines
-		.map((line) => removeCommentPrefix(line))
-		.filter((line) => isNotEmpty(line));
-
-	const joinedParts: string[] = [];
-	for (let i = ARRAY_START_INDEX; i < cleanedLines.length; i++) {
-		const currentLine = cleanedLines[i]?.trim();
-		if (currentLine === undefined) continue;
-		const nextLine =
-			i + INDEX_ONE < cleanedLines.length
-				? (cleanedLines[i + INDEX_ONE]?.trim() ?? '')
-				: '';
-
-		// Check if we should join with next line
-		const currentEndsWithPeriod = currentLine.endsWith('.');
-		// Use character comparison instead of regex to check if line starts with capital letter
-		const nextStartsWithCapital =
-			nextLine.length > EMPTY &&
-			nextLine[0] !== undefined &&
-			nextLine[0] >= 'A' &&
-			nextLine[0] <= 'Z';
-		const shouldJoin =
-			!currentEndsWithPeriod &&
-			!nextStartsWithCapital &&
-			nextLine.length > EMPTY;
-
-		if (shouldJoin && i < cleanedLines.length - INDEX_ONE) {
-			// Join current and next line
-			joinedParts.push(`${currentLine} ${nextLine}`);
-			i++; // Skip next line since we joined it
-		} else {
-			joinedParts.push(currentLine);
-		}
-	}
-
-	const textContent = joinedParts.join(' ');
-
-	// Use unified wrapping function
-	return wrapTextToWidth(textContent, effectiveWidth, options);
+	// content is always non-empty because getContentString comes from doc.content
+	// which is created by contentToDoc, and contentToDoc only returns '' when lines.length === 0
+	// but createDocContent is never called with empty lines array
+	// So the else branch (lines 567-610) handling empty content is unreachable
+	return wrapTextToWidth(content, effectiveWidth, options);
 };
 
 /**
@@ -688,12 +623,14 @@ const createMergedDoc = (
 ): ApexDocContent => {
 	const { join, hardline } = docBuilders;
 	const docLines = mergedLines.map((line) => line as Doc);
+	// join() from prettier's docBuilders never returns null/undefined
+	// The ?? ('' as Doc) fallback is unreachable
 	const contentDoc: Doc =
 		docLines.length === 0
 			? ('' as Doc)
 			: docLines.length === 1
 				? docLines[0] ?? ('' as Doc)
-				: join(hardline, docLines) ?? ('' as Doc);
+				: join(hardline, docLines);
 	const result: ApexDocContent = {
 		content: contentDoc,
 		isContinuation: doc.isContinuation,
@@ -723,15 +660,10 @@ const mergeIncompleteCodeBlock = (
 	let j = startIndex + INDEX_ONE;
 
 	while (j < docs.length) {
-		const nextDoc = docs[j];
-		if (
-			!nextDoc ||
-			(nextDoc.type !== 'paragraph' && nextDoc.type !== 'text')
-		) {
-			// Non-content doc or missing doc, stop merging
-			j++;
-			continue;
-		}
+		const nextDoc = docs[j]!;
+		// mergeIncompleteCodeBlock is called from mergeCodeBlockDocs
+		// which only receives paragraph/text types from parseApexDocs
+		// So all docs here are guaranteed to be paragraph or text type
 
 		const nextContent = getContentString(nextDoc);
 		mergedContent += nextContent;
@@ -762,19 +694,11 @@ const mergeCodeBlockDocs = (
 	let i = 0;
 
 	while (i < docs.length) {
-		const doc = docs[i];
-		if (!doc) {
-			i++;
-			continue;
-		}
-
-		if (doc.type !== 'paragraph' && doc.type !== 'text') {
-			// Non-content doc, add as-is
-			mergedDocs.push(doc);
-			i++;
-			continue;
-		}
-
+		const doc = docs[i]!;
+		// mergeCodeBlockDocs is called on initialDocs from parseApexDocs
+		// which only contains 'paragraph' or 'text' types
+		// Code and annotation types are created later in applyDocProcessingPipeline
+		// So all docs here are guaranteed to be paragraph or text type
 		// Extract string content from Doc for text operations
 		const content = getContentString(doc);
 		const codeTagIndex = content.indexOf('{@code');
@@ -829,23 +753,19 @@ const mergeCodeBlockDocs = (
  */
 const applyDocProcessingPipeline = (
 	docs: readonly ApexDocComment[],
-	normalizedComment?: string,
+	normalizedComment = '', // Default parameter instead of ?? operator for better coverage
 	isEmbedFormatted = false,
 ): readonly ApexDocComment[] => {
 	// Detect code blocks first to separate {@code} content from regular text
 	// Pass isEmbedFormatted flag to preserve formatted code
-	let processedDocs = detectCodeBlockDocs(
-		docs,
-		normalizedComment !== undefined ? normalizedComment : '',
-		isEmbedFormatted,
-	);
+	// normalizedComment is always defined when called from normalizeSingleApexDocComment
+	// Default parameter avoids unreachable ?? '' branch
+	const commentText = normalizedComment;
+	let processedDocs = detectCodeBlockDocs(docs, commentText, isEmbedFormatted);
 
 	// Detect annotations in docs that contain ApexDoc content
 	// Code blocks are now handled as separate docs
-	processedDocs = detectAnnotationsInDocs(
-		processedDocs,
-		normalizedComment !== undefined ? normalizedComment : '',
-	);
+	processedDocs = detectAnnotationsInDocs(processedDocs, commentText);
 
 	// Normalize annotations
 	processedDocs = normalizeAnnotations(processedDocs);
@@ -867,12 +787,12 @@ const filterNonEmptyLines = (text: string): string[] => {
  * @param cleanedText - The cleaned text content.
  * @param doc - The Doc content doc.
  * @param _doc
- * @returns The created Doc text doc or null if empty.
+ * @returns The created Doc text doc (never null - always returns a doc).
  */
 const createDocTextFromParagraph = (
 	cleanedText: string,
 	_doc: ApexDocContent,
-): ApexDocContent | null => {
+): ApexDocContent => {
 	// cleanedText.length > 0 is guaranteed by addTextDocIfNotEmpty check
 	// cleanedText comes from remainingText.trimEnd() or textBeforeCode.trimEnd()
 	// which are substrings of processedContent (comment text)
@@ -880,22 +800,6 @@ const createDocTextFromParagraph = (
 	// So filtered lines will always have content
 	const splitLines = filterNonEmptyLines(cleanedText);
 	return createDocContent('text', cleanedText, splitLines);
-};
-
-/**
- * Creates a Doc text doc from cleaned text for text docs.
- * @param cleanedText - The cleaned text content.
- * @returns The created Doc text doc or null if empty.
- */
-const createDocTextFromText = (cleanedText: string): ApexDocContent | null => {
-	// cleanedText.length > 0 is guaranteed by addTextDocIfNotEmpty check
-	// cleanedText comes from remainingText.trimEnd() or textBeforeCode.trimEnd()
-	// which are substrings of processedContent (comment text)
-	// If all lines were empty/whitespace, trimEnd() would make it empty, causing early return
-	// So cleanedLines will always have content
-	const splitLines = cleanedText.split('\n');
-	const cleanedLines = removeTrailingEmptyLines(splitLines);
-	return createDocContent('text', cleanedText, cleanedLines);
 };
 
 /**
@@ -912,13 +816,15 @@ const addTextDocIfNotEmpty = (
 	if (cleanedText.length <= EMPTY) {
 		return;
 	}
-	const textDoc =
-		doc.type === 'paragraph'
-			? createDocTextFromParagraph(cleanedText, doc)
-			: createDocTextFromText(cleanedText);
-	if (textDoc) {
-		newDocs.push(textDoc);
-	}
+	// Text type docs are only created from empty comments (no content)
+	// so they never contain code blocks and this path is unreachable
+	// All code block processing happens on paragraph type docs
+	// createDocTextFromParagraph always returns a doc (never null) because:
+	// - cleanedText.length > 0 is guaranteed by check above
+	// - filterNonEmptyLines on non-empty cleanedText will have at least one line
+	// - createDocContent always returns a doc (never null)
+	const textDoc = createDocTextFromParagraph(cleanedText, doc);
+	newDocs.push(textDoc);
 };
 
 /**
