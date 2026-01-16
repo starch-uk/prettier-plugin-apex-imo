@@ -624,12 +624,12 @@ const createMergedDoc = (
 	const { join, hardline } = docBuilders;
 	const docLines = mergedLines.map((line) => line as Doc);
 	// join() from prettier's docBuilders never returns null/undefined
-	// The ?? ('' as Doc) fallback is unreachable
+	// docLines[0] is never undefined when length === 1 (map doesn't create undefined entries)
 	const contentDoc: Doc =
 		docLines.length === 0
 			? ('' as Doc)
 			: docLines.length === 1
-				? docLines[0] ?? ('' as Doc)
+				? docLines[0]!
 				: join(hardline, docLines);
 	const result: ApexDocContent = {
 		content: contentDoc,
