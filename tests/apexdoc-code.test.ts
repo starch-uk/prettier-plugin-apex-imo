@@ -163,16 +163,28 @@ describe('apexdoc-code', () => {
 
 		it.concurrent('should handle code block ending within a line (lines 138-142)', () => {
 			// Test when inCodeBlock is true, line doesn't start with CODE_TAG, and willEndCodeBlock is true
+			// This triggers: if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) with willEndCodeBlock = true
+			// The line with '}' that ends the block must NOT start with CODE_TAG and must have braceCount reach 0
 			const lines = [
 				' * {@code',
 				' *   Integer x = 10;',
-				' * }', // This line will trigger willEndCodeBlock = true
+				' * }', // This line has '}' which decrements braceCount to 0 (willEndCodeBlock = true)
 			];
 			const result = processCodeBlockLines(lines);
 			expect(result.length).toBe(3);
-			// Line with '}' should end the code block
+			// Line 2: inCodeBlock=true, trimmedLine='}' doesn't start with CODE_TAG, willEndCodeBlock=true
+			// Should enter the if block at line 137, set inCodeBlock=false, return prefix + trimmed
 			expect(result[2]).toContain('}');
-			// inCodeBlock should be reset to false after this line
+		});
+
+		it.concurrent('should handle standalone closing brace not in code block (line 146)', () => {
+			// Test the standalone '}' case that triggers line 146
+			// This is when trimmedLine === '}' but NOT in a code block (inCodeBlock = false)
+			const lines = [' *   }'];
+			const result = processCodeBlockLines(lines);
+			// trimmedLine = '}', inCodeBlock = false, so skips line 137 condition
+			// Goes to line 145: if (trimmedLine === '}') return prefix + commentLine.trimStart()
+			expect(result[0]).toBe('*   }'); // prefix '' + ' *   }'.trimStart() = '*   }'
 		});
 
 		it.concurrent('should handle empty lines array', () => {
