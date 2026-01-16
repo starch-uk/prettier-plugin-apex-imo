@@ -23,7 +23,6 @@ import {
 	isApexDoc,
 } from './apexdoc.js';
 import { normalizeAnnotations } from './apexdoc-annotations.js';
-import { createDocCodeBlock } from './apexdoc-code.js';
 
 // Doc-based types for ApexDoc processing
 interface ApexDocContent {
@@ -533,56 +532,6 @@ const removeCommentPrefix = (
 	return result.trim();
 };
 
-/**
- * Detects code blocks (slash-asterisk ... Asterisk-slash) within comment text using character scanning.
- * This replaces regex-based detection for better control and performance.
- * @param text - The comment text content to scan.
- * @returns Array of code block objects with start, end, and content positions.
- */
-const detectCodeBlocks = (
-	text: string,
-): { start: number; end: number; content: string }[] => {
-	const codeBlocks: { start: number; end: number; content: string }[] =
-		[];
-	let i = 0;
-
-	while (i < text.length - 1) {
-		// Look for /* but not /**
-		if (text[i] === '/' && text[i + 1] === '*' && text[i + 2] !== '*') {
-			const start = i;
-			i += 2;
-			let depth = 1;
-			const contentStart = i;
-
-			while (i < text.length - 1 && depth > 0) {
-				if (text[i] === '/' && text[i + 1] === '*') {
-					depth++;
-					i += 2;
-				} else if (text[i] === '*' && text[i + 1] === '/') {
-					depth--;
-					i += 2;
-					if (depth === 0) {
-						codeBlocks.push({
-							content: text.substring(contentStart, i - 2),
-							end: i,
-							start,
-						});
-					}
-				} else {
-					i++;
-				}
-			}
-			// If block wasn't closed, continue from next position to avoid infinite loop
-			if (depth > 0) {
-				i = start + 1;
-			}
-		} else {
-			i++;
-		}
-	}
-
-	return codeBlocks;
-};
 
 /**
  * Converts string lines to Doc array (strings are valid Docs).
@@ -681,18 +630,13 @@ const parseCommentToDocs = (
 	}
 	const contentLines = lines.slice(INDEX_ONE, lines.length - INDEX_ONE);
 
-	// Join content for code block detection
-	const fullContent = contentLines.join('\n');
-
-	// First detect /* ... */ code blocks using character scanning
-	const codeBlocks = detectCodeBlocks(fullContent);
-
 	// Detect paragraphs based on empty lines and sentence boundaries
-	// Skip code blocks when detecting paragraphs
+	// Note: Code block detection for /* ... */ patterns is removed because
+	// Apex doesn't support nested block comments, so detectCodeBlocks would
+	// never find valid patterns in parsed comment content.
 	const docs: ApexDocComment[] = [];
 	let currentParagraph: string[] = [];
 	let currentParagraphLines: string[] = [];
-	let currentPos = ARRAY_START_INDEX;
 
 	const finishParagraph = (): void => {
 		if (currentParagraph.length > EMPTY) {
@@ -712,44 +656,6 @@ const parseCommentToDocs = (
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
 		const line = contentLines[i];
 		if (line === undefined) continue;
-		const lineStartPos = currentPos;
-		const lineEndPos = currentPos + line.length;
-		currentPos = lineEndPos + INDEX_ONE; // +1 for newline
-
-		// Check if this line is inside a code block - use Map for O(1) lookups
-		let isInCodeBlock = false;
-		let currentCodeBlock:
-			| { start: number; end: number; content: string }
-			| undefined;
-		for (const cb of codeBlocks) {
-			if (lineStartPos >= cb.start && lineEndPos <= cb.end) {
-				isInCodeBlock = true;
-				currentCodeBlock = cb;
-				break;
-			}
-		}
-
-		if (isInCodeBlock) {
-			// Finish current paragraph if any, then handle code block
-			finishParagraph();
-			// Use cached code block from earlier check
-			if (currentCodeBlock) {
-				// Only add code block doc once (on first line)
-				const codeBlockStartLine = fullContent
-					.substring(ARRAY_START_INDEX, currentCodeBlock.start)
-					.split('\n').length;
-				if (i === codeBlockStartLine) {
-					docs.push(
-						createDocCodeBlock(
-							currentCodeBlock.start,
-							currentCodeBlock.end,
-							currentCodeBlock.content,
-						),
-					);
-				}
-			}
-			continue;
-		}
 
 		// Remove comment prefix (*) to check if line is empty
 		const trimmedLine = removeCommentPrefix(line);
