@@ -399,28 +399,32 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			}
 			resultParts.push(breakableTypeDoc);
 
-			if (nameDocs.length > 1) {
-				const wrappedNames = nameDocs
-					.filter((nameDoc): nameDoc is Doc => nameDoc !== undefined)
-					.map((nameDoc) => {
-						return ifBreak(indent([line, nameDoc]), [
-							' ',
-							nameDoc,
-						]);
-					});
+			// Filter out any undefined nameDocs (should not occur, but defensive)
+			const validNameDocs = nameDocs.filter(
+				(nameDoc): nameDoc is Doc => nameDoc !== undefined,
+			);
+
+			if (validNameDocs.length > 1) {
+				const wrappedNames = validNameDocs.map((nameDoc) => {
+					return ifBreak(indent([line, nameDoc]), [
+						' ',
+						nameDoc,
+					]);
+				});
 				resultParts.push(joinDocs([', ', softline], wrappedNames), ';');
 				return group(resultParts);
 			}
 
-			if (nameDocs[0] !== undefined) {
-				const wrappedName = ifBreak(indent([line, nameDocs[0]]), [
+			if (validNameDocs.length === 1) {
+				const wrappedName = ifBreak(indent([line, validNameDocs[0]]), [
 					' ',
-					nameDocs[0],
+					validNameDocs[0],
 				]);
 				resultParts.push(wrappedName, ';');
 				return group(resultParts);
 			}
 
+			// All nameDocs were filtered out (should not occur with well-formed AST)
 			return null;
 		}
 
