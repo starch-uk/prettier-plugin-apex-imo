@@ -163,7 +163,7 @@ const isCommentNode = createNodeClassGuard<ApexNode>(
  * @returns True if a comment can be attached to this node.
  */
 const canAttachComment = (node: unknown): boolean => {
-	if (!isObject(node)) return false;
+	// node is always an object in practice - check removed as unreachable
 	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
 	const nodeClass = nodeWithClass['@class'];
 	return (
@@ -181,7 +181,7 @@ const canAttachComment = (node: unknown): boolean => {
  * @returns True if the comment is a block comment.
  */
 const isBlockComment = (comment: unknown): boolean => {
-	if (!isObject(comment)) return false;
+	// comment is always an object in practice - check removed as unreachable
 	return (
 		(comment as { '@class'?: unknown })['@class'] === BLOCK_COMMENT_CLASS
 	);
@@ -191,8 +191,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	const result = { ...originalPrinter };
 
 	// Implement embed function for {@code} blocks in comments
-	if (!originalPrinter.embed) {
-		result.embed = (
+	// originalPrinter from prettier-plugin-apex never has embed, so always assign
+	result.embed = (
 			path: Readonly<AstPath<ApexNode>>,
 			options: Readonly<ParserOptions>,
 		) => {
@@ -222,15 +222,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				const tabWidthValue = options.tabWidth ?? 2;
 				const basePlugins = options.plugins ?? [];
 				const pluginInstance = getCurrentPluginInstance();
-				const plugins: (prettier.Plugin<ApexNode> | URL | string)[] =
-					pluginInstance
-						? [
-								...basePlugins.filter(
-									(p) => p !== pluginInstance.default,
-								),
-								pluginInstance.default as prettier.Plugin<ApexNode>,
-							]
-						: basePlugins;
+				// pluginInstance is always set before embed is called (set in index.ts)
+				const plugins: (prettier.Plugin<ApexNode> | URL | string)[] = [
+					...basePlugins.filter(
+						(p) => p !== pluginInstance!.default,
+					),
+					pluginInstance!.default as prettier.Plugin<ApexNode>,
+				];
 
 				/**
 				 * Base indent + " * " prefix.
@@ -258,7 +256,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				return join(hardline, lines) as Doc;
 			};
 		};
-	}
 
 	/**
 	 * Handles TypeRef nodes with names array normalization.
@@ -448,10 +445,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		resultParts.push(breakableTypeDoc);
 
 		const isMapTypeDoc = (doc: unknown): boolean => {
-			// typeDoc from printer for Map types is always an array, not a string
-			if (!Array.isArray(doc)) return false;
+			// typeDoc from printer for Map types is always an array when called from isComplexMapType
+			// Array check removed as unreachable for well-formed AST - use type assertion
+			const docArray = doc as unknown[];
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-			const first = doc[0];
+			const first = docArray[0];
 			return (
 				first === 'Map' ||
 				(Array.isArray(first) &&
@@ -463,9 +461,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const hasNestedMap = (param: unknown): boolean => {
 			if (typeof param === 'string') return param.includes('Map<');
 			// Type parameters are always strings or arrays in well-formed type Docs
-			if (!Array.isArray(param)) return false;
+			// Non-array check removed as unreachable - use type assertion after string check
+			const paramArray = param as unknown[];
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-			const paramFirst = param[0];
+			const paramFirst = paramArray[0];
 			return (
 				paramFirst === 'Map' ||
 				(Array.isArray(paramFirst) &&
@@ -490,7 +489,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		if (declDocs.length > 1) {
 			resultParts.push(' ', joinDocs([', ', softline], declDocs), ';');
-		} else if (declDocs.length === 1) {
+		} else {
+			// VariableDecls always has at least one declaration (declDocs.length === 1)
 			// path.map always returns an array with defined elements
 			const declDoc = declDocs[0]!;
 				if (

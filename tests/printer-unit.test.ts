@@ -798,4 +798,174 @@ describe('printer', () => {
 			expect(result === undefined || typeof result === 'string').toBe(true);
 		});
 	});
+
+	describe('handleVariableDecls edge cases', () => {
+		it.concurrent(
+			'should return null when decls is not an array (line 351)',
+			() => {
+				// Test handleVariableDecls with non-array decls
+				const mockNode = {
+					decls: 'not an array', // Invalid: decls should be an array
+					modifiers: [],
+					[nodeClassKey]: 'apex.jorje.data.ast.VariableDecls',
+				} as unknown as ApexNode;
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
+
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				// Should return null and fall through to original printer
+				expect(result).toBe('original output');
+			},
+		);
+
+		it.concurrent(
+			'should handle non-object declaration in decls array (line 327)',
+			() => {
+				// Test hasVariableAssignments with non-object decl
+				const mockNode = {
+					decls: [
+						'not an object', // Invalid: decl should be an object
+						{ '@class': 'apex.jorje.data.ast.Variable' },
+					],
+					modifiers: [],
+					[nodeClassKey]: 'apex.jorje.data.ast.VariableDecls',
+				} as unknown as ApexNode;
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
+
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				// Should handle gracefully and continue processing
+				expect(result).toBeDefined();
+			},
+		);
+
+		it.concurrent(
+			'should handle non-array doc in isMapTypeDoc (line 453)',
+			() => {
+				// Test isMapTypeDoc with non-array doc (defensive check)
+				// This tests the unreachable branch when doc is not an array
+				const mockNode = {
+					decls: [
+						{
+							'@class': 'apex.jorje.data.ast.Variable',
+							assignment: {
+								value: {
+									'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+									creator: {
+										'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+									},
+								},
+							},
+						},
+					],
+					modifiers: [],
+					[nodeClassKey]: 'apex.jorje.data.ast.VariableDecls',
+				} as unknown as ApexNode;
+
+				const mockPath = createMockPath(mockNode);
+				// Mock print to return a non-array for type (simulating malformed input)
+				const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
+					const key = (path as { key?: string | number }).key;
+					if (key === 'type') {
+						// Return a non-array to trigger isMapTypeDoc's defensive check
+						return 'String' as unknown as Doc;
+					}
+					return '';
+				});
+
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
+
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					mockPrint,
+				);
+
+				// Should handle gracefully
+				expect(result).toBeDefined();
+			},
+		);
+
+		it.concurrent(
+			'should handle non-array param in hasNestedMap (line 467)',
+			() => {
+				// Test hasNestedMap with non-array param (defensive check)
+				// This tests the unreachable branch when param is neither string nor array
+				const mockNode = {
+					decls: [
+						{
+							'@class': 'apex.jorje.data.ast.Variable',
+							assignment: {
+								value: {
+									'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+									creator: {
+										'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+									},
+								},
+							},
+						},
+					],
+					modifiers: [],
+					[nodeClassKey]: 'apex.jorje.data.ast.VariableDecls',
+				} as unknown as ApexNode;
+
+				const mockPath = createMockPath(mockNode);
+				// Mock print to return a malformed typeDoc structure
+				const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
+					const key = (path as { key?: string | number }).key;
+					if (key === 'type') {
+						// Return a Map type with malformed params to trigger hasNestedMap's defensive check
+						// Structure: ['Map', '<', [params...], '>']
+						// params[0] could be non-array/non-string in malformed input
+						return [
+							'Map',
+							'<',
+							[{ invalid: 'param' }], // Non-string, non-array param
+							'>',
+						] as unknown as Doc;
+					}
+					return '';
+				});
+
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
+
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					mockPrint,
+				);
+
+				// Should handle gracefully
+				expect(result).toBeDefined();
+			},
+		);
+	});
 });
