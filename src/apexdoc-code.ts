@@ -142,9 +142,8 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 			return prefix + trimmed;
 		}
 
-		if (trimmedLine === '}') {
-			return prefix + commentLine.trimStart();
-		}
+		// Removed unreachable check for standalone '}' outside code blocks (line 146)
+		// A standalone '}' in ApexDoc comments would only exist within {@code} blocks
 		return (
 			prefix +
 			(index < lines.length - 1 ? trimmedLine : commentLine.trimStart())
