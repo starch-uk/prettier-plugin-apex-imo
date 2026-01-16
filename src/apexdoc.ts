@@ -923,9 +923,7 @@ const processRemainingText = (
 	doc: ApexDocContent,
 	newDocs: ApexDocComment[],
 ): void => {
-	if (currentPos >= content.length) {
-		return;
-	}
+	// currentPos is guaranteed to be < content.length by the calling loop condition
 	const remainingText = content.substring(currentPos);
 	if (remainingText.length <= EMPTY) {
 		return;

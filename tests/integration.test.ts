@@ -624,6 +624,18 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
+	describe('ApexDoc edge cases', () => {
+		it.concurrent(
+			'should handle standalone brace (apexdoc-code.ts line 146)',
+			async () => {
+				const input = loadFixture('apexdoc-standalone-brace', 'input');
+				const expected = loadFixture('apexdoc-standalone-brace', 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
 	describe('ApexDoc annotation normalization', () => {
 		it.concurrent.each([
 			{
@@ -745,6 +757,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 				description:
 					'should handle code block with no text before it (apexdoc.ts line 956)',
 				fixture: 'apexdoc-code-no-text-before',
+			},
+			{
+				description:
+					'should handle consecutive code blocks (apexdoc.ts line 954)',
+				fixture: 'apexdoc-consecutive-code-blocks',
+			},
+			{
+				description:
+					'should handle code block ending with only whitespace (apexdoc.ts line 929)',
+				fixture: 'apexdoc-code-block-ending-inline',
 			},
 		])(
 			'$description',
