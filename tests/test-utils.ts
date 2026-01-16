@@ -157,3 +157,6 @@ export function createMockOriginalPrinter(
 		print: vi.fn(() => returnValue),
 	};
 }
+
+// Re-export PrettierMockSuite for convenience
+export { PrettierMockSuite, defaultPrettierMock, createPrettierMock } from './prettier-mock.js';
