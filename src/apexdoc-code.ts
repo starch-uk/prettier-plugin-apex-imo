@@ -105,6 +105,24 @@ const extractCodeFromBlock = (
 };
 
 /**
+ * Counts braces in a line and determines if code block ends.
+ * @param trimmedLine - The trimmed line to process.
+ * @param currentBraceCount - The current brace count.
+ * @returns Object with updated brace count and whether code block ends.
+ */
+const countBracesAndCheckEnd = (
+	trimmedLine: string,
+	currentBraceCount: number,
+): { braceCount: number; willEnd: boolean } => {
+	let braceCount = currentBraceCount;
+	for (const char of trimmedLine) {
+		if (char === '{') braceCount++;
+		else if (char === '}') braceCount--;
+	}
+	return { braceCount, willEnd: braceCount === EMPTY };
+};
+
+/**
  * Processes comment lines to handle code block boundaries.
  * Tracks code blocks using brace counting and preserves structure.
  * @param lines - The comment lines to process.
@@ -127,11 +145,12 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 		let willEndCodeBlock = false;
 
 		if (inCodeBlock) {
-			for (const char of trimmedLine) {
-				if (char === '{') codeBlockBraceCount++;
-				else if (char === '}') codeBlockBraceCount--;
-			}
-			willEndCodeBlock = codeBlockBraceCount === EMPTY;
+			const braceResult = countBracesAndCheckEnd(
+				trimmedLine,
+				codeBlockBraceCount,
+			);
+			codeBlockBraceCount = braceResult.braceCount;
+			willEndCodeBlock = braceResult.willEnd;
 		}
 
 		if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) {
@@ -444,4 +463,5 @@ export {
 	processAllCodeBlocksInComment,
 	createDocCodeBlock,
 	renderCodeBlockInComment,
+	countBracesAndCheckEnd,
 };

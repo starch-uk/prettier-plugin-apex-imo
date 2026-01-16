@@ -854,6 +854,24 @@ const applyDocProcessingPipeline = (
 };
 
 /**
+ * Filters out whitespace-only lines from text.
+ * @param text - The text to filter.
+ * @returns Array of non-empty lines after filtering.
+ */
+const filterNonEmptyLines = (text: string): string[] => {
+	return text.split('\n').filter((line: string) => line.trim().length > EMPTY);
+};
+
+/**
+ * Checks if text becomes empty after filtering non-empty lines.
+ * @param cleanedText - The cleaned text content.
+ * @returns True if text would be empty after filtering.
+ */
+const isEmptyAfterFiltering = (cleanedText: string): boolean => {
+	return filterNonEmptyLines(cleanedText).length === EMPTY;
+};
+
+/**
  * Creates a Doc text doc from cleaned text for paragraph docs.
  * @param cleanedText - The cleaned text content.
  * @param doc - The Doc content doc.
@@ -864,13 +882,22 @@ const createDocTextFromParagraph = (
 	cleanedText: string,
 	_doc: ApexDocContent,
 ): ApexDocContent | null => {
-	const splitLines = cleanedText
-		.split('\n')
-		.filter((line: string) => line.trim().length > EMPTY);
-	if (splitLines.length === EMPTY) {
+	if (isEmptyAfterFiltering(cleanedText)) {
 		return null;
 	}
+	const splitLines = filterNonEmptyLines(cleanedText);
 	return createDocContent('text', cleanedText, splitLines);
+};
+
+/**
+ * Checks if text becomes empty after removing trailing empty lines.
+ * @param cleanedText - The cleaned text content.
+ * @returns True if text would be empty after removing trailing empty lines.
+ */
+const isEmptyAfterRemovingTrailingEmpty = (cleanedText: string): boolean => {
+	const splitLines = cleanedText.split('\n');
+	const cleanedLines = removeTrailingEmptyLines(splitLines);
+	return cleanedLines.length === EMPTY;
 };
 
 /**
@@ -879,11 +906,11 @@ const createDocTextFromParagraph = (
  * @returns The created Doc text doc or null if empty.
  */
 const createDocTextFromText = (cleanedText: string): ApexDocContent | null => {
-	const splitLines = cleanedText.split('\n');
-	const cleanedLines = removeTrailingEmptyLines(splitLines);
-	if (cleanedLines.length === EMPTY) {
+	if (isEmptyAfterRemovingTrailingEmpty(cleanedText)) {
 		return null;
 	}
+	const splitLines = cleanedText.split('\n');
+	const cleanedLines = removeTrailingEmptyLines(splitLines);
 	return createDocContent('text', cleanedText, cleanedLines);
 };
 
@@ -1049,6 +1076,9 @@ export {
 	detectCodeBlockDocs,
 	removeTrailingEmptyLines,
 	isApexDoc,
+	filterNonEmptyLines,
+	isEmptyAfterFiltering,
+	isEmptyAfterRemovingTrailingEmpty,
 };
 
 /**

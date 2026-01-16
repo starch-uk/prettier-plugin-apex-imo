@@ -13,6 +13,7 @@ import {
 	processCodeBlock,
 	renderCodeBlockInComment,
 	processAllCodeBlocksInComment,
+	countBracesAndCheckEnd,
 } from '../src/apexdoc-code.js';
 import type { ParserOptions } from 'prettier';
 import plugin from '../src/index.js';
@@ -512,5 +513,50 @@ describe('apexdoc-code', () => {
 			// When extraction fails, startIndex advances and loop continues, but if no valid blocks are found, returns undefined
 			expect(result).toBeUndefined();
 		});
+	});
+
+	describe('countBracesAndCheckEnd', () => {
+		it.concurrent(
+			'should count braces and detect code block end (apexdoc-code.ts lines 130-135)',
+			() => {
+				// Start with braceCount = 1 (from {@code opening)
+				const result = countBracesAndCheckEnd('Integer x = 1; }', 1);
+				expect(result.braceCount).toBe(0);
+				expect(result.willEnd).toBe(true);
+			},
+		);
+
+		it.concurrent('should handle nested braces', () => {
+			const result = countBracesAndCheckEnd('if (true) { x = 1; }', 1);
+			expect(result.braceCount).toBe(1); // +1 from {, -1 from }
+			expect(result.willEnd).toBe(false);
+		});
+
+		it.concurrent(
+			'should handle code block ending on line with content (apexdoc-code.ts lines 139-143)',
+			() => {
+				// Code block ending on line with content
+				const result = countBracesAndCheckEnd('  }', 1);
+				expect(result.braceCount).toBe(0);
+				expect(result.willEnd).toBe(true);
+			},
+		);
+	});
+
+	describe('processCodeBlockLines', () => {
+		it.concurrent(
+			'should handle code block ending on line with content (apexdoc-code.ts lines 148-153, 157-161)',
+			() => {
+				// Lines where code block ends with willEndCodeBlock = true
+				const lines = [
+					' * {@code',
+					' *   Integer x = 1; }',
+				];
+				const result = processCodeBlockLines(lines);
+				expect(result).toHaveLength(2);
+				expect(result[1]).toContain('Integer x = 1;');
+				// Should process the line and end the code block
+			},
+		);
 	});
 });
