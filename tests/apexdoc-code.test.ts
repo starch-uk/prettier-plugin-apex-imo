@@ -60,9 +60,12 @@ describe('apexdoc-code', () => {
 			expect(result?.code.trim()).toContain('if (true) {');
 		});
 
-		it.concurrent('should return null when braces are unmatched and no closing brace found', () => {
-			const text = '{@code Integer x = 10;';
+		it.concurrent('should return null when braces are unmatched and no closing brace found (line 63)', () => {
+			// Create scenario where braceCount > 0 (unmatched braces) AND lastClosingBracePos === NOT_FOUND_INDEX
+			// This requires text with opening braces but no closing braces at all
+			const text = '{@code if (true) { if (false) {';
 			const result = extractCodeFromBlock(text, 0);
+			// Should return null when lastClosingBracePos is NOT_FOUND_INDEX and braceCount !== 0
 			expect(result).toBeNull();
 		});
 
@@ -274,6 +277,80 @@ describe('apexdoc-code', () => {
 			expect(result[0]).toBe('{@code');
 			expect(result[result.length - 1]).toBe('}');
 		});
+
+		it.concurrent('should use extractCodeFromEmbedResult when embedResult exists (lines 301-302)', () => {
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			// Mock formatted embed result with comment structure ending with \n */\n (line 225)
+			const embedResult = '/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */\n';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const result = processCodeBlock(codeBlock, options, getFormattedCodeBlock, 'test-key', options);
+			// Should use extractCodeFromEmbedResult to extract lines from embedResult
+			expect(result.length).toBeGreaterThan(1);
+			expect(result[0]).toBe('{@code');
+			expect(result[result.length - 1]).toBe('}');
+			// Should contain extracted code lines
+			expect(result.some(line => line.includes('Integer x = 10;'))).toBe(true);
+		});
+
+		it.concurrent('should handle embedResult ending with \n */ (line 226-227)', () => {
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			// Mock formatted embed result ending with \n */ (without trailing newline) - line 226-227
+			const embedResult = '/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const result = processCodeBlock(codeBlock, options, getFormattedCodeBlock, 'test-key', options);
+			// Should handle both ending formats
+			expect(result.length).toBeGreaterThan(1);
+			expect(result[0]).toBe('{@code');
+			expect(result[result.length - 1]).toBe('}');
+		});
+
+		it.concurrent('should handle lines without asterisk in extractCodeFromEmbedResult (line 246)', () => {
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			// Mock formatted embed result with lines that don't start with asterisk after whitespace
+			// This triggers line 246: return line; (when line doesn't have asterisk)
+			const embedResult = '/**\n * {@code\n *   Line with asterisk\nPlain line without asterisk\n * }\n */\n';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const result = processCodeBlock(codeBlock, options, getFormattedCodeBlock, 'test-key', options);
+			// Should handle lines without asterisk
+			expect(result.length).toBeGreaterThan(1);
+			expect(result[0]).toBe('{@code');
+			expect(result[result.length - 1]).toBe('}');
+		});
+
+		it.concurrent('should handle embedResult without code markers (line 246, 263)', () => {
+			// Use multiline codeBlock to avoid early return for single-line code
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			// Mock formatted embed result without {@code markers - should use slice fallback
+			// Also include lines without asterisk prefix (line 246 return line path)
+			// Format: /**\n * line1\n * line2\n * line3\n */\n (ends with \n */\n to test line 225)
+			// After removing first 2 lines (SKIP_FIRST_TWO_LINES), should have at least line3
+			const embedResult = '/**\n * Line 1\n * Line 2\n * Line 3\n */\n';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const result = processCodeBlock(codeBlock, options, getFormattedCodeBlock, 'test-key', options);
+			// Should fall back to slice(SKIP_FIRST_TWO_LINES) when code markers not found
+			// This wraps result in {@code ... }, so length should be at least 3: ['{@code', 'Line 3', '}']
+			expect(result.length).toBeGreaterThanOrEqual(3);
+			expect(result[0]).toBe('{@code');
+			expect(result[result.length - 1]).toBe('}');
+			// Should contain the extracted line from slice fallback
+			expect(result.some(line => line.includes('Line 3'))).toBe(true);
+		});
 	});
 
 	describe('renderCodeBlockInComment', () => {
@@ -347,10 +424,11 @@ describe('apexdoc-code', () => {
 			expect(result).toBeUndefined();
 		});
 
-		it.concurrent('should process code block with blank line preservation', async () => {
+		it.concurrent('should process code block with blank line preservation (line 448)', async () => {
 			// Code block that will trigger preserveBlankLineAfterClosingBrace
+			// Need code that formats to have } followed by @annotation or access modifier
 			const commentText =
-				'/**\n * {@code\n *   if (true) {\n *     return;\n *   }\n *\n *   @Future\n * }\n */';
+				'/**\n * {@code\n *   public void method() {\n *     return;\n *   }\n *   @Future\n *   public void next() {}\n * }\n */';
 			const options = {
 				printWidth: 80,
 				tabWidth: 2,
@@ -370,6 +448,7 @@ describe('apexdoc-code', () => {
 
 			expect(result).toBeDefined();
 			expect(result).toContain('{@code');
+			// Should have preserved blank line after closing brace when followed by @Future or public
 		});
 
 		it.concurrent('should handle malformed code block (extraction fails)', async () => {
