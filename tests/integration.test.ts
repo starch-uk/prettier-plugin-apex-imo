@@ -317,6 +317,14 @@ describe('prettier-plugin-apex-imo integration', () => {
 				description: 'should format empty map initialization',
 				fixture: 'map-empty',
 			},
+			{
+				description: 'should format single variable with complex Map type',
+				fixture: 'variable-single-map-complex',
+			},
+			{
+				description: 'should format single variable with nested Map type',
+				fixture: 'variable-single-map-nested-type',
+			},
 		])(
 			'$description',
 			async ({

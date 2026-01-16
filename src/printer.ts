@@ -447,7 +447,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		resultParts.push(breakableTypeDoc);
 
 		const isMapTypeDoc = (doc: unknown): boolean => {
+			// typeDoc from printer for Map types is always an array, not a string
+			// String check kept for defensive purposes but unreachable in practice
 			if (typeof doc === 'string') return doc.includes('Map<');
+			// For Map types, doc is always an array
 			if (!Array.isArray(doc)) return false;
 			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
 			const first = doc[0];
@@ -475,17 +478,14 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
 			// typeDoc from printer is always an array for Map types with structure: ['Map', '<', [params...], '>']
-			if (!Array.isArray(typeDocToCheck)) return false;
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
 			
 			// Map type structure: ['Map', '<', [params...], '>']
 			// paramsIndex = 2 should be the params array
-			const paramsIndex = 2;
 			// Printer always produces well-formed Map types, so paramsIndex always exists and is an array
-			const paramsElement = typeDocToCheck[paramsIndex];
-			if (!Array.isArray(paramsElement)) return false;
-			
-			const params = paramsElement as unknown[];
+			const paramsIndex = 2;
+			const paramsElement = typeDocToCheck[paramsIndex] as unknown[];
+			const params = paramsElement;
 			return params.some((param) => hasNestedMap(param));
 		};
 
