@@ -380,16 +380,14 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const { join: joinDocs } = doc.builders;
 			const nameDocs = path.map(
 				(declPath: Readonly<AstPath<ApexNode>>) => {
-					const declNode = declPath.node;
-					if (typeof declNode !== 'object' || declNode === null)
-						return undefined;
+					// Printer always produces object nodes, so declNode is always an object
 					return declPath.call(
 						print,
 						'name' as never,
 					) as unknown as Doc;
 				},
 				'decls' as never,
-			) as unknown as (Doc | undefined)[];
+			) as unknown as Doc[];
 
 			if (nameDocs.length === 0) return null;
 
@@ -399,13 +397,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			}
 			resultParts.push(breakableTypeDoc);
 
-			// Filter out any undefined nameDocs (should not occur, but defensive)
-			const validNameDocs = nameDocs.filter(
-				(nameDoc): nameDoc is Doc => nameDoc !== undefined,
-			);
-
-			if (validNameDocs.length > 1) {
-				const wrappedNames = validNameDocs.map((nameDoc) => {
+			if (nameDocs.length > 1) {
+				const wrappedNames = nameDocs.map((nameDoc) => {
 					return ifBreak(indent([line, nameDoc]), [
 						' ',
 						nameDoc,
@@ -415,17 +408,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				return group(resultParts);
 			}
 
-			if (validNameDocs.length === 1) {
-				const wrappedName = ifBreak(indent([line, validNameDocs[0]]), [
-					' ',
-					validNameDocs[0],
-				]);
-				resultParts.push(wrappedName, ';');
-				return group(resultParts);
-			}
-
-			// All nameDocs were filtered out (should not occur with well-formed AST)
-			return null;
+			// Single declaration
+			const wrappedName = ifBreak(indent([line, nameDocs[0]!]), [
+				' ',
+				nameDocs[0]!,
+			]);
+			resultParts.push(wrappedName, ';');
+			return group(resultParts);
 		}
 
 		// Handle case with assignments
