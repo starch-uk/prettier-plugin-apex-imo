@@ -433,8 +433,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			if (!isObject(declNode)) return print(declPath);
 
 			const {assignment} = (declNode as { assignment?: unknown });
-			if (assignment === null || assignment === undefined)
+			// In Apex, all declarations in a VariableDecls statement must have the same structure
+			// (all have assignments or none do). Since hasVariableAssignments already checked that
+			// at least one has an assignment, all should have assignments here.
+			// This check is defensive for malformed AST but should be unreachable in normal operation.
+			if (assignment === null || assignment === undefined) {
 				return print(declPath);
+			}
 
 			const nameDoc = declPath.call(
 				print,
@@ -494,21 +499,28 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		};
 
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
+			// typeDoc from printer is always an array for Map types, but check for safety
 			if (typeof typeDocToCheck === 'string') {
+				// Defensive: if somehow a string, check if it contains Map<
 				return typeDocToCheck.includes('Map<');
 			}
 			if (!Array.isArray(typeDocToCheck)) return false;
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
-			 
+			
+			// Map type structure: ['Map', '<', [params...], '>']
+			// paramsIndex = 2 should be the params array
 			const paramsIndex = 2;
-			if (
-				typeDocToCheck.length <= paramsIndex ||
-				!Array.isArray(typeDocToCheck[paramsIndex])
-			) {
+			if (typeDocToCheck.length <= paramsIndex) {
+				// Defensive: malformed Map type (missing params)
 				return false;
 			}
-			 
-			const params = typeDocToCheck[paramsIndex] as unknown[];
+			const paramsElement = typeDocToCheck[paramsIndex];
+			if (!Array.isArray(paramsElement)) {
+				// Defensive: params should be an array
+				return false;
+			}
+			
+			const params = paramsElement as unknown[];
 			return params.some((param) => hasNestedMap(param));
 		};
 
