@@ -840,6 +840,34 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
+	describe('ApexDoc code block edge cases', () => {
+		it.concurrent(
+			'should handle code block ending on separate line after nested braces (apexdoc-code.ts lines 138-142)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-code-block-multi-line-ending',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-code-block-multi-line-ending',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle standalone closing brace line (apexdoc-code.ts line 146)',
+			async () => {
+				const input = loadFixture('apexdoc-standalone-closing-brace', 'input');
+				const expected = loadFixture('apexdoc-standalone-closing-brace', 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
 	describe('Non-ApexDoc block comments', () => {
 		it.concurrent(
 			'should normalize annotations in non-ApexDoc block comments (comments.ts lines 1051-1065)',

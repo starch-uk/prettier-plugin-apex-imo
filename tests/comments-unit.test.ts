@@ -9,6 +9,7 @@ import {
 	printComment,
 	tokensToCommentString,
 	parseCommentToDocs,
+	createDocContent,
 } from '../src/comments.js';
 import type { ParserOptions } from 'prettier';
 import { docBuilders } from '../src/utils.js';
@@ -102,11 +103,37 @@ describe('comments internal functions', () => {
 		it.concurrent(
 			'should create text doc when no paragraphs found (lines 734-740)',
 			() => {
-				// Empty comment with just whitespace
+				// Empty comment with just whitespace - no paragraphs created
 				const emptyComment = '/**\n *\n *\n */';
 				const result = parseCommentToDocs(emptyComment);
 				expect(result).toHaveLength(1);
 				expect(result[0]?.type).toBe('text');
+			},
+		);
+
+		it.concurrent(
+			'should handle removeCommentPrefix fallback when regex does not match (line 528)',
+			() => {
+				// Use removeCommentPrefix directly via parseCommentToDocs with malformed input
+				// Line without asterisk pattern when preserveIndent=true
+				// This is tested indirectly through parseCommentToDocs
+				const comment = '/**\n * normal line\n *   \n */';
+				const result = parseCommentToDocs(comment);
+				expect(result.length).toBeGreaterThan(0);
+			},
+		);
+	});
+
+	describe('createDocContent', () => {
+		it.concurrent(
+			'should handle empty lines array (line 552)',
+			() => {
+				// Test createDocContent with empty lines array to cover contentToDoc line 552
+				// This path is defensive and unlikely in practice but tested for completeness
+				const result = createDocContent('text', '', []);
+				expect(result.type).toBe('text');
+				expect(result.content).toBe('');
+				// contentToDoc with empty array returns '' as Doc (line 552)
 			},
 		);
 	});

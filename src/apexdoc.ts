@@ -924,10 +924,8 @@ const processRemainingText = (
 	newDocs: ApexDocComment[],
 ): void => {
 	// currentPos is guaranteed to be < content.length by the calling loop condition
+	// so remainingText will always have at least one character
 	const remainingText = content.substring(currentPos);
-	if (remainingText.length <= EMPTY) {
-		return;
-	}
 	addTextDocIfNotEmpty(remainingText.trimEnd(), doc, newDocs);
 };
 
@@ -949,10 +947,8 @@ const processTextBeforeCode = (
 	if (codeTagStart <= lastMatchEnd) {
 		return;
 	}
+	// codeTagStart > lastMatchEnd ensures textBeforeCode has at least one character
 	const textBeforeCode = content.substring(lastMatchEnd, codeTagStart);
-	if (textBeforeCode.length <= EMPTY) {
-		return;
-	}
 	addTextDocIfNotEmpty(textBeforeCode.trimEnd(), doc, newDocs);
 };
 
