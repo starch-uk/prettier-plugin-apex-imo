@@ -50,13 +50,8 @@ const isAnnotationKeyValue = (
 const isStringAnnotationValue = (
 	value: Readonly<ApexAnnotationValue>,
 ): value is Readonly<ApexAnnotationValue & { value: string }> => {
-	const cls = getNodeClass(value);
-	if (
-		cls === TRUE_ANNOTATION_VALUE_CLASS ||
-		cls === FALSE_ANNOTATION_VALUE_CLASS
-	) {
-		return false;
-	}
+	// TRUE/FALSE annotation values are handled directly in formatAnnotationValue before calling this function
+	// So we don't need to check for them here - they're already filtered out
 	if (!('value' in value)) return false;
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AST type access
 	const valueProp = (value as { value?: unknown }).value;
@@ -143,9 +138,10 @@ const printAnnotation = (
 		]);
 	}
 	const [singleParam] = formattedParams;
-	if (singleParam === undefined) {
-		return group(['@', normalizedName, '()']);
-	}
+	// singleParam cannot be undefined here because:
+	// 1. We already checked parametersLength === EMPTY above
+	// 2. formatAnnotationParam always returns a Doc (never undefined)
+	// 3. So formattedParams.length === parametersLength > 0
 	return group([
 		'@',
 		normalizedName,

@@ -18,6 +18,7 @@ const { group, indent, softline, ifBreak, line } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
 	createTypeNormalizingPrint,
+	createReservedWordNormalizingPrint,
 	isIdentifier,
 	isInTypeContext,
 	normalizeTypeName,
@@ -364,8 +365,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		if (!Array.isArray(decls)) return null;
 
 		// Cache these values as they're used in both branches
+		// Normalize reserved words in modifiers (e.g., PUBLIC -> public, Static -> static)
+		const reservedWordNormalizingPrint = createReservedWordNormalizingPrint(print);
 		const modifierDocs = path.map(
-			print,
+			reservedWordNormalizingPrint,
 			'modifiers' as never,
 		) as unknown as Doc[];
 		const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
@@ -600,7 +603,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		};
 		const { node } = path;
 		const nodeClass = getNodeClassOptional(node);
-		const typeNormalizingPrint = createTypeNormalizingPrint(print);
+		
+		// Create print functions with reserved word normalization
+		// Reserved words are normalized to lowercase (e.g., 'PUBLIC' -> 'public', 'Class' -> 'class')
+		const reservedWordNormalizingPrint = createReservedWordNormalizingPrint(print);
+		const typeNormalizingPrint = createTypeNormalizingPrint(reservedWordNormalizingPrint);
 		const fallback = (): Doc =>
 			originalPrinter.print(path, options, typeNormalizingPrint);
 

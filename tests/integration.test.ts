@@ -898,4 +898,24 @@ describe('prettier-plugin-apex-imo integration', () => {
 			},
 		);
 	});
+
+	describe('Reserved word normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize all reserved words to lowercase (modifiers, keywords, control flow)',
+				fixture: 'reserved-word-normalization',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
 });

@@ -8,6 +8,7 @@ import type { ApexNode, ApexIdentifier } from './types.js';
 import { STANDARD_OBJECTS } from './refs/standard-objects.js';
 import { SORTED_SUFFIXES } from './refs/object-suffixes.js';
 import { PRIMITIVE_AND_COLLECTION_TYPES } from './refs/primitive-types.js';
+import { APEX_RESERVED_WORDS } from './refs/reserved-words.js';
 import { getNodeClassOptional, isObject } from './utils.js';
 
 /**
@@ -21,6 +22,32 @@ import { getNodeClassOptional, isObject } from './utils.js';
  * ```
  */
 const SLICE_START_INDEX = 0;
+
+/**
+ * Set of Apex reserved words for O(1) lookup performance.
+ */
+const APEX_RESERVED_WORDS_SET = new Set(
+	APEX_RESERVED_WORDS.map((word) => word.toLowerCase()),
+);
+
+/**
+ * Normalizes a reserved word to lowercase.
+ * Reserved words in Apex should always be lowercase (e.g., 'public', 'class', 'static').
+ * @param word - The word to normalize (may be in any case).
+ * @returns The normalized word in lowercase if it's a reserved word, otherwise the original word.
+ * @example
+ * ```typescript
+ * normalizeReservedWord('PUBLIC'); // Returns 'public'
+ * normalizeReservedWord('Class'); // Returns 'class'
+ * normalizeReservedWord('STATIC'); // Returns 'static'
+ * normalizeReservedWord('MyVariable'); // Returns 'MyVariable' (not a reserved word)
+ * ```
+ */
+const normalizeReservedWord = (word: string): string => {
+	if (!word) return word;
+	const lowerWord = word.toLowerCase();
+	return APEX_RESERVED_WORDS_SET.has(lowerWord) ? lowerWord : word;
+};
 
 const normalizeStandardObjectType = (typeName: string): string => {
 	if (!typeName) {
@@ -244,6 +271,45 @@ function normalizeSingleIdentifier(
 }
 
 /**
+ * Normalizes a single identifier node's value if it's a reserved word and prints it.
+ * @param node - The identifier node to normalize.
+ * @param originalPrint - The original print function.
+ * @param subPath - The AST path to the node.
+ * @returns The formatted document for the normalized identifier.
+ * @example
+ * ```typescript
+ * normalizeReservedWordIdentifier(node, originalPrint, subPath);
+ * ```
+ */
+function normalizeReservedWordIdentifier(
+	node: Readonly<ApexIdentifier>,
+	originalPrint: (
+		path: Readonly<AstPath<ApexNode>>,
+		...extraArgs: unknown[]
+	) => Doc,
+	subPath: Readonly<AstPath<ApexNode>>,
+): Doc {
+	const nodeValue = node.value;
+	if (nodeValue.length === 0) return originalPrint(subPath);
+	const normalizedValue = normalizeReservedWord(nodeValue);
+	if (normalizedValue === nodeValue) return originalPrint(subPath);
+	
+	// Mutate the node to use normalized value for printing
+	(node as { value: string }).value = normalizedValue;
+	
+	// For identifiers that aren't in arrays, restore after printing
+	// For arrays, keep normalized value as Doc may be evaluated lazily
+	const isInArray = typeof subPath.key === 'number';
+	try {
+		return originalPrint(subPath);
+	} finally {
+		if (!isInArray) {
+			(node as { value: string }).value = nodeValue;
+		}
+	}
+}
+
+/**
  * Normalizes an array of identifier names and prints them.
  * @param node - The node containing the names array to normalize.
  * @param originalPrint - The original print function.
@@ -284,6 +350,44 @@ function normalizeNamesArray(
 	// The AST is already being mutated, so we keep the normalized values
 	return originalPrint(subPath);
 }
+
+/**
+ * Creates a print function that normalizes reserved words in identifiers.
+ * Reserved words are normalized to lowercase (e.g., 'PUBLIC' -> 'public', 'Class' -> 'class').
+ * @param originalPrint - The original print function.
+ * @returns A print function that normalizes reserved words.
+ * @example
+ * ```typescript
+ * const reservedWordNormalizingPrint = createReservedWordNormalizingPrint(originalPrint);
+ * ```
+ */
+const createReservedWordNormalizingPrint =
+	(
+		originalPrint: (
+			path: Readonly<AstPath<ApexNode>>,
+			...extraArgs: unknown[]
+		) => Doc,
+	) =>
+	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {
+		const { node } = subPath;
+		if (!node) return originalPrint(subPath);
+		
+		const isIdent = isIdentifier(node);
+		if (!isIdent) {
+			return originalPrint(subPath, ..._extraArgs);
+		}
+		
+		const valueField = (node as { value?: unknown }).value;
+		if (typeof valueField === 'string') {
+			return normalizeReservedWordIdentifier(
+				node as ApexIdentifier,
+				originalPrint,
+				subPath,
+			);
+		}
+		
+		return originalPrint(subPath, ..._extraArgs);
+	};
 
 const createTypeNormalizingPrint =
 	(
@@ -336,8 +440,10 @@ const createTypeNormalizingPrint =
 
 export {
 	normalizeTypeName,
+	normalizeReservedWord,
 	isIdentifier,
 	isInTypeContext,
+	createReservedWordNormalizingPrint,
 	createTypeNormalizingPrint,
 	TYPEREF_CLASS,
 };

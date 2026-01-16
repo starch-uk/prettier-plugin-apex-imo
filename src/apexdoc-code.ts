@@ -179,14 +179,7 @@ const formatCodeBlockToken = async ({
 	readonly embedOptions: ParserOptions;
 	readonly currentPluginInstance: { default: unknown } | undefined;
 }): Promise<string> => {
-	if (
-		currentPluginInstance?.default === undefined
-	) {
-		throw new Error(
-			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
-		);
-	}
-	const pluginDefault = currentPluginInstance.default;
+	const pluginDefault = currentPluginInstance?.default;
 	if (pluginDefault === null || pluginDefault === undefined) {
 		throw new Error(
 			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
@@ -206,9 +199,6 @@ const formatCodeBlockToken = async ({
 	const formattedLines = formatted.trim().split('\n');
 	const resultLines: string[] = [];
 	for (let i = 0; i < formattedLines.length; i++) {
-		if (i < 0 || i >= formattedLines.length) {
-			continue;
-		}
 		const formattedLine = formattedLines[i];
 		if (formattedLine === undefined) continue;
 		resultLines.push(formattedLine);

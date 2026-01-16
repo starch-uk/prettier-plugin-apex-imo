@@ -6,8 +6,10 @@
 import { describe, it, expect, test } from 'vitest';
 import {
 	normalizeTypeName,
+	normalizeReservedWord,
 	isIdentifier,
 	isInTypeContext,
+	createReservedWordNormalizingPrint,
 	createTypeNormalizingPrint,
 } from '../src/casing.js';
 import { STANDARD_OBJECTS } from '../src/refs/standard-objects.js';
@@ -18,6 +20,93 @@ import { createMockPath, createMockPrint } from './test-utils.js';
 const nodeClassKey = '@class';
 
 describe('casing', () => {
+	describe('normalizeReservedWord', () => {
+		it.concurrent('should normalize reserved words to lowercase', () => {
+			expect(normalizeReservedWord('PUBLIC')).toBe('public');
+			expect(normalizeReservedWord('Private')).toBe('private');
+			expect(normalizeReservedWord('STATIC')).toBe('static');
+			expect(normalizeReservedWord('Final')).toBe('final');
+			expect(normalizeReservedWord('CLASS')).toBe('class');
+			expect(normalizeReservedWord('Interface')).toBe('interface');
+			expect(normalizeReservedWord('ENUM')).toBe('enum');
+			expect(normalizeReservedWord('Void')).toBe('void');
+			expect(normalizeReservedWord('ABSTRACT')).toBe('abstract');
+			expect(normalizeReservedWord('Virtual')).toBe('virtual');
+			expect(normalizeReservedWord('IF')).toBe('if');
+			expect(normalizeReservedWord('Else')).toBe('else');
+			expect(normalizeReservedWord('FOR')).toBe('for');
+			expect(normalizeReservedWord('While')).toBe('while');
+			expect(normalizeReservedWord('RETURN')).toBe('return');
+			expect(normalizeReservedWord('Try')).toBe('try');
+			expect(normalizeReservedWord('CATCH')).toBe('catch');
+			expect(normalizeReservedWord('Finally')).toBe('finally');
+			expect(normalizeReservedWord('NEW')).toBe('new');
+			expect(normalizeReservedWord('This')).toBe('this');
+			expect(normalizeReservedWord('SUPER')).toBe('super');
+			expect(normalizeReservedWord('NULL')).toBe('null');
+		});
+
+		it.concurrent(
+			'should return lowercase unchanged for reserved words already in lowercase',
+			() => {
+				expect(normalizeReservedWord('public')).toBe('public');
+				expect(normalizeReservedWord('private')).toBe('private');
+				expect(normalizeReservedWord('static')).toBe('static');
+				expect(normalizeReservedWord('class')).toBe('class');
+				expect(normalizeReservedWord('interface')).toBe('interface');
+			},
+		);
+
+		it.concurrent(
+			'should return unchanged for non-reserved words',
+			() => {
+				expect(normalizeReservedWord('MyVariable')).toBe('MyVariable');
+				expect(normalizeReservedWord('myVariable')).toBe('myVariable');
+				expect(normalizeReservedWord('MYVARIABLE')).toBe('MYVARIABLE');
+				expect(normalizeReservedWord('Account')).toBe('Account');
+				expect(normalizeReservedWord('String')).toBe('String');
+			},
+		);
+
+		it.concurrent('should handle empty string', () => {
+			expect(normalizeReservedWord('')).toBe('');
+		});
+
+		it.concurrent('should handle all declaration modifiers', () => {
+			expect(normalizeReservedWord('PUBLIC')).toBe('public');
+			expect(normalizeReservedWord('PRIVATE')).toBe('private');
+			expect(normalizeReservedWord('PROTECTED')).toBe('protected');
+			expect(normalizeReservedWord('STATIC')).toBe('static');
+			expect(normalizeReservedWord('FINAL')).toBe('final');
+			expect(normalizeReservedWord('TRANSIENT')).toBe('transient');
+			expect(normalizeReservedWord('GLOBAL')).toBe('global');
+			expect(normalizeReservedWord('WEBSERVICE')).toBe('webservice');
+		});
+
+		it.concurrent('should handle type-related reserved words', () => {
+			expect(normalizeReservedWord('ENUM')).toBe('enum');
+			expect(normalizeReservedWord('CLASS')).toBe('class');
+			expect(normalizeReservedWord('INTERFACE')).toBe('interface');
+			expect(normalizeReservedWord('VOID')).toBe('void');
+			expect(normalizeReservedWord('ABSTRACT')).toBe('abstract');
+			expect(normalizeReservedWord('VIRTUAL')).toBe('virtual');
+		});
+
+		it.concurrent('should handle control flow keywords', () => {
+			expect(normalizeReservedWord('IF')).toBe('if');
+			expect(normalizeReservedWord('ELSE')).toBe('else');
+			expect(normalizeReservedWord('SWITCH')).toBe('switch');
+			expect(normalizeReservedWord('CASE')).toBe('case');
+			expect(normalizeReservedWord('DEFAULT')).toBe('default');
+			expect(normalizeReservedWord('FOR')).toBe('for');
+			expect(normalizeReservedWord('WHILE')).toBe('while');
+			expect(normalizeReservedWord('DO')).toBe('do');
+			expect(normalizeReservedWord('BREAK')).toBe('break');
+			expect(normalizeReservedWord('CONTINUE')).toBe('continue');
+			expect(normalizeReservedWord('RETURN')).toBe('return');
+		});
+	});
+
 	describe('normalizeTypeName', () => {
 		it.concurrent('should normalize primitive types to PascalCase', () => {
 			// Test that primitives are normalized first, before standard objects
@@ -71,6 +160,15 @@ describe('casing', () => {
 				);
 			},
 		);
+
+		it.concurrent('should handle empty string input', () => {
+			expect(normalizeTypeName('')).toBe('');
+		});
+
+		it.concurrent('should handle types that are not primitives or standard objects', () => {
+			expect(normalizeTypeName('MyCustomClass')).toBe('MyCustomClass');
+			expect(normalizeTypeName('SomeOtherType')).toBe('SomeOtherType');
+		});
 
 		it.concurrent(
 			'should handle types with only standard object normalization',
@@ -657,6 +755,177 @@ describe('casing', () => {
 
 			// Should normalize because parentKey is 'types'
 			expect(mockPrint).toHaveBeenCalled();
+		});
+	});
+
+	describe('createReservedWordNormalizingPrint', () => {
+		it.concurrent(
+			'should return original print when node is not an identifier',
+			() => {
+				const mockPrint = createMockPrint();
+				const reservedWordNormalizingPrint =
+					createReservedWordNormalizingPrint(mockPrint);
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
+				} as ApexNode;
+				const path = createMockPath(node, 'body');
+
+				const result = reservedWordNormalizingPrint(path);
+
+				expect(result).toBe('original output');
+				expect(mockPrint).toHaveBeenCalledWith(path);
+			},
+		);
+
+		it.concurrent(
+			'should normalize identifier that is a reserved word',
+			() => {
+				const mockPrint = createMockPrint();
+				const reservedWordNormalizingPrint =
+					createReservedWordNormalizingPrint(mockPrint);
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'PUBLIC',
+				} as ApexIdentifier;
+				const path = createMockPath(node, 'modifiers');
+
+				reservedWordNormalizingPrint(path);
+
+				// Should call print with modified node (value normalized to 'public')
+				expect(mockPrint).toHaveBeenCalled();
+				expect((node as { value: string }).value).toBe('PUBLIC'); // Restored after printing if not in array
+			},
+		);
+
+		it.concurrent(
+			'should normalize identifier in array (modifiers array)',
+			() => {
+				const mockPrint = createMockPrint();
+				const reservedWordNormalizingPrint =
+					createReservedWordNormalizingPrint(mockPrint);
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'STATIC',
+				} as ApexIdentifier;
+				const path = createMockPath(node, 0); // Array index
+
+				reservedWordNormalizingPrint(path);
+
+				// Should call print with modified node (value normalized to 'static')
+				expect(mockPrint).toHaveBeenCalled();
+				// For arrays, value should remain normalized (not restored)
+				expect((node as { value: string }).value).toBe('static');
+			},
+		);
+
+		it.concurrent(
+			'should return original print when identifier is not a reserved word',
+			() => {
+				const mockPrint = createMockPrint();
+				const reservedWordNormalizingPrint =
+					createReservedWordNormalizingPrint(mockPrint);
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'MyVariable',
+				} as ApexIdentifier;
+				const path = createMockPath(node, 'name');
+
+				const result = reservedWordNormalizingPrint(path);
+
+				expect(result).toBe('original output');
+				expect(mockPrint).toHaveBeenCalledWith(path);
+			},
+		);
+
+		it.concurrent('should handle empty string in identifier value', () => {
+			const mockPrint = createMockPrint();
+			const reservedWordNormalizingPrint =
+				createReservedWordNormalizingPrint(mockPrint);
+			const node = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+				value: '',
+			} as ApexIdentifier;
+			const path = createMockPath(node, 'modifiers');
+
+			const result = reservedWordNormalizingPrint(path);
+
+			expect(result).toBe('original output');
+			expect(mockPrint).toHaveBeenCalledWith(path);
+		});
+
+		it.concurrent(
+			'should handle identifier with non-string value property',
+			() => {
+				const mockPrint = createMockPrint();
+				const reservedWordNormalizingPrint =
+					createReservedWordNormalizingPrint(mockPrint);
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 123,
+				} as ApexNode;
+				const path = createMockPath(node, 'modifiers');
+
+				const result = reservedWordNormalizingPrint(path);
+
+				expect(result).toBe('original output');
+				expect(mockPrint).toHaveBeenCalledWith(path);
+			},
+		);
+
+		it.concurrent('should handle null node', () => {
+			const mockPrint = createMockPrint();
+			const reservedWordNormalizingPrint =
+				createReservedWordNormalizingPrint(mockPrint);
+			const path = createMockPath(null as unknown as ApexNode, 'modifiers');
+
+			const result = reservedWordNormalizingPrint(path);
+
+			expect(result).toBe('original output');
+			expect(mockPrint).toHaveBeenCalledWith(path);
+		});
+
+		it.concurrent('should normalize various reserved words', () => {
+			const testCases = [
+				{ input: 'PUBLIC', expected: 'public' },
+				{ input: 'Private', expected: 'private' },
+				{ input: 'STATIC', expected: 'static' },
+				{ input: 'Class', expected: 'class' },
+				{ input: 'INTERFACE', expected: 'interface' },
+				{ input: 'Enum', expected: 'enum' },
+				{ input: 'VOID', expected: 'void' },
+				{ input: 'Abstract', expected: 'abstract' },
+				{ input: 'IF', expected: 'if' },
+				{ input: 'Else', expected: 'else' },
+				{ input: 'FOR', expected: 'for' },
+				{ input: 'While', expected: 'while' },
+				{ input: 'RETURN', expected: 'return' },
+				{ input: 'Try', expected: 'try' },
+				{ input: 'CATCH', expected: 'catch' },
+				{ input: 'NEW', expected: 'new' },
+				{ input: 'This', expected: 'this' },
+				{ input: 'SUPER', expected: 'super' },
+				{ input: 'NULL', expected: 'null' },
+			];
+
+			for (const testCase of testCases) {
+				const mockPrint = createMockPrint();
+				const reservedWordNormalizingPrint =
+					createReservedWordNormalizingPrint(mockPrint);
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: testCase.input,
+				} as ApexIdentifier;
+				// Use array index to test normalization without restoration
+				const path = createMockPath(node, 0);
+
+				reservedWordNormalizingPrint(path);
+
+				// For array indices, value should remain normalized (not restored)
+				expect((node as { value: string }).value).toBe(
+					testCase.expected,
+				);
+				expect(mockPrint).toHaveBeenCalled();
+			}
 		});
 	});
 });
