@@ -69,21 +69,15 @@ const printComment = (
 	) => Doc,
 	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires 4 parameters
 ): Doc => {
-	// Get stored options from printer
-	const storedOptions = getCurrentPrintOptions();
-	if (!storedOptions) {
-		throw new Error(
-			'prettier-plugin-apex-imo: storedOptions is required for printComment',
-		);
-	}
-
 	// Use the centralized comment processing logic
+	// Use options parameter directly - it's always provided by Prettier's API
+	// storedOptions is set in print() but options is more reliable here
 	return printCommentFn(
 		path,
 		options,
 		print,
 		originalPrintComment,
-		storedOptions,
+		options,
 		getCurrentOriginalText,
 		getFormattedCodeBlock,
 	);
