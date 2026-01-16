@@ -634,6 +634,32 @@ describe('prettier-plugin-apex-imo integration', () => {
 				expect(result).toBe(expected);
 			},
 		);
+
+		it.concurrent(
+			'should handle code block that ends inline (apexdoc-code.ts lines 138-142)',
+			async () => {
+				const input = loadFixture('apexdoc-code-block-ends-inline', 'input');
+				const expected = loadFixture(
+					'apexdoc-code-block-ends-inline',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle text with newline before code block (comments.ts lines 882-887)',
+			async () => {
+				const input = loadFixture('apexdoc-code-with-newline-trailing', 'input');
+				const expected = loadFixture(
+					'apexdoc-code-with-newline-trailing',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('ApexDoc annotation normalization', () => {
