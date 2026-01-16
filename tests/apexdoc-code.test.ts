@@ -144,10 +144,35 @@ describe('apexdoc-code', () => {
 			expect(result).toHaveLength(5);
 		});
 
-		it.concurrent('should handle standalone closing brace', () => {
+		it.concurrent('should handle standalone closing brace (line 146)', () => {
+			// Test the standalone '}' case that triggers line 146
+			// For first line (index 0), prefix is empty string (index > EMPTY ? ' ' : '')
 			const lines = [' *   }'];
 			const result = processCodeBlockLines(lines);
 			expect(result[0]).toContain('}');
+			// Should return prefix + commentLine.trimStart()
+			// index 0: prefix = '', commentLine = ' *   }', trimStart() = '*   }', so result = '*   }'
+			expect(result[0]).toBe('*   }');
+			
+			// Test with second line to get prefix = ' '
+			const lines2 = [' * Line 1', ' *   }'];
+			const result2 = processCodeBlockLines(lines2);
+			// index 1: prefix = ' ', commentLine = ' *   }', trimStart() = '*   }', so result = ' *   }'
+			expect(result2[1]).toBe(' *   }');
+		});
+
+		it.concurrent('should handle code block ending within a line (lines 138-142)', () => {
+			// Test when inCodeBlock is true, line doesn't start with CODE_TAG, and willEndCodeBlock is true
+			const lines = [
+				' * {@code',
+				' *   Integer x = 10;',
+				' * }', // This line will trigger willEndCodeBlock = true
+			];
+			const result = processCodeBlockLines(lines);
+			expect(result.length).toBe(3);
+			// Line with '}' should end the code block
+			expect(result[2]).toContain('}');
+			// inCodeBlock should be reset to false after this line
 		});
 
 		it.concurrent('should handle empty lines array', () => {

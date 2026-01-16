@@ -160,58 +160,6 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
  */
 
 /**
- * Formats a code block using prettier with our plugin and effective page width.
- * @param root0 - The parameters object.
- * @param root0.code - The code string to format.
- * @param root0.effectiveWidth - The effective page width (reduced from printWidth).
- * @param root0.embedOptions - Parser options for formatting.
- * @param root0.currentPluginInstance - Plugin instance to ensure wrapped printer is used.
- * @returns Formatted code string with preserved blank lines.
- */
-const formatCodeBlockToken = async ({
-	code,
-	effectiveWidth,
-	embedOptions,
-	currentPluginInstance,
-}: {
-	readonly code: string;
-	readonly effectiveWidth: number;
-	readonly embedOptions: ParserOptions;
-	readonly currentPluginInstance: { default: unknown } | undefined;
-}): Promise<string> => {
-	const pluginDefault = currentPluginInstance?.default;
-	if (pluginDefault === null || pluginDefault === undefined) {
-		throw new Error(
-			'prettier-plugin-apex-imo: currentPluginInstance.default is required for formatCodeBlockToken',
-		);
-	}
-	const optionsWithPlugin = {
-		...embedOptions,
-		plugins: [pluginDefault],
-		printWidth: effectiveWidth,
-	};
-
-	// Format with prettier, trying apex-anonymous first, then apex
-	// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
-	const formatted = await formatApexCodeWithFallback(code, optionsWithPlugin);
-
-	// Preserve blank lines after closing braces when followed by annotations or access modifiers
-	const formattedLines = formatted.trim().split('\n');
-	const resultLines: string[] = [];
-	for (let i = 0; i < formattedLines.length; i++) {
-		const formattedLine = formattedLines[i];
-		if (formattedLine === undefined) continue;
-		resultLines.push(formattedLine);
-
-		if (preserveBlankLineAfterClosingBrace(formattedLines, i)) {
-			resultLines.push('');
-		}
-	}
-
-	return resultLines.join('\n').trimEnd();
-};
-
-/**
  * Processes embed result to extract formatted code lines.
  * @param embedResult - The embed result string to process.
  * @returns Array of extracted code lines.
@@ -492,7 +440,6 @@ export {
 	CODE_TAG_LENGTH,
 	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
-	formatCodeBlockToken,
 	processCodeBlock,
 	processCodeBlockLines,
 	processAllCodeBlocksInComment,
