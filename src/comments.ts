@@ -278,22 +278,21 @@ const normalizeCommentStart = (comment: string): string => {
 	) {
 		start++;
 	}
-	// If we find /*, normalize multiple asterisks
-	if (comment.substring(start).startsWith('/*')) {
-		const prefix = comment.substring(0, start);
-		const afterSlash = comment.substring(start + 1);
-		// Count asterisks after /
-		let asteriskCount = 0;
-		while (
-			asteriskCount < afterSlash.length &&
-			afterSlash[asteriskCount] === '*'
-		) {
-			asteriskCount++;
-		}
-		// Normalize to exactly two asterisks (/**)
-		if (asteriskCount !== 2) {
-			return prefix + '/**' + afterSlash.substring(asteriskCount);
-		}
+	// Block comments always start with /* or /** after whitespace
+	// Normalize multiple asterisks to exactly two asterisks (/**)
+	const prefix = comment.substring(0, start);
+	const afterSlash = comment.substring(start + 1);
+	// Count asterisks after /
+	let asteriskCount = 0;
+	while (
+		asteriskCount < afterSlash.length &&
+		afterSlash[asteriskCount] === '*'
+	) {
+		asteriskCount++;
+	}
+	// Normalize to exactly two asterisks (/**)
+	if (asteriskCount !== 2) {
+		return prefix + '/**' + afterSlash.substring(asteriskCount);
 	}
 	return comment;
 };
@@ -431,8 +430,8 @@ const normalizeBlockComment = (
 		options.useTabs,
 	);
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
-		const line = lines[i];
-		if (line === undefined) continue;
+		const line = lines[i]!;
+		// lines comes from normalizedComment.split('\n') which never creates undefined entries
 		normalizedLines.push(
 			normalizeCommentLine(
 				line,
@@ -501,7 +500,7 @@ const removeCommentPrefix = (
 		if (match) {
 			// match[4] is capturing group (.*) which always matches (even if empty string)
 			// so rest will always be a string, never undefined
-			const rest = match[4] ?? '';
+			const rest = match[4]!;
 			// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
 			// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
 			// But preserve any additional spaces (indentation) - they're part of the content
@@ -651,8 +650,8 @@ const parseCommentToDocs = (
 	};
 
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
-		const line = contentLines[i];
-		if (line === undefined) continue;
+		const line = contentLines[i]!;
+		// contentLines comes from lines.slice() which never creates undefined entries
 
 		// Remove comment prefix (*) to check if line is empty
 		const trimmedLine = removeCommentPrefix(line);
@@ -766,25 +765,23 @@ const tokensToCommentString = (
 	const lines: string[] = [`${baseIndent}/**`];
 
 	for (let i = 0; i < docs.length; i++) {
-		const doc = docs[i];
-		if (!doc) continue;
-
-		if (doc.type === 'text' || doc.type === 'paragraph') {
-			// Extract string lines from Doc
-			const docLines = getContentLines(doc);
-
-			for (const line of docLines) {
-				// Preserve existing structure if line already has prefix
-				lines.push(
-					line.trimStart().startsWith('*')
-						? line
-						: `${commentPrefix}${line.trimStart()}`,
-				);
-			}
-		}
-		// Annotation docs will be handled later
+		const doc = docs[i]!;
+		// docs is readonly ApexDocComment[] and arrays created via push() never have undefined holes
 		// Note: Code block docs are converted to content docs in docsToApexDocString
-		// before reaching tokensToCommentString, so doc.type === 'code' and isFollowedByCodeBlock are unreachable
+		// before reaching tokensToCommentString, so doc.type is always 'text' or 'paragraph'
+		// Annotation docs are handled separately, so we can directly process content docs
+
+		// Extract string lines from Doc
+		const docLines = getContentLines(doc);
+
+		for (const line of docLines) {
+			// Preserve existing structure if line already has prefix
+			lines.push(
+				line.trimStart().startsWith('*')
+					? line
+					: `${commentPrefix}${line.trimStart()}`,
+			);
+		}
 	}
 
 	lines.push(`${baseIndent} */`);

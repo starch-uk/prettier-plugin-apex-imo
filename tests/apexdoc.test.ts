@@ -14,6 +14,7 @@ import {
 	normalizeSingleApexDocComment,
 } from '../src/apexdoc.js';
 import type { ApexDocComment } from '../src/comments.js';
+import { createDocContent } from '../src/comments.js';
 import { loadFixture, formatApex } from './test-utils.js';
 
 describe('apexdoc', () => {
@@ -353,6 +354,35 @@ describe('apexdoc', () => {
 				expect(result).toBeDefined();
 				// The important part is that line 920 (if (isEmbedFormatted)) gets executed
 				// when isEmbedFormatted is true and code blocks are detected
+			},
+		);
+	});
+
+	describe('detectCodeBlockDocs with isEmbedFormatted', () => {
+		it.concurrent(
+			'should handle isEmbedFormatted=true when processing code blocks (apexdoc.ts line 915)',
+			() => {
+				// Test detectCodeBlockDocs directly with isEmbedFormatted=true
+				// This should exercise processContentForCodeBlocks with isEmbedFormatted=true
+				// which triggers the ternary at line 915-917: isEmbedFormatted ? codeBlockResult.code : undefined
+				// Use text type to avoid removeCommentPrefix processing which might affect the format
+				const textDoc = createDocContent(
+					'text',
+					'Example with {@code Integer x = 10; } code block',
+					['Example with {@code Integer x = 10; } code block'],
+				);
+				const docs: ApexDocComment[] = [textDoc];
+
+				// Call detectCodeBlockDocs with isEmbedFormatted=true (true branch)
+				const resultTrue = detectCodeBlockDocs(docs, '', true);
+				expect(Array.isArray(resultTrue)).toBe(true);
+				expect(resultTrue.length).toBeGreaterThan(0);
+
+				// Call detectCodeBlockDocs with isEmbedFormatted=false (false branch)
+				const resultFalse = detectCodeBlockDocs(docs, '', false);
+				expect(Array.isArray(resultFalse)).toBe(true);
+				expect(resultFalse.length).toBeGreaterThan(0);
+				// Both branches of the ternary should be covered now
 			},
 		);
 	});

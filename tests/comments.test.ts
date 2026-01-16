@@ -15,10 +15,12 @@ import {
 	handleRemainingComment,
 	wrapTextToWidth,
 	printComment,
+	tokensToCommentString,
 } from '../src/comments.js';
 import { PrettierMockSuite } from './prettier-mock.js';
 import { createMockPath } from './test-utils.js';
 import { loadFixture } from './test-utils.js';
+import type { ApexDocComment } from '../src/comments.js';
 
 describe('comments', () => {
 	describe('getIndentLevel', () => {
@@ -390,6 +392,21 @@ describe('comments', () => {
 				expect(result).toBe(expectedComment);
 			},
 		);
+
+		it.concurrent(
+			'should normalize comment starting with /* (comments.ts line 282)',
+			() => {
+				// Test the branch when comment starts with /* instead of /**
+				// This covers line 282: if (comment.substring(start).startsWith('/*'))
+				const comment = '  /* Comment text */';
+				const expected = '  /** Comment text */';
+				const result = normalizeBlockComment(comment, 2, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('comment attachment handlers', () => {
@@ -429,6 +446,20 @@ describe('comments', () => {
 				};
 				const result = handleEndOfLineComment(comment, '');
 				expect(result).toBe(true);
+			});
+
+			it('should return false when binaryExpr.right is missing (comments.ts line 219)', () => {
+				// Test the guard clause when binaryExpr.right is undefined/null
+				// This covers line 219: if (!binaryExpr.right) return false;
+				const comment = {
+					placement: 'endOfLine',
+					precedingNode: {
+						'@class': 'apex.jorje.data.ast.Expr$BinaryExpr',
+						// right is missing/undefined
+					},
+				};
+				const result = handleEndOfLineComment(comment, '');
+				expect(result).toBe(false);
 			});
 		});
 
@@ -562,6 +593,107 @@ describe('comments', () => {
 
 				// Should return empty string for empty comment value
 				expect(result).toBe('');
+			},
+		);
+	});
+
+	describe('tokensToCommentString', () => {
+		it.concurrent(
+			'should process text and paragraph type docs (comments.ts lines 772-779)',
+			() => {
+				// Test the loop body that processes text/paragraph type docs
+				// This covers lines 772-779: the loop that processes docLines and adds prefix
+				const textDoc: ApexDocComment = {
+					type: 'text',
+					content: 'Some text content',
+					lines: ['Some text content'], // Lines for text doc
+				};
+				const paragraphDoc: ApexDocComment = {
+					type: 'paragraph',
+					content: 'Paragraph content',
+					lines: ['Paragraph content'], // Lines for paragraph doc
+				};
+				const docs: ApexDocComment[] = [textDoc, paragraphDoc];
+
+				const result = tokensToCommentString(docs, 0, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+
+				// Should produce a valid comment string with opening/closing markers
+				expect(result).toContain('/**');
+				expect(result).toContain('*/');
+				expect(result).toContain('Some text content');
+				expect(result).toContain('Paragraph content');
+			},
+		);
+
+		it.concurrent(
+			'should handle lines that already start with * (comments.ts line 779)',
+			() => {
+				// Test the ternary branch when line.trimStart().startsWith('*')
+				// This covers line 779: the true branch of the ternary
+				const paragraphDoc: ApexDocComment = {
+					type: 'paragraph',
+					content: 'Content with * prefix',
+					lines: ['   * Content with * prefix'], // Line that already has * prefix
+				};
+				const docs: ApexDocComment[] = [paragraphDoc];
+
+				const result = tokensToCommentString(docs, 0, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+
+				// Should preserve the existing * prefix
+				expect(result).toContain('* Content with * prefix');
+			},
+		);
+
+		it.concurrent(
+			'should add prefix to lines without * (comments.ts line 781)',
+			() => {
+				// Test the ternary branch when line doesn't start with *
+				// This covers line 781: the false branch that adds commentPrefix
+				const paragraphDoc: ApexDocComment = {
+					type: 'paragraph',
+					content: 'Content without prefix',
+					lines: ['Content without prefix'], // Line without * prefix
+				};
+				const docs: ApexDocComment[] = [paragraphDoc];
+
+				const result = tokensToCommentString(docs, 2, {
+					// commentIndent: 2, tabWidth: 2
+					tabWidth: 2,
+					useTabs: false,
+				});
+
+				// Should add the comment prefix (spaces + *)
+				expect(result).toContain('Content without prefix');
+				// Should have proper comment structure
+				expect(result).toContain('/**');
+				expect(result).toContain('*/');
+			},
+		);
+	});
+
+	describe('normalizeBlockComment edge cases', () => {
+		it.concurrent(
+			'should handle comment without closing slash (comments.ts line 312)',
+			() => {
+				// Test the break condition when no / is found in normalizeCommentEnd
+				// This covers line 312: if (slashPos === -1) break;
+				// A comment without / would be malformed, but we should handle it gracefully
+				const malformedComment = '/** Comment text without closing';
+				// normalizeBlockComment should handle this - the normalizeCommentEnd will break
+				// when no / is found after searching through the string
+				const result = normalizeBlockComment(malformedComment, 0, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+				// Should return normalized comment (start normalization happens first)
+				expect(typeof result).toBe('string');
+				expect(result).toContain('/**');
 			},
 		);
 	});

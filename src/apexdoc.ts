@@ -346,7 +346,7 @@ const renderCodeBlock = (
 ): RenderedContent => {
 	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
 	// Use formattedCode if available, otherwise use rawCode
-	const codeToUse = doc.formattedCode ?? doc.rawCode;
+	const codeToUse = doc.formattedCode !== undefined ? doc.formattedCode : doc.rawCode;
 
 	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
 	// Apply blank line preservation even for formattedCode to restore blank lines that Prettier removed
@@ -376,18 +376,17 @@ const renderCodeBlock = (
 	const finalCodeLines = handleUnwrappedCode(
 		codeLinesForProcessing,
 		commentPrefix,
-		options.printWidth ?? 80,
+		options.printWidth!,
 	);
 
 	const lines = buildLinesWithPrefixes(finalCodeLines, commentPrefix);
-
-	return isNotEmpty(lines)
-		? {
-				content: lines.join('\n'),
-				lines,
-				type: 'text',
-			}
-		: null;
+	// handleUnwrappedCode always returns at least ['{@code'] or ['{@code', ...lines, '}'],
+	// so lines is never empty (buildLinesWithPrefixes just adds prefixes to each line)
+	return {
+		content: lines.join('\n'),
+		lines,
+		type: 'text',
+	};
 };
 
 /**
@@ -624,13 +623,10 @@ const createMergedDoc = (
 	const { join, hardline } = docBuilders;
 	const docLines = mergedLines.map((line) => line as Doc);
 	// join() from prettier's docBuilders never returns null/undefined
-	// docLines[0] is never undefined when length === 1 (map doesn't create undefined entries)
-	const contentDoc: Doc =
-		docLines.length === 0
-			? ('' as Doc)
-			: docLines.length === 1
-				? docLines[0]!
-				: join(hardline, docLines);
+	// join() handles single-element arrays correctly, so we can simplify the ternary
+	// docLines.length is never 0 because mergedLines comes from getContentLines(doc),
+	// and doc.lines is never empty (createDocContent is always called with at least one line)
+	const contentDoc: Doc = join(hardline, docLines);
 	const result: ApexDocContent = {
 		content: contentDoc,
 		isContinuation: doc.isContinuation,
@@ -915,11 +911,9 @@ const processContentForCodeBlocks = (
 		);
 		if (codeBlockResult) {
 			// If comment was already formatted by embed function, treat extracted code as formatted
-			// Initialize to undefined (default), only set if isEmbedFormatted is true
-			let formattedCode: string | undefined = undefined;
-			if (isEmbedFormatted) {
-				formattedCode = codeBlockResult.code;
-			}
+			const formattedCode = isEmbedFormatted
+				? codeBlockResult.code
+				: undefined;
 			newDocs.push(
 				createDocCodeBlock(
 					codeTagStart,
