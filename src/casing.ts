@@ -137,8 +137,8 @@ const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	return false;
 };
 
-const isTypeRelatedKey = (key: number | string | undefined): boolean => {
-	if (typeof key !== 'string') return false;
+const isTypeRelatedKey = (key: string): boolean => {
+	// This function is only called when key is already confirmed to be a string
 	const lowerKey = key.toLowerCase();
 	return (
 		lowerKey === 'types' ||
