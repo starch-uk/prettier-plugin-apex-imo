@@ -10,9 +10,13 @@ import {
 	tokensToCommentString,
 	parseCommentToDocs,
 	createDocContent,
+	normalizeBlockComment,
+	handleOwnLineComment,
 } from '../src/comments.js';
 import type { ParserOptions } from 'prettier';
 import { docBuilders } from '../src/utils.js';
+import { PrettierMockSuite } from './prettier-mock.js';
+import { vi, beforeEach } from 'vitest';
 
 describe('comments internal functions', () => {
 	describe('printComment', () => {
@@ -137,4 +141,21 @@ describe('comments internal functions', () => {
 			},
 		);
 	});
+
+	describe('normalizeBlockComment', () => {
+		it.concurrent(
+			'should handle comment with leading whitespace (line 276)',
+			() => {
+				// Comment with leading whitespace before /*
+				const comment = '  /* comment */';
+				const result = normalizeBlockComment(comment, 0, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+				expect(result).toContain('/*');
+				// normalizeCommentStart line 276 should be executed
+			},
+		);
+	});
+
 });

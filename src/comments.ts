@@ -360,14 +360,9 @@ const normalizeCommentLine = (
 	}
 
 	if (asteriskPos === -1) {
+		// asteriskPos === -1 means no asterisk found after whitespace
+		// so trimmed cannot start with '*' (would have been found by loop)
 		const trimmed = line.trimStart();
-		if (trimmed.startsWith('*')) {
-			const afterAsteriskRaw = trimmed.substring(1);
-			const afterAsterisk = afterAsteriskRaw.startsWith(' ')
-				? afterAsteriskRaw
-				: afterAsteriskRaw.trimStart();
-			return `${baseIndent} * ${afterAsterisk}`;
-		}
 		return `${baseIndent} * ${trimmed}`;
 	}
 
@@ -501,10 +496,9 @@ const removeCommentPrefix = (
 		// Match: leading whitespace, then asterisks (possibly separated by spaces), then optional single space, then rest
 		const match = /^(\s*)(\*(\s*\*)*)\s?(.*)$/.exec(line);
 		if (match) {
-			const rest = match[4];
-			if (rest === undefined) {
-				return line;
-			}
+			// match[4] is capturing group (.*) which always matches (even if empty string)
+			// so rest will always be a string, never undefined
+			const rest = match[4] ?? '';
 			// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
 			// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
 			// But preserve any additional spaces (indentation) - they're part of the content
