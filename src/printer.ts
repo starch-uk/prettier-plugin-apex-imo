@@ -146,10 +146,6 @@ const setFormattedCodeBlock = (key: string, value: string): void => {
 	formattedCodeBlocks.set(key, value);
 };
 
-const clearFormattedCodeBlocks = (): void => {
-	formattedCodeBlocks.clear();
-};
-
 const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
 const INLINE_COMMENT_CLASS =
 	'apex.jorje.parser.impl.HiddenTokens$InlineComment';
@@ -224,17 +220,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 					options: ParserOptions,
 				) => Promise<Doc>,
 			): Promise<Doc | undefined> => {
-				// Cache options values early
-				if (
-					options.plugins === undefined ||
-					options.tabWidth === undefined
-				) {
-					throw new Error(
-						'prettier-plugin-apex-imo: options.plugins and options.tabWidth are required',
-					);
-				}
-				const tabWidthValue = options.tabWidth;
-				const basePlugins = options.plugins;
+				// Prettier always provides plugins and tabWidth in options
+				const tabWidthValue = options.tabWidth ?? 2;
+				const basePlugins = options.plugins ?? [];
 				const pluginInstance = getCurrentPluginInstance();
 				const plugins: (prettier.Plugin<ApexNode> | URL | string)[] =
 					pluginInstance
