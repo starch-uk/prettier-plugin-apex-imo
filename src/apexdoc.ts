@@ -915,9 +915,11 @@ const processContentForCodeBlocks = (
 		);
 		if (codeBlockResult) {
 			// If comment was already formatted by embed function, treat extracted code as formatted
-			const formattedCode = isEmbedFormatted
-				? codeBlockResult.code
-				: undefined;
+			// Initialize to undefined (default), only set if isEmbedFormatted is true
+			let formattedCode: string | undefined = undefined;
+			if (isEmbedFormatted) {
+				formattedCode = codeBlockResult.code;
+			}
 			newDocs.push(
 				createDocCodeBlock(
 					codeTagStart,

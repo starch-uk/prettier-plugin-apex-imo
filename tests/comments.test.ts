@@ -444,6 +444,21 @@ describe('comments', () => {
 				const result = handleRemainingComment(comment, '');
 				expect(result).toBe(true);
 			});
+
+			it('should handle empty block statement with comment (comments.ts line 184)', () => {
+				// Test the else branch when block has no statements (stmnts is undefined or empty)
+				// This covers line 184: addDanglingComment(followingNode, comment, null)
+				const comment = {
+					followingNode: {
+						'@class': 'apex.jorje.data.ast.Stmnt$BlockStmnt',
+						// stmnts is undefined or empty array for empty block
+						stmnts: [],
+					},
+				};
+				const result = handleRemainingComment(comment, '');
+				// Should return true because handleBlockStatementLeadingComment handles it
+				expect(result).toBe(true);
+			});
 		});
 	});
 });

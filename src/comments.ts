@@ -173,11 +173,14 @@ const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
 	const blockStatement = followingNode as { stmnts?: unknown[] };
 	const { addLeadingComment, addDanglingComment } = prettier.util;
 
-	if (blockStatement.stmnts && blockStatement.stmnts.length > 0) {
+	const hasStatements =
+		blockStatement.stmnts !== undefined &&
+		blockStatement.stmnts.length > 0;
+	if (hasStatements) {
 		// Add as leading comment to first statement in block
 		addLeadingComment(blockStatement.stmnts[0], comment);
 	} else {
-		// Add as dangling comment to empty block
+		// Add as dangling comment to empty block (stmnts is undefined or empty array)
 		addDanglingComment(followingNode, comment, null);
 	}
 	return true;

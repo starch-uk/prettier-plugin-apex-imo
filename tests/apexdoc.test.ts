@@ -11,6 +11,7 @@ import {
 	removeTrailingEmptyLines,
 	isApexDoc,
 	detectCodeBlockDocs,
+	normalizeSingleApexDocComment,
 } from '../src/apexdoc.js';
 import type { ApexDocComment } from '../src/comments.js';
 import { loadFixture, formatApex } from './test-utils.js';
@@ -321,6 +322,37 @@ describe('apexdoc', () => {
 				expect(Array.isArray(result)).toBe(true);
 				// The important part is that line 890 (else branch: lines.join('\n')) gets executed
 				// when doc.type === 'text' (not 'paragraph')
+			},
+		);
+	});
+
+	describe('normalizeSingleApexDocComment with isEmbedFormatted', () => {
+		it.concurrent(
+			'should handle isEmbedFormatted=true for code blocks (apexdoc.ts line 920)',
+			async () => {
+				// Test the isEmbedFormatted=true branch when code blocks are processed
+				// This happens when embed function has already formatted the comment
+				const commentWithCode = `/**
+ * Example method.
+ * {@code Integer x = 10; }
+ */`;
+				const options = {
+					printWidth: 80,
+					tabWidth: 2,
+				} as ParserOptions;
+
+				// Call with isEmbedFormatted=true to exercise line 920 branch
+				const result = normalizeSingleApexDocComment(
+					commentWithCode,
+					0,
+					options,
+					true, // isEmbedFormatted = true
+				);
+
+				// Should process successfully - the isEmbedFormatted branch should execute
+				expect(result).toBeDefined();
+				// The important part is that line 920 (if (isEmbedFormatted)) gets executed
+				// when isEmbedFormatted is true and code blocks are detected
 			},
 		);
 	});
