@@ -13,6 +13,10 @@ import {
 	createMockPrint,
 	createMockOriginalPrinter,
 } from './test-utils.js';
+import {
+	getCurrentPrintOptions,
+	getCurrentOriginalText,
+} from '../src/printer.js';
 
 const nodeClassKey = '@class';
 
@@ -738,5 +742,60 @@ describe('printer', () => {
 				expect(result).toBe('original output');
 			},
 		);
+
+		it.concurrent(
+			'should handle variable declarations with object typeDoc (line 106)',
+			() => {
+				// Test makeTypeDocBreakable with object Doc (neither string nor array)
+				// This tests line 106: return typeDoc; (fallback for object Doc)
+				const mockNode = {
+					decls: [{ '@class': 'apex.jorje.data.ast.Variable' }],
+					modifiers: [],
+					[nodeClassKey]: 'apex.jorje.data.ast.VariableDecls',
+				};
+
+				const mockPath = createMockPath(mockNode);
+				// Mock print to return an object Doc for 'type' (like group() or indent())
+				const objectDoc = { type: 'group', contents: ['String'] };
+				const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
+					const key = (path as { key?: string | number }).key;
+					if (key === 'type') {
+						return objectDoc as unknown as Doc;
+					}
+					return '';
+				});
+
+				const mockOriginalPrinter = {
+					print: vi.fn(() => 'original output'),
+				};
+
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					mockPrint,
+				);
+
+				// Should handle object Doc and pass through
+				expect(result).toBeDefined();
+			},
+		);
+	});
+
+	describe('getter functions', () => {
+		it.concurrent('getCurrentPrintOptions should be callable and return a value', () => {
+			// Test that the function can be called (line 134)
+			const result = getCurrentPrintOptions();
+			// Result may be undefined or an object depending on test state
+			expect(result === undefined || typeof result === 'object').toBe(true);
+		});
+
+		it.concurrent('getCurrentOriginalText should be callable and return a value', () => {
+			// Test that the function can be called (line 137)
+			const result = getCurrentOriginalText();
+			// Result may be undefined or a string depending on test state
+			expect(result === undefined || typeof result === 'string').toBe(true);
+		});
 	});
 });

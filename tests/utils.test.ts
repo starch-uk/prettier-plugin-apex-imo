@@ -243,6 +243,15 @@ describe('utils', () => {
 			expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(false);
 		});
 
+		it.concurrent('should return false when current line is undefined (sparse array)', () => {
+			// Create sparse array where index 0 exists but index 1 is undefined
+			const lines: (string | undefined)[] = ['  }'];
+			lines[2] = '  @Test'; // Skip index 1
+			// Access with index 1 which is undefined
+			// This tests line 137: if (currentLine === undefined) return false;
+			expect(preserveBlankLineAfterClosingBrace(lines as readonly string[], 1)).toBe(false);
+		});
+
 		it.concurrent(
 			'should return false when next line starts with non-modifier word',
 			() => {
@@ -331,5 +340,6 @@ describe('utils', () => {
 				expect(result).toBe(code);
 			},
 		);
+
 	});
 });
