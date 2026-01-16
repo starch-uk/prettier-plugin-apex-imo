@@ -736,6 +736,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 					'should normalize ApexDoc comments with mixed malformations and code blocks',
 				fixture: 'apexdoc-malformed-mixed-code',
 			},
+			{
+				description:
+					'should handle malformed code block where extraction fails (apexdoc.ts lines 1021-1022)',
+				fixture: 'apexdoc-malformed-code-extraction-fails',
+			},
+			{
+				description:
+					'should handle code block with no text before it (apexdoc.ts line 956)',
+				fixture: 'apexdoc-code-no-text-before',
+			},
 		])(
 			'$description',
 			async ({
@@ -743,6 +753,18 @@ describe('prettier-plugin-apex-imo integration', () => {
 			}: Readonly<{ description: string; fixture: string }>) => {
 				const input = loadFixture(fixture, 'input');
 				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Non-ApexDoc block comments', () => {
+		it.concurrent(
+			'should normalize annotations in non-ApexDoc block comments (comments.ts lines 1051-1065)',
+			async () => {
+				const input = loadFixture('block-comment-non-apexdoc', 'input');
+				const expected = loadFixture('block-comment-non-apexdoc', 'output');
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},
