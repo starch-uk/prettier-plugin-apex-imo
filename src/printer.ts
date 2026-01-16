@@ -400,16 +400,15 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			resultParts.push(breakableTypeDoc);
 
 			if (nameDocs.length > 1) {
-				const typeAndNames = nameDocs
+				const wrappedNames = nameDocs
 					.filter((nameDoc): nameDoc is Doc => nameDoc !== undefined)
 					.map((nameDoc) => {
-						const wrappedName = ifBreak(indent([line, nameDoc]), [
+						return ifBreak(indent([line, nameDoc]), [
 							' ',
 							nameDoc,
 						]);
-						return group([breakableTypeDoc, wrappedName]);
 					});
-				resultParts.push(joinDocs([', ', softline], typeAndNames), ';');
+				resultParts.push(joinDocs([', ', softline], wrappedNames), ';');
 				return group(resultParts);
 			}
 
@@ -436,10 +435,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// In Apex, all declarations in a VariableDecls statement must have the same structure
 			// (all have assignments or none do). Since hasVariableAssignments already checked that
 			// at least one has an assignment, all should have assignments here.
-			// This check is defensive for malformed AST but should be unreachable in normal operation.
-			if (assignment === null || assignment === undefined) {
-				return print(declPath);
-			}
+			// No need for defensive check - printer always produces well-formed AST
 
 			const nameDoc = declPath.call(
 				print,
@@ -499,26 +495,16 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		};
 
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
-			// typeDoc from printer is always an array for Map types, but check for safety
-			if (typeof typeDocToCheck === 'string') {
-				// Defensive: if somehow a string, check if it contains Map<
-				return typeDocToCheck.includes('Map<');
-			}
+			// typeDoc from printer is always an array for Map types with structure: ['Map', '<', [params...], '>']
 			if (!Array.isArray(typeDocToCheck)) return false;
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
 			
 			// Map type structure: ['Map', '<', [params...], '>']
 			// paramsIndex = 2 should be the params array
 			const paramsIndex = 2;
-			if (typeDocToCheck.length <= paramsIndex) {
-				// Defensive: malformed Map type (missing params)
-				return false;
-			}
+			// Printer always produces well-formed Map types, so paramsIndex always exists and is an array
 			const paramsElement = typeDocToCheck[paramsIndex];
-			if (!Array.isArray(paramsElement)) {
-				// Defensive: params should be an array
-				return false;
-			}
+			if (!Array.isArray(paramsElement)) return false;
 			
 			const params = paramsElement as unknown[];
 			return params.some((param) => hasNestedMap(param));
