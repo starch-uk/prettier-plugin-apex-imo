@@ -636,6 +636,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 
 		it.concurrent(
+			'should handle end-of-line comment after non-binary expression (comments.ts line 212)',
+			async () => {
+				const input = loadFixture('comment-end-of-line-after-literal', 'input');
+				const expected = loadFixture('comment-end-of-line-after-literal', 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
 			'should handle standalone brace (apexdoc-code.ts line 146)',
 			async () => {
 				const input = loadFixture('apexdoc-standalone-brace', 'input');
