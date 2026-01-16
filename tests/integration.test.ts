@@ -886,6 +886,11 @@ describe('prettier-plugin-apex-imo integration', () => {
 					'should wrap field and variable declarations with assignments across multiple lines',
 				fixture: 'wrapping-assignments',
 			},
+			{
+				description:
+					'should handle multiple variable declarations on same line',
+				fixture: 'variable-multiple-declarations',
+			},
 		])(
 			'$description',
 			async ({
