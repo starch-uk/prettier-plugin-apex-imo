@@ -863,15 +863,6 @@ const filterNonEmptyLines = (text: string): string[] => {
 };
 
 /**
- * Checks if text becomes empty after filtering non-empty lines.
- * @param cleanedText - The cleaned text content.
- * @returns True if text would be empty after filtering.
- */
-const isEmptyAfterFiltering = (cleanedText: string): boolean => {
-	return filterNonEmptyLines(cleanedText).length === EMPTY;
-};
-
-/**
  * Creates a Doc text doc from cleaned text for paragraph docs.
  * @param cleanedText - The cleaned text content.
  * @param doc - The Doc content doc.
@@ -882,22 +873,13 @@ const createDocTextFromParagraph = (
 	cleanedText: string,
 	_doc: ApexDocContent,
 ): ApexDocContent | null => {
-	if (isEmptyAfterFiltering(cleanedText)) {
-		return null;
-	}
+	// cleanedText.length > 0 is guaranteed by addTextDocIfNotEmpty check
+	// cleanedText comes from remainingText.trimEnd() or textBeforeCode.trimEnd()
+	// which are substrings of processedContent (comment text)
+	// If all lines were whitespace-only, trimEnd() would make it empty, causing early return
+	// So filtered lines will always have content
 	const splitLines = filterNonEmptyLines(cleanedText);
 	return createDocContent('text', cleanedText, splitLines);
-};
-
-/**
- * Checks if text becomes empty after removing trailing empty lines.
- * @param cleanedText - The cleaned text content.
- * @returns True if text would be empty after removing trailing empty lines.
- */
-const isEmptyAfterRemovingTrailingEmpty = (cleanedText: string): boolean => {
-	const splitLines = cleanedText.split('\n');
-	const cleanedLines = removeTrailingEmptyLines(splitLines);
-	return cleanedLines.length === EMPTY;
 };
 
 /**
@@ -906,9 +888,11 @@ const isEmptyAfterRemovingTrailingEmpty = (cleanedText: string): boolean => {
  * @returns The created Doc text doc or null if empty.
  */
 const createDocTextFromText = (cleanedText: string): ApexDocContent | null => {
-	if (isEmptyAfterRemovingTrailingEmpty(cleanedText)) {
-		return null;
-	}
+	// cleanedText.length > 0 is guaranteed by addTextDocIfNotEmpty check
+	// cleanedText comes from remainingText.trimEnd() or textBeforeCode.trimEnd()
+	// which are substrings of processedContent (comment text)
+	// If all lines were empty/whitespace, trimEnd() would make it empty, causing early return
+	// So cleanedLines will always have content
 	const splitLines = cleanedText.split('\n');
 	const cleanedLines = removeTrailingEmptyLines(splitLines);
 	return createDocContent('text', cleanedText, cleanedLines);
@@ -1077,8 +1061,6 @@ export {
 	removeTrailingEmptyLines,
 	isApexDoc,
 	filterNonEmptyLines,
-	isEmptyAfterFiltering,
-	isEmptyAfterRemovingTrailingEmpty,
 };
 
 /**

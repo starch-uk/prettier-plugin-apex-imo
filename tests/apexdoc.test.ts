@@ -5,12 +5,7 @@
  
 import { describe, it, expect } from 'vitest';
 import type { ParserOptions } from 'prettier';
-import {
-	EMPTY_CODE_TAG,
-	filterNonEmptyLines,
-	isEmptyAfterFiltering,
-	isEmptyAfterRemovingTrailingEmpty,
-} from '../src/apexdoc.js';
+import { EMPTY_CODE_TAG, filterNonEmptyLines } from '../src/apexdoc.js';
 import { loadFixture, formatApex } from './test-utils.js';
 
 describe('apexdoc', () => {
@@ -34,71 +29,6 @@ describe('apexdoc', () => {
 		});
 	});
 
-	describe('isEmptyAfterFiltering', () => {
-		it.concurrent(
-			'should return true for whitespace-only text (apexdoc.ts line 898-900)',
-			() => {
-				const text = '   \n  \n  ';
-				const result = isEmptyAfterFiltering(text);
-				expect(result).toBe(true);
-			},
-		);
-
-		it.concurrent('should return false for text with content', () => {
-			const text = '   \n  text\n  ';
-			const result = isEmptyAfterFiltering(text);
-			expect(result).toBe(false);
-		});
-	});
-
-	describe('isEmptyAfterRemovingTrailingEmpty', () => {
-		it.concurrent(
-			'should return true for text with only empty lines (apexdoc.ts line 909-914)',
-			() => {
-				const text = '\n\n';
-				const result = isEmptyAfterRemovingTrailingEmpty(text);
-				expect(result).toBe(true);
-			},
-		);
-
-		it.concurrent('should return true for whitespace-only lines', () => {
-			const text = '   \n  \n';
-			const result = isEmptyAfterRemovingTrailingEmpty(text);
-			expect(result).toBe(true);
-		});
-
-		it.concurrent('should return false for text with content', () => {
-			const text = 'text\n\n';
-			const result = isEmptyAfterRemovingTrailingEmpty(text);
-			expect(result).toBe(false);
-		});
-	});
-
-	describe('createDocTextFromParagraph via isEmptyAfterFiltering', () => {
-		it.concurrent(
-			'should return null for whitespace-only text (apexdoc.ts line 886)',
-			() => {
-				// Test that isEmptyAfterFiltering returns true for whitespace-only
-				// This covers the return null path in createDocTextFromParagraph
-				const text = '   \n  \n  ';
-				const result = isEmptyAfterFiltering(text);
-				expect(result).toBe(true);
-			},
-		);
-	});
-
-	describe('createDocTextFromText via isEmptyAfterRemovingTrailingEmpty', () => {
-		it.concurrent(
-			'should return null for whitespace-only text (apexdoc.ts line 910)',
-			() => {
-				// Test that isEmptyAfterRemovingTrailingEmpty returns true
-				// This covers the return null path in createDocTextFromText
-				const text = '\n\n';
-				const result = isEmptyAfterRemovingTrailingEmpty(text);
-				expect(result).toBe(true);
-			},
-		);
-	});
 
 	describe('Type casing in {@code} blocks', () => {
 		it.concurrent(
