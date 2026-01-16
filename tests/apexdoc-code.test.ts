@@ -12,8 +12,10 @@ import {
 	createDocCodeBlock,
 	processCodeBlock,
 	renderCodeBlockInComment,
+	processAllCodeBlocksInComment,
 } from '../src/apexdoc-code.js';
 import type { ParserOptions } from 'prettier';
+import plugin from '../src/index.js';
 
 describe('apexdoc-code', () => {
 	describe('CODE_TAG', () => {
@@ -319,6 +321,80 @@ describe('apexdoc-code', () => {
 			expect(result.length).toBeGreaterThan(2);
 			// Empty line should use trimmedCommentPrefix which is commentPrefix.trimEnd() = "   *"
 			expect(result[1]).toBe('   *');
+		});
+	});
+
+	describe('processAllCodeBlocksInComment', () => {
+		it.concurrent('should return undefined when comment has no code blocks', async () => {
+			const commentText = '/**\n * This is a regular comment\n * with no code blocks\n */';
+			const options = {
+				printWidth: 80,
+				tabWidth: 2,
+			} as ParserOptions;
+			const formattedCodeBlocks = new Map<string, string>();
+			const setFormattedCodeBlock = (key: string, value: string): void => {
+				formattedCodeBlocks.set(key, value);
+			};
+
+			const result = await processAllCodeBlocksInComment({
+				commentText,
+				options,
+				plugins: [plugin],
+				commentPrefixLength: 5,
+				setFormattedCodeBlock,
+			});
+
+			expect(result).toBeUndefined();
+		});
+
+		it.concurrent('should process code block with blank line preservation', async () => {
+			// Code block that will trigger preserveBlankLineAfterClosingBrace
+			const commentText =
+				'/**\n * {@code\n *   if (true) {\n *     return;\n *   }\n *\n *   @Future\n * }\n */';
+			const options = {
+				printWidth: 80,
+				tabWidth: 2,
+			} as ParserOptions;
+			const formattedCodeBlocks = new Map<string, string>();
+			const setFormattedCodeBlock = (key: string, value: string): void => {
+				formattedCodeBlocks.set(key, value);
+			};
+
+			const result = await processAllCodeBlocksInComment({
+				commentText,
+				options,
+				plugins: [plugin],
+				commentPrefixLength: 5,
+				setFormattedCodeBlock,
+			});
+
+			expect(result).toBeDefined();
+			expect(result).toContain('{@code');
+		});
+
+		it.concurrent('should handle malformed code block (extraction fails)', async () => {
+			// Code block with unmatched braces to trigger the continue path
+			const commentText = '/**\n * {@code unmatched braces\n */';
+			const options = {
+				printWidth: 80,
+				tabWidth: 2,
+			} as ParserOptions;
+			const formattedCodeBlocks = new Map<string, string>();
+			const setFormattedCodeBlock = (key: string, value: string): void => {
+				formattedCodeBlocks.set(key, value);
+			};
+
+			// Should return undefined because extraction fails and no changes are made
+			const result = await processAllCodeBlocksInComment({
+				commentText,
+				options,
+				plugins: [plugin],
+				commentPrefixLength: 5,
+				setFormattedCodeBlock,
+			});
+
+			// When extraction fails, startIndex advances and loop continues, but if no valid blocks are found, returns undefined
+			expect(result).toBeUndefined();
 		});
 	});
 });

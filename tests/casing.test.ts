@@ -7,6 +7,7 @@ import { describe, it, expect, test } from 'vitest';
 import {
 	normalizeTypeName,
 	normalizeReservedWord,
+	normalizeStandardObjectType,
 	isIdentifier,
 	isInTypeContext,
 	createReservedWordNormalizingPrint,
@@ -192,6 +193,11 @@ describe('casing', () => {
 
 		it.concurrent('should handle empty string', () => {
 			expect(normalizeTypeName('')).toBe('');
+		});
+
+		it.concurrent('should handle empty string in normalizeStandardObjectType', () => {
+			// Test the defensive empty string check in normalizeStandardObjectType
+			expect(normalizeStandardObjectType('')).toBe('');
 		});
 
 		it.concurrent(

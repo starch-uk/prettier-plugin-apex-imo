@@ -441,6 +441,7 @@ const createTypeNormalizingPrint =
 export {
 	normalizeTypeName,
 	normalizeReservedWord,
+	normalizeStandardObjectType,
 	isIdentifier,
 	isInTypeContext,
 	createReservedWordNormalizingPrint,
