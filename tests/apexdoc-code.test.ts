@@ -548,14 +548,19 @@ describe('apexdoc-code', () => {
 			'should handle code block ending on line with content (apexdoc-code.ts lines 148-153, 157-161)',
 			() => {
 				// Lines where code block ends with willEndCodeBlock = true
+				// First line starts code block (sets inCodeBlock = true, codeBlockBraceCount = 1)
+				// Second line has content + closing brace that ends the block
 				const lines = [
 					' * {@code',
-					' *   Integer x = 1; }',
+					' *   Integer x = 1; }', // This line decrements braceCount to 0 (willEndCodeBlock = true)
 				];
 				const result = processCodeBlockLines(lines);
 				expect(result).toHaveLength(2);
+				expect(result[0]).toContain('{@code');
+				// Second line should be processed: inCodeBlock=true, !startsWith(CODE_TAG), willEndCodeBlock=true
+				// This should execute lines 148-153 (countBracesAndCheckEnd) and 157-161 (willEndCodeBlock check)
 				expect(result[1]).toContain('Integer x = 1;');
-				// Should process the line and end the code block
+				expect(result[1]).toContain('}');
 			},
 		);
 	});
