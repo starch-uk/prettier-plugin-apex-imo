@@ -626,6 +626,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 
 	describe('ApexDoc edge cases', () => {
 		it.concurrent(
+			'should handle empty block statement with leading comment (comments.ts line 181)',
+			async () => {
+				const input = loadFixture('comment-empty-block', 'input');
+				const expected = loadFixture('comment-empty-block', 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
 			'should handle standalone brace (apexdoc-code.ts line 146)',
 			async () => {
 				const input = loadFixture('apexdoc-standalone-brace', 'input');
