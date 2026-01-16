@@ -98,4 +98,16 @@ describe('comments internal functions', () => {
 		);
 	});
 
+	describe('parseCommentToDocs', () => {
+		it.concurrent(
+			'should create text doc when no paragraphs found (lines 734-740)',
+			() => {
+				// Empty comment with just whitespace
+				const emptyComment = '/**\n *\n *\n */';
+				const result = parseCommentToDocs(emptyComment);
+				expect(result).toHaveLength(1);
+				expect(result[0]?.type).toBe('text');
+			},
+		);
+	});
 });
