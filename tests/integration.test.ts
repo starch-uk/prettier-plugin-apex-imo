@@ -850,6 +850,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 				expect(result).toBe(expected);
 			},
 		);
+
+		it.concurrent(
+			'should handle empty block comment (comments.ts lines 828-834)',
+			async () => {
+				const input = loadFixture('block-comment-empty-content', 'input');
+				const expected = loadFixture('block-comment-empty-content', 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('Annotation formatting', () => {

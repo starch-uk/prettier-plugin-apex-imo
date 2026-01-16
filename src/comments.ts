@@ -23,10 +23,7 @@ import {
 	isApexDoc,
 } from './apexdoc.js';
 import { normalizeAnnotations } from './apexdoc-annotations.js';
-import {
-	createDocCodeBlock,
-	renderCodeBlockInComment,
-} from './apexdoc-code.js';
+import { createDocCodeBlock } from './apexdoc-code.js';
 
 // Doc-based types for ApexDoc processing
 interface ApexDocContent {
@@ -868,33 +865,12 @@ const tokensToCommentString = (
 	for (let i = 0; i < docs.length; i++) {
 		const doc = docs[i];
 		if (!doc) continue;
-		const nextDoc = i + 1 < docs.length ? docs[i + 1] : null;
-		const isFollowedByCodeBlock = nextDoc?.type === 'code';
 
 		if (doc.type === 'text' || doc.type === 'paragraph') {
 			// Extract string lines from Doc
 			const docLines = getContentLines(doc);
-			// Filter out empty trailing lines if followed by a code block
-			const linesToProcess = isFollowedByCodeBlock
-				? (() => {
-						const filtered = removeTrailingEmptyLines(docLines);
-						// Remove trailing newlines from the last line
-						if (filtered.length > 0) {
-							const lastIndex = filtered.length - 1;
-							const lastLine = filtered[lastIndex];
-							if (lastLine?.endsWith('\n')) {
-								filtered[lastIndex] = lastLine.slice(0, -1);
-							}
-						}
-						return filtered;
-					})()
-				: docLines;
 
-			for (const line of linesToProcess) {
-				// Skip empty lines that would create a blank line before the code block
-				if (isFollowedByCodeBlock && line.trim().length === 0) {
-					continue;
-				}
+			for (const line of docLines) {
 				// Preserve existing structure if line already has prefix
 				lines.push(
 					line.trimStart().startsWith('*')
@@ -902,29 +878,10 @@ const tokensToCommentString = (
 						: `${commentPrefix}${line.trimStart()}`,
 				);
 			}
-		} else if (doc.type === 'code') {
-			// Remove any trailing empty lines before adding the code block
-			// to avoid an extra blank line before the code block
-			// Keep at least one line (the opening /**)
-			// Check up to the last 2 lines (in case there are multiple empty lines)
-			for (
-				let checkIndex = lines.length - 1;
-				checkIndex > 0 && lines.length > 1;
-				checkIndex--
-			) {
-				const lineToCheck = lines[checkIndex];
-				if (lineToCheck?.trim().length === 0) {
-					lines.splice(checkIndex, 1);
-				} else {
-					break; // Stop when we find a non-empty line
-				}
-			}
-
-			// Use renderCodeBlockInComment to handle code block rendering
-			const codeBlockLines = renderCodeBlockInComment(doc, commentPrefix);
-			lines.push(...codeBlockLines);
 		}
 		// Annotation docs will be handled later
+		// Note: Code block docs are converted to content docs in docsToApexDocString
+		// before reaching tokensToCommentString, so doc.type === 'code' and isFollowedByCodeBlock are unreachable
 	}
 
 	lines.push(`${baseIndent} */`);
