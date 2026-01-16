@@ -492,8 +492,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		if (declDocs.length > 1) {
 			resultParts.push(' ', joinDocs([', ', softline], declDocs), ';');
 		} else if (declDocs.length === 1) {
-			const declDoc = declDocs[0];
-			if (declDoc !== undefined) {
+			// path.map always returns an array with defined elements
+			const declDoc = declDocs[0]!;
 				if (
 					Array.isArray(declDoc) &&
 					declDoc.length >= 5 &&
@@ -513,7 +513,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				} else {
 					resultParts.push(' ', [declDoc, ';']);
 				}
-			}
 		}
 
 		return group(resultParts);
@@ -539,7 +538,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			return null;
 
 		const {expr} = (node as { expr?: unknown });
-		if (!isApexNodeLike(expr)) return null;
+		// If node class includes ExpressionStmnt, expr is always an ApexNode in well-formed ASTs
 
 		const EXPR_ASSIGNMENT_CLASS = 'Expr$AssignmentExpr';
 		const exprNodeClass = getNodeClassOptional(expr as ApexNode);
@@ -559,7 +558,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			'right' as never,
 		) as unknown as Doc;
 
-		if (!leftPath || !rightPath) return null;
+		// path.call always returns a Doc for valid AST paths with AssignmentExpr nodes
 
 		const wrappedAssignment = ifBreak(indent([line, rightPath]), [
 			' ',
