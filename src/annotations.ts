@@ -144,7 +144,8 @@ const printAnnotation = (
 	// 2. formatAnnotationParam always returns a Doc (never undefined)
 	// 3. So formattedParams.length === parametersLength > 0
 	// Type assertion safe: singleParam is always defined per above checks
-	const singleParam = formattedParams[FIRST_PARAM_INDEX];
+	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- singleParam is always defined per checks above
+	const singleParam = formattedParams[FIRST_PARAM_INDEX]!;
 	// Removed unreachable undefined check: formattedParams[FIRST_PARAM_INDEX] is always defined
 	return group([
 		'@',

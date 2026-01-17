@@ -512,8 +512,8 @@ function processCodeBlock(
 		return [`{@code ${codeContent}${separator}}`];
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- commentKey may be null/undefined/empty, needs explicit checks
 	const embedResult =
+		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- commentKey may be null/undefined/empty, needs explicit checks
 		commentKey !== null && commentKey !== undefined && commentKey !== ''
 			? getFormattedCodeBlock(commentKey)
 			: null;
@@ -549,6 +549,7 @@ const createDocCodeBlock = (
 	// split('\n') always returns at least one element (never empty array)
 	// So codeLines.length === ZERO_LENGTH_CONST is unreachable - removed
 	const { join, hardline } = docBuilders;
+
 	/**
 	 * Converts string lines to Doc array.
 	 * @param lines - String lines to convert.
@@ -668,7 +669,8 @@ const processAllCodeBlocksInComment = async ({
 
 		// split('\n') always returns array without holes (no undefined elements)
 		for (let i = 0; i < formattedLines.length; i++) {
-			const formattedLine = formattedLines[i];
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- formattedLines from split('\n') always contains strings
+			const formattedLine = formattedLines[i]!;
 			// Removed unreachable undefined check: formattedLines from split('\n') always contains strings
 			resultLines.push(formattedLine);
 			// Insert blank line after } when followed by annotations or access modifiers

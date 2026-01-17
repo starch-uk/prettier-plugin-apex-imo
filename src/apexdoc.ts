@@ -294,7 +294,8 @@ const handleUnwrappedCode = (
 	// Type assertion safe: first element exists when isSingleLine is true
 	const FIRST_ELEMENT_INDEX = 0;
 	const singleLineContent = isSingleLine
-		? codeLinesForProcessing[FIRST_ELEMENT_INDEX]!.trim()
+		? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- codeLinesForProcessing always has at least one element
+			codeLinesForProcessing[FIRST_ELEMENT_INDEX]!.trim()
 		: '';
 	const singleLineWithBraces = `{@code ${singleLineContent} }`;
 	const commentPrefixLength = commentPrefix.length;
@@ -541,9 +542,10 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 		cleaned.length > ZERO_LENGTH &&
 		// Array indexing check removed: cleaned array has no holes (created from [...lines])
 		// Type assertion safe: array element always exists when length > 0
-		(() => {
+		// eslint-disable-next-line jsdoc/convert-to-jsdoc-comments -- inline comments in code logic, not JSDoc
+		((): boolean => {
 			const lastLine = cleaned[cleaned.length - INDEX_OFFSET];
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- lastLine always exists when length > 0
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unnecessary-condition, @typescript-eslint/prefer-optional-chain -- lastLine always exists when length > 0, but check needed for type narrowing
 			return (
 				lastLine !== undefined &&
 				lastLine!.trim().length === EMPTY_TRIM_LENGTH
@@ -697,15 +699,21 @@ const mergeIncompleteCodeBlock = (
 	let j = startIndex + INDEX_ONE;
 
 	while (j < docs.length) {
-		const nextDoc = docs[j];
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- nextDoc is always defined per array bounds check
+		const nextDoc = docs[j]!;
 		// mergeIncompleteCodeBlock is called from mergeCodeBlockDocs
 		// which only receives paragraph/text types from parseApexDocs
 		// So all docs here are guaranteed to be paragraph or text type
 		// Removed unreachable checks: nextDoc is never undefined and always 'text' or 'paragraph'
 		// Type guard: nextDoc is now ApexDocContent (text or paragraph)
-		const nextContent = getContentString(nextDoc);
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- nextDoc is guaranteed to be ApexDocContent per comment above
+		const nextContent = getContentString(nextDoc as ApexDocContent);
 		mergedContent += nextContent;
-		mergedLines = [...mergedLines, ...getContentLines(nextDoc)];
+		mergedLines = [
+			...mergedLines,
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- nextDoc is guaranteed to be ApexDocContent per comment above
+			...getContentLines(nextDoc as ApexDocContent),
+		];
 
 		// Check if the merged content now has a complete block
 		if (hasCompleteCodeBlock(mergedContent, codeTagIndex)) {
@@ -734,7 +742,8 @@ const mergeCodeBlockDocs = (
 	let i = 0;
 
 	while (i < docs.length) {
-		const doc = docs[i];
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- doc is always defined per array bounds check
+		const doc = docs[i]!;
 		// mergeCodeBlockDocs is called on initialDocs from parseApexDocs
 		// which only contains 'paragraph' or 'text' types
 		// Code and annotation types are created later in applyDocProcessingPipeline
@@ -742,7 +751,8 @@ const mergeCodeBlockDocs = (
 		// Removed unreachable checks: doc is never undefined and always 'text' or 'paragraph'
 		// Type guard: doc is now ApexDocContent (text or paragraph)
 		// Extract string content from Doc for text operations
-		const content = getContentString(doc);
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- doc is guaranteed to be ApexDocContent per comment above
+		const content = getContentString(doc as ApexDocContent);
 		const codeTagIndex = content.indexOf('{@code');
 		const NOT_FOUND_CODE_TAG = -1;
 
@@ -764,7 +774,8 @@ const mergeCodeBlockDocs = (
 		// Need to merge with subsequent docs
 		// Type guard: doc is already confirmed to be text or paragraph (not code) above
 		const mergeResult = mergeIncompleteCodeBlock(
-			doc,
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- doc is guaranteed to be ApexDocContent per comment above
+			doc as ApexDocContent,
 			codeTagIndex,
 			docs,
 			i,

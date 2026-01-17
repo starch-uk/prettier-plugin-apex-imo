@@ -326,36 +326,33 @@ describe('annotations', () => {
 			},
 		);
 
-		it.concurrent(
-			'should handle parameter without value property (tests line 86 false branch)',
-			() => {
-				// Test param that doesn't have 'value' property - should fallback to empty string
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-							// No value property
-						} as unknown as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
+		it.concurrent('should handle parameter without value property', () => {
+			// Test param that doesn't have 'value' property - should fallback to empty string
+			const mockNode = {
+				name: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'test',
+				},
+				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+				parameters: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+						// No value property
+					} as unknown as Readonly<ApexAnnotationParameter>,
+				],
+			} as Readonly<ApexAnnotationNode>;
 
-				const mockPath = createMockPath(
-					mockNode,
-				) as AstPath<ApexAnnotationNode>;
-				const result = printAnnotation(mockPath);
+			const mockPath = createMockPath(
+				mockNode,
+			) as AstPath<ApexAnnotationNode>;
+			const result = printAnnotation(mockPath);
 
-				expect(result).toBeDefined();
-			},
-		);
+			expect(result).toBeDefined();
+		});
 
 		it.concurrent(
-			'should handle multiline annotation with array params (tests line 119 Array.isArray branch)',
+			'should handle multiline annotation with array params',
 			() => {
 				// Test that array params in multiline annotations are wrapped with group
 				// This triggers the Array.isArray(param) branch in paramsForJoin

@@ -156,10 +156,6 @@ describe('casing', () => {
 			},
 		);
 
-		it.concurrent('should handle empty string input', () => {
-			expect(normalizeTypeName('')).toBe('');
-		});
-
 		it.concurrent(
 			'should handle types that are not primitives or standard objects',
 			() => {
@@ -192,7 +188,7 @@ describe('casing', () => {
 			},
 		);
 
-		it.concurrent('should handle empty string', () => {
+		it.concurrent('should handle empty string input', () => {
 			expect(normalizeTypeName('')).toBe('');
 		});
 
@@ -639,7 +635,6 @@ describe('casing', () => {
 				const result = typeNormalizingPrint(path);
 
 				// Should call print and return original output since no changes were made
-				// This should reach line 208 (final return statement)
 				expect(mockPrint).toHaveBeenCalled();
 				expect(result).toBe('original output');
 			},
@@ -716,9 +711,9 @@ describe('casing', () => {
 		);
 
 		it.concurrent(
-			'should skip nameNode with non-string value property (line 350)',
+			'should skip nameNode with non-string value property',
 			() => {
-				// Test line 350: if (typeof nodeValueRaw !== 'string') continue;
+				// Test when nodeValueRaw is not a string - should skip that node
 				// normalizeNamesArray is called when isIdent is true and 'names' in node and value is not string
 				const mockPrint = createMockPrint();
 				const typeNormalizingPrint = createTypeNormalizingPrint(
@@ -762,7 +757,7 @@ describe('casing', () => {
 					true,
 					'names',
 				);
-				// Include non-object primitives to trigger line 178 continue statement
+				// Include non-object primitives to trigger continue for non-objects
 				// (typeof nameNode !== 'object' will be true for primitives)
 				const nameNode1 = 'string' as unknown as ApexIdentifier;
 				const nameNode2 = {
@@ -781,7 +776,7 @@ describe('casing', () => {
 
 				typeNormalizingPrint(path);
 
-				// Should call print (primitive should be skipped via continue on line 178)
+				// Should call print (primitive should be skipped)
 				expect(mockPrint).toHaveBeenCalled();
 			},
 		);
@@ -806,7 +801,7 @@ describe('casing', () => {
 			const node = {
 				[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
 			} as ApexNode;
-			// Create path with null key (which gets normalized to undefined on line 403)
+			// Create path with null key (which gets normalized to undefined)
 			const basePath = createMockPath(node, undefined);
 			const path = { ...basePath, key: null } as typeof basePath;
 

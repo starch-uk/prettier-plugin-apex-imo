@@ -459,7 +459,8 @@ const normalizeBlockComment = (
 	// lines comes from normalizedComment.split('\n') which never creates undefined entries
 	// Array indexing check removed: lines array has no holes
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
-		const line = lines[i];
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- lines array from split('\n') always contains strings
+		const line = lines[i]!;
 		// Removed unreachable undefined check: lines array from split('\n') always contains strings
 		normalizedLines.push(
 			normalizeCommentLine(
@@ -708,7 +709,8 @@ const parseCommentToDocs = (
 	// contentLines comes from lines.slice() which never creates undefined entries
 	// Array indexing check removed: contentLines array has no holes
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
-		const line = contentLines[i];
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contentLines from slice() always contains strings
+		const line = contentLines[i]!;
 		// Removed unreachable undefined check: contentLines from slice() always contains strings
 		// Remove comment prefix (*) to check if line is empty
 		const trimmedLine = removeCommentPrefix(line);
@@ -771,7 +773,8 @@ const parseCommentToDocs = (
 			// Add current line to paragraph
 			// Removed unreachable undefined check: lines array from split('\n') always contains strings
 			currentParagraph.push(trimmedLine);
-			currentParagraphLines.push(line);
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- line is always defined from contentLines[i] above
+			currentParagraphLines.push(line!);
 
 			// If this is a sentence boundary or we're at an annotation line, finish current paragraph
 			if (

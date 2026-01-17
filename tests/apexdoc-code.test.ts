@@ -69,7 +69,7 @@ describe('apexdoc-code', () => {
 		});
 
 		it.concurrent(
-			'should return null when braces are unmatched and no closing brace found (line 63)',
+			'should return null when braces are unmatched and no closing brace found',
 			() => {
 				// Create scenario where braceCount > 0 (unmatched braces) AND lastClosingBracePos === NOT_FOUND_INDEX
 				// This requires text with opening braces but no closing braces at all
@@ -164,65 +164,57 @@ describe('apexdoc-code', () => {
 			expect(result).toHaveLength(5);
 		});
 
-		it.concurrent(
-			'should handle standalone closing brace (line 146)',
-			() => {
-				// Test the standalone '}' case that triggers line 146
-				// For first line (index 0), prefix is empty string (index > EMPTY ? ' ' : '')
-				const lines = [' *   }'];
-				const result = processCodeBlockLines(lines);
-				expect(result[0]).toContain('}');
-				// Should return prefix + commentLine.trimStart()
-				// index 0: prefix = '', commentLine = ' *   }', trimStart() = '*   }', so result = '*   }'
-				expect(result[0]).toBe('*   }');
+		it.concurrent('should handle standalone closing brace', () => {
+			// Test the standalone '}' case
+			// For first line (index 0), prefix is empty string (index > EMPTY ? ' ' : '')
+			const lines = [' *   }'];
+			const result = processCodeBlockLines(lines);
+			expect(result[0]).toContain('}');
+			// Should return prefix + commentLine.trimStart()
+			// index 0: prefix = '', commentLine = ' *   }', trimStart() = '*   }', so result = '*   }'
+			expect(result[0]).toBe('*   }');
 
-				// Test with second line to get prefix = ' '
-				const lines2 = [' * Line 1', ' *   }'];
-				const result2 = processCodeBlockLines(lines2);
-				// index 1: prefix = ' ', commentLine = ' *   }', trimStart() = '*   }', so result = ' *   }'
-				expect(result2[1]).toBe(' *   }');
-			},
-		);
+			// Test with second line to get prefix = ' '
+			const lines2 = [' * Line 1', ' *   }'];
+			const result2 = processCodeBlockLines(lines2);
+			// index 1: prefix = ' ', commentLine = ' *   }', trimStart() = '*   }', so result = ' *   }'
+			expect(result2[1]).toBe(' *   }');
+		});
 
-		it.concurrent(
-			'should handle code block ending within a line (apexdoc-code.ts lines 152-157, 161-165)',
-			() => {
-				// Test when inCodeBlock is true, line doesn't start with CODE_TAG, and willEndCodeBlock is true
-				// This exercises: countBracesAndCheckEnd call (line 152), assignments (156-157),
-				// and the willEndCodeBlock=true branch (162-163) that sets inCodeBlock=false
-				const lines = [
-					' * {@code', // Starts code block, sets inCodeBlock=true, codeBlockBraceCount=1
-					' *   Integer x = 10;', // In code block, processes braces (line 151-157)
-					' * }', // Decrements braceCount to 0, willEndCodeBlock=true (line 152-157)
-					// Then enters if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) (line 160)
-					// And sets inCodeBlock=false when willEndCodeBlock=true (line 162-163)
-				];
-				const result = processCodeBlockLines(lines);
-				expect(result.length).toBe(3);
-				// Verify the closing brace was processed correctly
-				expect(result[2]).toContain('}');
-				// Verify subsequent processing after code block ends
-				const linesAfter = [
-					' * {@code',
-					' *   Integer x = 10;',
-					' * }',
-					' * More text',
-				];
-				const resultAfter = processCodeBlockLines(linesAfter);
-				// After ' * }', inCodeBlock should be false, so ' * More text' should be processed normally
-				expect(resultAfter[3]).toContain('More text');
-			},
-		);
+		it.concurrent('should handle code block ending within a line', () => {
+			// Test when inCodeBlock is true, line doesn't start with CODE_TAG, and willEndCodeBlock is true
+			// This exercises countBracesAndCheckEnd call and the willEndCodeBlock=true branch that sets inCodeBlock=false
+			const lines = [
+				' * {@code', // Starts code block, sets inCodeBlock=true, codeBlockBraceCount=1
+				' *   Integer x = 10;', // In code block, processes braces
+				' * }', // Decrements braceCount to 0, willEndCodeBlock=true
+				// Then enters if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG))
+				// And sets inCodeBlock=false when willEndCodeBlock=true
+			];
+			const result = processCodeBlockLines(lines);
+			expect(result.length).toBe(3);
+			// Verify the closing brace was processed correctly
+			expect(result[2]).toContain('}');
+			// Verify subsequent processing after code block ends
+			const linesAfter = [
+				' * {@code',
+				' *   Integer x = 10;',
+				' * }',
+				' * More text',
+			];
+			const resultAfter = processCodeBlockLines(linesAfter);
+			// After ' * }', inCodeBlock should be false, so ' * More text' should be processed normally
+			expect(resultAfter[3]).toContain('More text');
+		});
 
 		it.concurrent(
-			'should handle standalone closing brace not in code block (line 146)',
+			'should handle standalone closing brace not in code block',
 			() => {
-				// Test the standalone '}' case that triggers line 146
+				// Test the standalone '}' case
 				// This is when trimmedLine === '}' but NOT in a code block (inCodeBlock = false)
 				const lines = [' *   }'];
 				const result = processCodeBlockLines(lines);
-				// trimmedLine = '}', inCodeBlock = false, so skips line 137 condition
-				// Goes to line 145: if (trimmedLine === '}') return prefix + commentLine.trimStart()
+				// trimmedLine = '}', inCodeBlock = false
 				expect(result[0]).toBe('*   }'); // prefix '' + ' *   }'.trimStart() = '*   }'
 			},
 		);
@@ -430,11 +422,11 @@ describe('apexdoc-code', () => {
 		);
 
 		it.concurrent(
-			'should use extractCodeFromEmbedResult when embedResult exists (lines 301-302)',
+			'should use extractCodeFromEmbedResult when embedResult exists',
 			() => {
 				const codeBlock =
 					'{@code\nInteger x = 10;\nString y = "test";\n}';
-				// Mock formatted embed result with comment structure ending with \n */\n (line 225)
+				// Mock formatted embed result with comment structure ending with \n */\n
 				const embedResult =
 					'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */\n';
 				const getFormattedCodeBlock = (key: string) => {
@@ -460,39 +452,35 @@ describe('apexdoc-code', () => {
 			},
 		);
 
-		it.concurrent(
-			'should handle embedResult ending with \n */ (line 431)',
-			() => {
-				// Test line 431: else if (embedContent.endsWith('\n */')) branch
-				// Need embedResult that ends with \n */ but NOT \n */\n
-				const codeBlock =
-					'{@code\nInteger x = 10;\nString y = "test";\n}';
-				// After removing '/**\n' prefix, content ends with \n */ (no trailing newline)
-				// This requires embedResult to not end with \n */\n after prefix removal
-				// Create embedResult that after prefix removal ends with just \n */
-				const embedResult =
-					'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
-				const getFormattedCodeBlock = (key: string) => {
-					if (key === 'test-key') return embedResult;
-					return undefined;
-				};
-				const options = {} as ParserOptions;
-				const result = processCodeBlock(
-					codeBlock,
-					options,
-					getFormattedCodeBlock,
-					'test-key',
-					options,
-				);
-				expect(result.length).toBeGreaterThan(1);
-				expect(result[0]).toBe('{@code');
-			},
-		);
+		it.concurrent('should handle embedResult ending with \n */', () => {
+			// Test else if (embedContent.endsWith('\n */')) branch
+			// Need embedResult that ends with \n */ but NOT \n */\n
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			// After removing '/**\n' prefix, content ends with \n */ (no trailing newline)
+			// This requires embedResult to not end with \n */\n after prefix removal
+			// Create embedResult that after prefix removal ends with just \n */
+			const embedResult =
+				'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const result = processCodeBlock(
+				codeBlock,
+				options,
+				getFormattedCodeBlock,
+				'test-key',
+				options,
+			);
+			expect(result.length).toBeGreaterThan(1);
+			expect(result[0]).toBe('{@code');
+		});
 
 		it.concurrent(
-			'should handle embedResult not starting with /**\\n (line 425 false branch)',
+			'should handle embedResult not starting with /**\\n',
 			() => {
-				// Test line 425: false branch when embedContent doesn't start with '/**\n'
+				// Test false branch when embedContent doesn't start with '/**\n'
 				const codeBlock =
 					'{@code\nInteger x = 10;\nString y = "test";\n}';
 				// Embed result without '/**\n' prefix
@@ -516,12 +504,12 @@ describe('apexdoc-code', () => {
 		);
 
 		it.concurrent(
-			'should handle lines without asterisk in extractCodeFromEmbedResult (line 246)',
+			'should handle lines without asterisk in extractCodeFromEmbedResult',
 			() => {
 				const codeBlock =
 					'{@code\nInteger x = 10;\nString y = "test";\n}';
 				// Mock formatted embed result with lines that don't start with asterisk after whitespace
-				// This triggers line 246: return line; (when line doesn't have asterisk)
+				// This triggers return line; when line doesn't have asterisk
 				const embedResult =
 					'/**\n * {@code\n *   Line with asterisk\nPlain line without asterisk\n * }\n */\n';
 				const getFormattedCodeBlock = (key: string) => {
@@ -543,98 +531,82 @@ describe('apexdoc-code', () => {
 			},
 		);
 
-		it.concurrent(
-			'should handle embedResult ending with \n */ (line 431)',
-			() => {
-				// Test line 431: else if (embedContent.endsWith('\n */')) branch
-				// Directly test extractCodeFromEmbedResult with embedResult ending with \n */ (not \n */\n)
-				// After removing '/**\n' prefix (4 chars), embedContent ends with '\n */' not '\n */\n'
-				const embedResult =
-					'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
-				const result = extractCodeFromEmbedResult(embedResult);
-				expect(result.length).toBeGreaterThan(0);
-				// Also test via processCodeBlock to ensure full path is covered
-				const codeBlock =
-					'{@code\nInteger x = 10;\nString y = "test";\n}';
-				const getFormattedCodeBlock = (key: string) => {
-					if (key === 'test-key') return embedResult;
-					return undefined;
-				};
-				const options = {} as ParserOptions;
-				const processResult = processCodeBlock(
-					codeBlock,
-					options,
-					getFormattedCodeBlock,
-					'test-key',
-					options,
-				);
-				expect(processResult.length).toBeGreaterThan(1);
-				expect(processResult[0]).toBe('{@code');
-			},
-		);
+		it.concurrent('should handle embedResult ending with \n */', () => {
+			// Test else if (embedContent.endsWith('\n */')) branch
+			// Directly test extractCodeFromEmbedResult with embedResult ending with \n */ (not \n */\n)
+			// After removing '/**\n' prefix (4 chars), embedContent ends with '\n */' not '\n */\n'
+			const embedResult =
+				'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
+			const result = extractCodeFromEmbedResult(embedResult);
+			expect(result.length).toBeGreaterThan(0);
+			// Also test via processCodeBlock to ensure full path is covered
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const processResult = processCodeBlock(
+				codeBlock,
+				options,
+				getFormattedCodeBlock,
+				'test-key',
+				options,
+			);
+			expect(processResult.length).toBeGreaterThan(1);
+			expect(processResult[0]).toBe('{@code');
+		});
 
-		it.concurrent(
-			'should handle asterisk without space after it (line 449 false branch)',
-			() => {
-				// Test line 449: if (start < line.length && line[start] === ' ') false branch
-				// When line has '*' followed by non-space character (like '*text' instead of '* text')
-				// Use multiline codeBlock to ensure extractCodeFromEmbedResult is called
-				const codeBlock =
-					'{@code\nInteger x = 10;\nString y = "test";\n}';
-				const embedResult =
-					'/**\n * {@code\n *text\n *more\n * }\n */\n';
-				const getFormattedCodeBlock = (key: string) => {
-					if (key === 'test-key') return embedResult;
-					return undefined;
-				};
-				const options = {} as ParserOptions;
-				const result = processCodeBlock(
-					codeBlock,
-					options,
-					getFormattedCodeBlock,
-					'test-key',
-					options,
-				);
-				expect(result.length).toBeGreaterThan(1);
-				expect(result[0]).toBe('{@code');
-			},
-		);
+		it.concurrent('should handle asterisk without space after it', () => {
+			// Test if (start < line.length && line[start] === ' ') false branch
+			// When line has '*' followed by non-space character (like '*text' instead of '* text')
+			// Use multiline codeBlock to ensure extractCodeFromEmbedResult is called
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			const embedResult = '/**\n * {@code\n *text\n *more\n * }\n */\n';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const result = processCodeBlock(
+				codeBlock,
+				options,
+				getFormattedCodeBlock,
+				'test-key',
+				options,
+			);
+			expect(result.length).toBeGreaterThan(1);
+			expect(result[0]).toBe('{@code');
+		});
 
-		it.concurrent(
-			'should handle embedResult without code markers (line 246, 263)',
-			() => {
-				// Use multiline codeBlock to avoid early return for single-line code
-				const codeBlock =
-					'{@code\nInteger x = 10;\nString y = "test";\n}';
-				// Mock formatted embed result without {@code markers - should use slice fallback
-				// Also include lines without asterisk prefix (line 246 return line path)
-				// Format: /**\n * line1\n * line2\n * line3\n */\n (ends with \n */\n to test line 225)
-				// After removing first 2 lines (SKIP_FIRST_TWO_LINES), should have at least line3
-				const embedResult =
-					'/**\n * Line 1\n * Line 2\n * Line 3\n */\n';
-				const getFormattedCodeBlock = (key: string) => {
-					if (key === 'test-key') return embedResult;
-					return undefined;
-				};
-				const options = {} as ParserOptions;
-				const result = processCodeBlock(
-					codeBlock,
-					options,
-					getFormattedCodeBlock,
-					'test-key',
-					options,
-				);
-				// Should fall back to slice(SKIP_FIRST_TWO_LINES) when code markers not found
-				// This wraps result in {@code ... }, so length should be at least 3: ['{@code', 'Line 3', '}']
-				expect(result.length).toBeGreaterThanOrEqual(3);
-				expect(result[0]).toBe('{@code');
-				expect(result[result.length - 1]).toBe('}');
-				// Should contain the extracted line from slice fallback
-				expect(result.some((line) => line.includes('Line 3'))).toBe(
-					true,
-				);
-			},
-		);
+		it.concurrent('should handle embedResult without code markers', () => {
+			// Use multiline codeBlock to avoid early return for single-line code
+			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
+			// Mock formatted embed result without {@code markers - should use slice fallback
+			// Also include lines without asterisk prefix
+			// Format: /**\n * line1\n * line2\n * line3\n */\n
+			// After removing first 2 lines (SKIP_FIRST_TWO_LINES), should have at least line3
+			const embedResult = '/**\n * Line 1\n * Line 2\n * Line 3\n */\n';
+			const getFormattedCodeBlock = (key: string) => {
+				if (key === 'test-key') return embedResult;
+				return undefined;
+			};
+			const options = {} as ParserOptions;
+			const result = processCodeBlock(
+				codeBlock,
+				options,
+				getFormattedCodeBlock,
+				'test-key',
+				options,
+			);
+			// Should fall back to slice(SKIP_FIRST_TWO_LINES) when code markers not found
+			// This wraps result in {@code ... }, so length should be at least 3: ['{@code', 'Line 3', '}']
+			expect(result.length).toBeGreaterThanOrEqual(3);
+			expect(result[0]).toBe('{@code');
+			expect(result[result.length - 1]).toBe('}');
+			// Should contain the extracted line from slice fallback
+			expect(result.some((line) => line.includes('Line 3'))).toBe(true);
+		});
 	});
 
 	describe('renderCodeBlockInComment', () => {
@@ -655,9 +627,9 @@ describe('apexdoc-code', () => {
 		});
 
 		it.concurrent(
-			'should render single-line code block without semicolon (line 504)',
+			'should render single-line code block without semicolon',
 			() => {
-				// Test line 504: separator when code doesn't end with ';'
+				// Test separator when code doesn't end with ';'
 				const codeBlock = '{@code Integer x = 10 }';
 				const options = {} as ParserOptions;
 				const getFormattedCodeBlock = vi.fn(() => undefined);
@@ -740,7 +712,7 @@ describe('apexdoc-code', () => {
 		);
 
 		it.concurrent(
-			'should process code block with blank line preservation (line 448)',
+			'should process code block with blank line preservation',
 			async () => {
 				// Code block that will trigger preserveBlankLineAfterClosingBrace
 				// Need code that formats to have } followed by @annotation or access modifier
@@ -773,9 +745,9 @@ describe('apexdoc-code', () => {
 		);
 
 		it.concurrent(
-			'should handle empty code block when beforeCode ends with newline (line 688 false branch)',
+			'should handle empty code block when beforeCode ends with newline',
 			async () => {
-				// Test line 688: false branch of needsLeadingNewline when isEmptyBlock is true
+				// Test false branch of needsLeadingNewline when isEmptyBlock is true
 				// beforeCode ends with '\n', so needsLeadingNewline = false, isEmptyBlock = true
 				// This covers: (needsLeadingNewline ? '\n' : '') when isEmptyBlock is true
 				// Need blank line without ' * ' prefix before code block to make beforeCode end with '\n'
@@ -839,15 +811,12 @@ describe('apexdoc-code', () => {
 	});
 
 	describe('countBracesAndCheckEnd', () => {
-		it.concurrent(
-			'should count braces and detect code block end (apexdoc-code.ts lines 130-135)',
-			() => {
-				// Start with braceCount = 1 (from {@code opening)
-				const result = countBracesAndCheckEnd('Integer x = 1; }', 1);
-				expect(result.braceCount).toBe(0);
-				expect(result.willEnd).toBe(true);
-			},
-		);
+		it.concurrent('should count braces and detect code block end', () => {
+			// Start with braceCount = 1 (from {@code opening)
+			const result = countBracesAndCheckEnd('Integer x = 1; }', 1);
+			expect(result.braceCount).toBe(0);
+			expect(result.willEnd).toBe(true);
+		});
 
 		it.concurrent('should handle nested braces', () => {
 			const result = countBracesAndCheckEnd('if (true) { x = 1; }', 1);
@@ -856,7 +825,7 @@ describe('apexdoc-code', () => {
 		});
 
 		it.concurrent(
-			'should handle code block ending on line with content (apexdoc-code.ts lines 139-143)',
+			'should handle code block ending on line with content',
 			() => {
 				// Code block ending on line with content
 				const result = countBracesAndCheckEnd('  }', 1);
@@ -868,7 +837,7 @@ describe('apexdoc-code', () => {
 
 	describe('processCodeBlockLines', () => {
 		it.concurrent(
-			'should handle code block ending on line with content (apexdoc-code.ts lines 148-153, 157-161)',
+			'should handle code block ending on line with content',
 			() => {
 				// Lines where code block ends with willEndCodeBlock = true
 				// First line starts code block (sets inCodeBlock = true, codeBlockBraceCount = 1)
@@ -881,18 +850,18 @@ describe('apexdoc-code', () => {
 				expect(result).toHaveLength(2);
 				expect(result[0]).toContain('{@code');
 				// Second line should be processed: inCodeBlock=true, !startsWith(CODE_TAG), willEndCodeBlock=true
-				// This should execute lines 148-153 (countBracesAndCheckEnd) and 157-161 (willEndCodeBlock check)
+				// This should execute countBracesAndCheckEnd and willEndCodeBlock check
 				expect(result[1]).toContain('Integer x = 1;');
 				expect(result[1]).toContain('}');
 			},
 		);
 
 		it.concurrent(
-			'should handle code block content line with willEnd=false (apexdoc-code.ts lines 183-192, 365)',
+			'should handle code block content line with willEnd=false',
 			() => {
 				// Test when inCodeBlock=true, !startsWith(CODE_TAG), willEnd=false
 				// This covers the ternary's false branch: willEnd ? {...} : nextState
-				// Also tests line 365: return processLineAsCodeContent when isCodeContent=true
+				// Also tests return processLineAsCodeContent when isCodeContent=true
 				// Lines should be: {@code, content line (willEnd=false), closing }
 				const lines = [
 					'{@code', // Starts code block, sets inCodeBlock=true, codeBlockBraceCount=1
@@ -903,8 +872,8 @@ describe('apexdoc-code', () => {
 				expect(result).toHaveLength(3);
 				expect(result[0]).toContain('{@code');
 				// Second line: isCodeContent=true (newInCodeBlock=true && !isCodeTagLine), willEnd=false
-				// This should trigger line 365: return processLineAsCodeContent(...)
-				// This exercises lines 183-192, specifically the false branch of the ternary
+				// This should trigger return processLineAsCodeContent(...)
+				// This exercises the false branch of the ternary
 				expect(result[1]).toContain('Integer x = 10;');
 				expect(result[1]).not.toContain('}');
 				expect(result[2]).toContain('}');
@@ -912,7 +881,7 @@ describe('apexdoc-code', () => {
 		);
 
 		it.concurrent(
-			'should handle code block content line with willEnd=true (apexdoc-code.ts lines 183-192)',
+			'should handle code block content line with willEnd=true',
 			() => {
 				// Test when inCodeBlock=true, !startsWith(CODE_TAG), willEnd=true
 				// This covers the ternary's true branch: willEnd ? {...} : nextState
@@ -935,7 +904,7 @@ describe('apexdoc-code', () => {
 				expect(result2).toHaveLength(2);
 				expect(result2[0]).toContain('{@code');
 				// Second line: isCodeContent=true, willEnd=true, should use ternary's true branch
-				// This exercises lines 183-192, specifically the true branch of the ternary (willEnd ? {...})
+				// This exercises the true branch of the ternary (willEnd ? {...})
 				expect(result2[1]).toContain('Integer x = 10;');
 				expect(result2[1]).toContain('}');
 				// Verify that the next line (if any) would not be in code block
@@ -973,7 +942,7 @@ describe('apexdoc-code', () => {
 		it.concurrent(
 			'should be called and set state correctly in processCodeBlockLines',
 			() => {
-				// This test ensures lines 216-217 are covered by verifying code block starts
+				// This test verifies code block starts correctly
 				const lines = [' * {@code', ' *   Integer x = 10;', ' * }'];
 				const result = processCodeBlockLines(lines);
 				expect(result).toHaveLength(3);

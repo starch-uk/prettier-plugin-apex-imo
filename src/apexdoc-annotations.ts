@@ -201,7 +201,7 @@ const detectAnnotationsInDocs = (
 						const content = contentMatch.trim();
 						const lowerName = annotationName.toLowerCase();
 						// match.index is always defined for matchAll results
-						// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- match.index is always defined for matchAll results
+						// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- match.index is always defined for matchAll results
 						const matchIndex = match.index!;
 						const beforeText = extractBeforeText(line, matchIndex);
 
@@ -254,7 +254,7 @@ const detectAnnotationsInDocs = (
 					}
 				} else {
 					// line is never undefined per array iteration guarantee
-					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- line is never undefined per array iteration guarantee
+					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- line is never undefined per array iteration guarantee
 					processedLines.push(line!);
 				}
 			}
@@ -394,6 +394,7 @@ const renderAnnotation = (
 	// contentLines always has at least one element (line 332-334)
 	// Removed unreachable undefined check: contentLines[FIRST_ELEMENT_INDEX] is always defined
 	const FIRST_ELEMENT_INDEX = 0;
+	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contentLines[FIRST_ELEMENT_INDEX] is always defined
 	const firstContent = contentLines[FIRST_ELEMENT_INDEX]!;
 	const firstLine = isNotEmpty(firstContent)
 		? `${commentPrefix}@${annotationName} ${firstContent}`

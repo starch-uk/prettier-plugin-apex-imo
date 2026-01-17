@@ -45,11 +45,11 @@ describe('printer embed function', () => {
 		setCurrentPluginInstance({ default: {} });
 	});
 
-	it('should add embed function when original printer does not have one (line 194)', () => {
+	it('should add embed function when original printer does not have one', () => {
 		// Test that createWrappedPrinter adds embed when original printer lacks it
 		const mockOriginalPrinter = {
 			print: vi.fn(() => 'original output'),
-			// No embed property - should trigger line 194
+			// No embed property
 		};
 
 		const wrapped = createWrappedPrinter(mockOriginalPrinter);
@@ -59,8 +59,8 @@ describe('printer embed function', () => {
 		expect(typeof wrapped.embed).toBe('function');
 	});
 
-	it('should return undefined when pluginInstance is not set (line 260)', async () => {
-		// Test embed function when pluginInstance is null/undefined (line 260)
+	it('should return undefined when pluginInstance is not set', async () => {
+		// Test embed function when pluginInstance is null/undefined
 		// Clear plugin instance to test the null/undefined check
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Need to set to undefined
 		setCurrentPluginInstance(undefined as any);
@@ -91,9 +91,10 @@ describe('printer embed function', () => {
 		// Since the beforeEach sets it, we need to clear it after beforeEach runs
 		// But we can't control beforeEach order easily, so let's mock the module
 		vi.doMock('../src/printer.js', async () => {
-			const actual = await vi.importActual<typeof import('../src/printer.js')>(
-				'../src/printer.js',
-			);
+			const actual =
+				await vi.importActual<typeof import('../src/printer.js')>(
+					'../src/printer.js',
+				);
 			return {
 				...actual,
 				getCurrentPluginInstance: vi.fn(() => undefined),
@@ -108,7 +109,10 @@ describe('printer embed function', () => {
 			await import('../src/printer.js');
 		const wrappedMocked = createWrappedPrinterMocked(mockOriginalPrinter);
 
-		const embedResult = wrappedMocked.embed?.(mockPath, createMockOptions());
+		const embedResult = wrappedMocked.embed?.(
+			mockPath,
+			createMockOptions(),
+		);
 		// embedResult should be a function (the async processor)
 		expect(embedResult).toBeDefined();
 		expect(typeof embedResult).toBe('function');
@@ -122,7 +126,7 @@ describe('printer embed function', () => {
 		vi.resetModules();
 	});
 
-	it('should return undefined when processAllCodeBlocksInComment returns undefined (line 254)', async () => {
+	it('should return undefined when processAllCodeBlocksInComment returns undefined', async () => {
 		// Set plugin instance for embed to work
 		setCurrentPluginInstance({ default: {} });
 		// Mock processAllCodeBlocksInComment to return undefined
@@ -153,7 +157,7 @@ describe('printer embed function', () => {
 		// Call the async function
 		const docResult = await embedResult?.(async () => 'doc');
 
-		// Should return undefined (line 254)
+		// Should return undefined
 		expect(docResult).toBeUndefined();
 		expect(mockProcessAllCodeBlocksInComment).toHaveBeenCalled();
 	});
