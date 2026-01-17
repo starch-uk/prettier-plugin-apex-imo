@@ -422,33 +422,42 @@ describe('casing', () => {
 			},
 		);
 
-		it.concurrent('should handle empty string in identifier value', () => {
-			const mockPrint = createMockPrint();
-			const reservedWordNormalizingPrint =
-				createReservedWordNormalizingPrint(mockPrint);
-			const node = {
-				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				value: '',
-			} as ApexIdentifier;
-			const path = createMockPath(node, 'modifiers');
-
-			const result = reservedWordNormalizingPrint(path);
-
-			expect(result).toBe('original output');
-			expect(mockPrint).toHaveBeenCalledWith(path);
-		});
-
-		it.concurrent(
-			'should handle identifier with non-string value property',
-			() => {
+		it.concurrent.each([
+			{
+				description: 'empty string in identifier value',
+				key: 'modifiers',
+				node: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: '',
+				} as ApexIdentifier,
+			},
+			{
+				description: 'identifier with non-string value property',
+				key: 'modifiers',
+				node: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 123,
+				} as ApexNode,
+			},
+			{
+				description: 'null node',
+				key: 'modifiers',
+				node: null as unknown as ApexNode,
+			},
+		])(
+			'should handle $description',
+			({
+				node,
+				key,
+			}: Readonly<{
+				description: string;
+				key: number | string;
+				node: ApexNode;
+			}>) => {
 				const mockPrint = createMockPrint();
 				const reservedWordNormalizingPrint =
 					createReservedWordNormalizingPrint(mockPrint);
-				const node = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 123,
-				} as ApexNode;
-				const path = createMockPath(node, 'modifiers');
+				const path = createMockPath(node, key);
 
 				const result = reservedWordNormalizingPrint(path);
 
@@ -456,21 +465,6 @@ describe('casing', () => {
 				expect(mockPrint).toHaveBeenCalledWith(path);
 			},
 		);
-
-		it.concurrent('should handle null node', () => {
-			const mockPrint = createMockPrint();
-			const reservedWordNormalizingPrint =
-				createReservedWordNormalizingPrint(mockPrint);
-			const path = createMockPath(
-				null as unknown as ApexNode,
-				'modifiers',
-			);
-
-			const result = reservedWordNormalizingPrint(path);
-
-			expect(result).toBe('original output');
-			expect(mockPrint).toHaveBeenCalledWith(path);
-		});
 
 		it.concurrent(
 			'should normalize reserved words in print context (integration test)',

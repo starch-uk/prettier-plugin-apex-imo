@@ -40,22 +40,27 @@ describe('utils', () => {
 	});
 
 	describe('isObject', () => {
-		it.concurrent('should return true for objects', () => {
-			expect(isObject({})).toBe(true);
-			expect(isObject({ key: 'value' })).toBe(true);
-			expect(isObject([])).toBe(true);
-		});
-
-		it.concurrent('should return false for null', () => {
-			expect(isObject(null)).toBe(false);
-		});
-
-		it.concurrent('should return false for primitives', () => {
-			expect(isObject('string')).toBe(false);
-			expect(isObject(123)).toBe(false);
-			expect(isObject(true)).toBe(false);
-			expect(isObject(undefined)).toBe(false);
-		});
+		it.concurrent.each([
+			{ expected: true, value: {} },
+			{ expected: true, value: { key: 'value' } },
+			{ expected: true, value: [] },
+			{ expected: false, value: null },
+			{ expected: false, value: 'string' },
+			{ expected: false, value: 123 },
+			{ expected: false, value: true },
+			{ expected: false, value: undefined },
+		])(
+			'should return $expected for $value',
+			({
+				expected,
+				value,
+			}: Readonly<{
+				expected: boolean;
+				value: unknown;
+			}>) => {
+				expect(isObject(value)).toBe(expected);
+			},
+		);
 	});
 
 	describe('isApexNodeLike', () => {
@@ -163,47 +168,70 @@ describe('utils', () => {
 	});
 
 	describe('startsWithAccessModifier', () => {
-		it.concurrent('should return true for public modifier', () => {
-			expect(startsWithAccessModifier('public String name')).toBe(true);
-			expect(startsWithAccessModifier('PUBLIC String name')).toBe(true);
-		});
+		it.concurrent.each([
+			{
+				description: 'public modifier',
+				expected: true,
+				text: 'public String name',
+			},
+			{
+				description: 'PUBLIC modifier (uppercase)',
+				expected: true,
+				text: 'PUBLIC String name',
+			},
+			{
+				description: 'private modifier',
+				expected: true,
+				text: 'private Integer count',
+			},
+			{
+				description: 'protected modifier',
+				expected: true,
+				text: 'protected String name',
+			},
+			{
+				description: 'static modifier',
+				expected: true,
+				text: 'static final Integer count',
+			},
+			{
+				description: 'global modifier',
+				expected: true,
+				text: 'global Account account',
+			},
+		])(
+			'should return $expected for $description',
+			({
+				expected,
+				text,
+			}: Readonly<{
+				description: string;
+				expected: boolean;
+				text: string;
+			}>) => {
+				expect(startsWithAccessModifier(text)).toBe(expected);
+			},
+		);
 
-		it.concurrent('should return true for private modifier', () => {
-			expect(startsWithAccessModifier('private Integer count')).toBe(
-				true,
-			);
-		});
-
-		it.concurrent('should return true for protected modifier', () => {
-			expect(startsWithAccessModifier('protected String name')).toBe(
-				true,
-			);
-		});
-
-		it.concurrent('should return true for static modifier', () => {
-			expect(startsWithAccessModifier('static final Integer count')).toBe(
-				true,
-			);
-		});
-
-		it.concurrent('should return true for global modifier', () => {
-			expect(startsWithAccessModifier('global Account account')).toBe(
-				true,
-			);
-		});
-
-		it.concurrent('should return false for non-modifier words', () => {
-			expect(startsWithAccessModifier('String name')).toBe(false);
-			expect(startsWithAccessModifier('Integer count')).toBe(false);
-		});
-
-		it.concurrent('should return false for empty string', () => {
-			expect(startsWithAccessModifier('')).toBe(false);
-		});
-
-		it.concurrent('should return false for whitespace-only string', () => {
-			expect(startsWithAccessModifier('   ')).toBe(false);
-		});
+		it.concurrent.each([
+			{ description: 'non-modifier words', text: 'String name' },
+			{
+				description: 'non-modifier words (Integer)',
+				text: 'Integer count',
+			},
+			{ description: 'empty string', text: '' },
+			{ description: 'whitespace-only string', text: '   ' },
+		])(
+			'should return false for $description',
+			({
+				text,
+			}: Readonly<{
+				description: string;
+				text: string;
+			}>) => {
+				expect(startsWithAccessModifier(text)).toBe(false);
+			},
+		);
 	});
 
 	describe('calculateEffectiveWidth', () => {
@@ -278,6 +306,49 @@ describe('utils', () => {
 				index: 0,
 				lines: ['  }', '   '],
 			},
+			{
+				description:
+					'should return false when index is out of bounds (last line)',
+				expected: false,
+				index: 0,
+				lines: ['  }'],
+			},
+			{
+				description:
+					'should return false when index is out of bounds (negative)',
+				expected: false,
+				index: -1,
+				lines: ['  }'],
+			},
+			{
+				description:
+					'should return false when index is out of bounds (too large)',
+				expected: false,
+				index: 10,
+				lines: ['  }'],
+			},
+			{
+				description:
+					'should return false when current line is undefined (empty array)',
+				expected: false,
+				index: 0,
+				lines: [],
+			},
+			{
+				description:
+					'should return false when current line is undefined (sparse array)',
+				expected: false,
+				index: 1,
+				lines: ((): readonly string[] => {
+					// Create sparse array where index 0 exists but index 1 is undefined
+					const sparseLines: (string | undefined)[] = ['  }'];
+					sparseLines[2] = '  @Test'; // Skip index 1
+					// Access with index 1 which is undefined
+					// This tests line 137: if (currentLine === undefined) return false;
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing sparse array with undefined elements
+					return sparseLines as readonly string[];
+				})(),
+			},
 		])(
 			'$description',
 			({
@@ -294,41 +365,6 @@ describe('utils', () => {
 				expect(preserveBlankLineAfterClosingBrace(lines, index)).toBe(
 					expected,
 				);
-			},
-		);
-
-		it.concurrent('should return false when index is out of bounds', () => {
-			const lines = ['  }'];
-			expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(false);
-			expect(preserveBlankLineAfterClosingBrace(lines, -1)).toBe(false);
-			expect(preserveBlankLineAfterClosingBrace(lines, 10)).toBe(false);
-		});
-
-		it.concurrent(
-			'should return false when current line is undefined',
-			() => {
-				const lines: string[] = [];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(
-					false,
-				);
-			},
-		);
-
-		it.concurrent(
-			'should return false when current line is undefined (sparse array)',
-			() => {
-				// Create sparse array where index 0 exists but index 1 is undefined
-				const lines: (string | undefined)[] = ['  }'];
-				lines[2] = '  @Test'; // Skip index 1
-				// Access with index 1 which is undefined
-				// This tests line 137: if (currentLine === undefined) return false;
-				expect(
-					preserveBlankLineAfterClosingBrace(
-						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing sparse array with undefined elements
-						lines as readonly string[],
-						1,
-					),
-				).toBe(false);
 			},
 		);
 	});

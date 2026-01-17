@@ -57,34 +57,33 @@ describe('apexdoc', () => {
 	});
 
 	describe('isApexDoc', () => {
-		it.concurrent('should return false for null', () => {
-			expect(isApexDoc(null)).toBe(false);
-		});
-
-		it.concurrent('should return false for undefined', () => {
-			expect(isApexDoc(undefined)).toBe(false);
-		});
-
-		it.concurrent('should return false for non-object', () => {
-			expect(isApexDoc('string')).toBe(false);
-			expect(isApexDoc(123)).toBe(false);
-			expect(isApexDoc(true)).toBe(false);
-		});
-
-		it.concurrent(
-			'should return false for object without value property',
-			() => {
-				expect(isApexDoc({})).toBe(false);
-				expect(isApexDoc({ other: 'prop' })).toBe(false);
+		it.concurrent.each([
+			{ description: 'null', value: null },
+			{ description: 'undefined', value: undefined },
+			{ description: 'string', value: 'string' },
+			{ description: 'number', value: 123 },
+			{ description: 'boolean', value: true },
+			{ description: 'object without value property', value: {} },
+			{
+				description: 'object with other properties but no value',
+				value: { other: 'prop' },
 			},
-		);
-
-		it.concurrent(
-			'should return false for object with non-string value',
-			() => {
-				expect(isApexDoc({ value: 123 })).toBe(false);
-				expect(isApexDoc({ value: null })).toBe(false);
-				expect(isApexDoc({ value: {} })).toBe(false);
+			{ description: 'object with number value', value: { value: 123 } },
+			{ description: 'object with null value', value: { value: null } },
+			{ description: 'object with object value', value: { value: {} } },
+			{
+				description: 'single-line comment (apexdoc.ts line 87)',
+				value: { value: '/** */' },
+			},
+		])(
+			'should return false for $description',
+			({
+				value,
+			}: Readonly<{
+				description: string;
+				value: unknown;
+			}>) => {
+				expect(isApexDoc(value)).toBe(false);
 			},
 		);
 
@@ -94,18 +93,6 @@ describe('apexdoc', () => {
 			};
 			expect(isApexDoc(comment)).toBe(true);
 		});
-
-		it.concurrent(
-			'should return false for single-line comment (apexdoc.ts line 87)',
-			() => {
-				// Test the branch: if (lines.length <= INDEX_ONE) return false
-				// A single-line comment like /** */ has only 1 line when split by \n
-				const singleLineComment = {
-					value: '/** */',
-				};
-				expect(isApexDoc(singleLineComment)).toBe(false);
-			},
-		);
 	});
 
 	describe('Type casing in {@code} blocks', () => {

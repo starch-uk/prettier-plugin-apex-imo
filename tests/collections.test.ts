@@ -349,6 +349,36 @@ describe('collections', () => {
 				desc: 'rejects assignment with non-collection creator',
 				expected: false,
 			},
+			{
+				assignment: {
+					value: {
+						'@class': NEW_EXPR_CLASS,
+						// Missing creator property
+					},
+				},
+				desc: 'rejects assignment with missing creator property',
+				expected: false,
+			},
+			{
+				assignment: {
+					value: {
+						'@class': NEW_EXPR_CLASS,
+						creator: 'not an object',
+					},
+				},
+				desc: 'rejects assignment with non-object creator',
+				expected: false,
+			},
+			{
+				assignment: {
+					value: {
+						'@class': NEW_EXPR_CLASS,
+						creator: {},
+					},
+				},
+				desc: 'rejects assignment with creator without @class property',
+				expected: false,
+			},
 		])(
 			'$desc',
 			({
@@ -359,45 +389,6 @@ describe('collections', () => {
 				expected: boolean;
 			}>) => {
 				expect(isCollectionAssignment(assignment)).toBe(expected);
-			},
-		);
-
-		it.concurrent(
-			'should handle assignment with missing creator property',
-			() => {
-				const assignment = {
-					value: {
-						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
-						// Missing creator property
-					},
-				};
-				expect(isCollectionAssignment(assignment)).toBe(false);
-			},
-		);
-
-		it.concurrent(
-			'should handle assignment with non-object creator',
-			() => {
-				const assignment = {
-					value: {
-						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
-						creator: 'not an object',
-					},
-				};
-				expect(isCollectionAssignment(assignment)).toBe(false);
-			},
-		);
-
-		it.concurrent(
-			'should handle assignment with creator without @class property',
-			() => {
-				const assignment = {
-					value: {
-						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
-						creator: {},
-					},
-				};
-				expect(isCollectionAssignment(assignment)).toBe(false);
 			},
 		);
 	});
