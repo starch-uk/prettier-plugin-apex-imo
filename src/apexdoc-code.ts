@@ -125,7 +125,6 @@ const countBracesAndCheckEnd = (
 /**
  * Processes comment lines to handle code block boundaries.
  * Tracks code blocks using brace counting and preserves structure.
- * Uses reduce pattern to avoid let variable assignments in loops for better coverage tracking.
  * @param lines - The comment lines to process.
  * @returns The processed lines with code block structure preserved.
  * @example
@@ -182,17 +181,19 @@ const processCodeBlockLines = (
 			if (isCodeContent) {
 				const trimmed = removeCommentPrefix(commentLine, true);
 				const willEnd = braceResult.willEnd;
-				const finalState = willEnd
+				const updatedResult = [...nextState.result, prefix + trimmed];
+				// Inline ternary to help V8 AST-based coverage tracking
+				return willEnd
 					? {
 							inCodeBlock: false,
 							codeBlockBraceCount: nextState.codeBlockBraceCount,
-							result: nextState.result,
+							result: updatedResult,
 						}
-					: nextState;
-				return {
-					...finalState,
-					result: [...finalState.result, prefix + trimmed],
-				};
+					: {
+							inCodeBlock: nextState.inCodeBlock,
+							codeBlockBraceCount: nextState.codeBlockBraceCount,
+							result: updatedResult,
+						};
 			}
 
 			// Removed unreachable check for standalone '}' outside code blocks (line 146)
