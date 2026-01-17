@@ -267,8 +267,6 @@ describe('utils', () => {
 
 		it.concurrent.each([
 			{
-				desc: 'identifies List literal assignment',
-				expected: true,
 				assignment: {
 					value: {
 						'@class': NEW_EXPR_CLASS,
@@ -277,10 +275,10 @@ describe('utils', () => {
 						},
 					},
 				},
+				desc: 'identifies List literal assignment',
+				expected: true,
 			},
 			{
-				desc: 'identifies Set literal assignment',
-				expected: true,
 				assignment: {
 					value: {
 						'@class': NEW_EXPR_CLASS,
@@ -289,10 +287,10 @@ describe('utils', () => {
 						},
 					},
 				},
+				desc: 'identifies Set literal assignment',
+				expected: true,
 			},
 			{
-				desc: 'identifies Map literal assignment',
-				expected: true,
 				assignment: {
 					value: {
 						'@class': NEW_EXPR_CLASS,
@@ -301,46 +299,46 @@ describe('utils', () => {
 						},
 					},
 				},
+				desc: 'identifies Map literal assignment',
+				expected: true,
 			},
 			{
+				assignment: 'not an object',
 				desc: 'rejects non-object assignment',
 				expected: false,
-				assignment: 'not an object',
 			},
 			{
+				assignment: {},
 				desc: 'rejects assignment without value property',
 				expected: false,
-				assignment: {},
 			},
 			{
-				desc: 'rejects assignment with null value',
-				expected: false,
 				assignment: {
 					value: null,
 				},
+				desc: 'rejects assignment with null value',
+				expected: false,
 			},
 			{
-				desc: 'rejects assignment with non-NewExpr value',
-				expected: false,
 				assignment: {
 					value: {
 						'@class': 'apex.jorje.data.ast.LiteralExpr',
 					},
 				},
+				desc: 'rejects assignment with non-NewExpr value',
+				expected: false,
 			},
 			{
-				desc: 'rejects assignment with null creator',
-				expected: false,
 				assignment: {
 					value: {
 						'@class': NEW_EXPR_CLASS,
 						creator: null,
 					},
 				},
+				desc: 'rejects assignment with null creator',
+				expected: false,
 			},
 			{
-				desc: 'rejects assignment with non-collection creator',
-				expected: false,
 				assignment: {
 					value: {
 						'@class': NEW_EXPR_CLASS,
@@ -349,6 +347,8 @@ describe('utils', () => {
 						},
 					},
 				},
+				desc: 'rejects assignment with non-collection creator',
+				expected: false,
 			},
 		])(
 			'$desc',

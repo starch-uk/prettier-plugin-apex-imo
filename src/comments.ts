@@ -17,11 +17,7 @@ import {
 	isNotEmpty,
 	isObject,
 } from './utils.js';
-import {
-	normalizeSingleApexDocComment,
-	removeTrailingEmptyLines,
-	isApexDoc,
-} from './apexdoc.js';
+import { normalizeSingleApexDocComment, isApexDoc } from './apexdoc.js';
 import { normalizeAnnotations } from './apexdoc-annotations.js';
 
 // Doc-based types for ApexDoc processing
@@ -50,7 +46,7 @@ interface ApexDocCodeBlock {
 	readonly endPos: number;
 
 	/**
-	 * Raw code string between {@code ... } braces, with comment prefixes removed.
+	 * Raw code string between code tag braces, with comment prefixes removed.
 	 * This is kept for interaction with prettier.format and other string-based helpers.
 	 */
 	readonly rawCode: string;
@@ -85,7 +81,9 @@ interface ApexDocAnnotation {
 	readonly followingText?: Doc;
 }
 
+/* eslint-disable @typescript-eslint/no-type-alias -- Union type needed for type discrimination */
 type ApexDocComment = ApexDocAnnotation | ApexDocCodeBlock | ApexDocContent;
+/* eslint-enable @typescript-eslint/no-type-alias */
 
 const MIN_INDENT_LEVEL = 0;
 const DEFAULT_TAB_WIDTH = 2;
@@ -130,20 +128,25 @@ const handleDanglingComment = (comment: unknown): boolean => {
 	const { enclosingNode } = commentWithContext;
 	if (!enclosingNode) return false;
 	const enclosingNodeClass = getNodeClassOptional(enclosingNode);
-	if (
-		!enclosingNodeClass ||
-		!ALLOW_DANGLING_COMMENTS.includes(enclosingNodeClass)
-	) {
+	const hasValidClass =
+		enclosingNodeClass !== undefined &&
+		ALLOW_DANGLING_COMMENTS.includes(enclosingNodeClass);
+	if (!hasValidClass) {
 		return false;
 	}
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- enclosingNode is confirmed to have members
 	const enclosingNodeWithMembers = enclosingNode as {
 		stmnts?: unknown[];
 		members?: unknown[];
 	};
-	const isEmpty =
-		enclosingNodeWithMembers.stmnts?.length === 0 ||
-		enclosingNodeWithMembers.members?.length === 0;
-	if (!isEmpty) return false;
+	const ZERO_LENGTH = 0;
+	const NOT_FOUND_LENGTH = -1;
+	const stmntsLength = enclosingNodeWithMembers.stmnts?.length ?? NOT_FOUND_LENGTH;
+	const membersLength =
+		enclosingNodeWithMembers.members?.length ?? NOT_FOUND_LENGTH;
+	const isEmptyCheck =
+		stmntsLength === ZERO_LENGTH || membersLength === ZERO_LENGTH;
+	if (!isEmptyCheck) return false;
 	const { addDanglingComment } = prettier.util;
 	addDanglingComment(enclosingNode, comment, null);
 	return true;
@@ -170,14 +173,21 @@ const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
 		return false;
 	}
 
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- followingNode is confirmed to be BlockStmnt
 	const blockStatement = followingNode as { stmnts?: unknown[] };
 	const { addLeadingComment, addDanglingComment } = prettier.util;
 
+	const ZERO_LENGTH = 0;
+	const FIRST_STMT_INDEX = 0;
 	const hasStatements =
-		blockStatement.stmnts !== undefined && blockStatement.stmnts.length > 0;
-	if (hasStatements) {
+		blockStatement.stmnts !== undefined &&
+		blockStatement.stmnts.length > ZERO_LENGTH;
+	const firstStmt = hasStatements
+		? blockStatement.stmnts?.[FIRST_STMT_INDEX]
+		: undefined;
+	if (hasStatements && firstStmt !== undefined && firstStmt !== null) {
 		// Add as leading comment to first statement in block
-		addLeadingComment(blockStatement.stmnts[0], comment);
+		addLeadingComment(firstStmt, comment);
 	} else {
 		// Add as dangling comment to empty block (stmnts is undefined or empty array)
 		addDanglingComment(followingNode, comment, null);
@@ -214,8 +224,11 @@ const handleBinaryishExpressionRightChildTrailingComment = (
 		return false;
 	}
 
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- precedingNode is confirmed to be BinaryExpr or BooleanExpr
 	const binaryExpr = precedingNode as { right?: unknown };
-	if (!binaryExpr.right) return false;
+	const hasRight =
+		binaryExpr.right !== undefined && binaryExpr.right !== null;
+	if (!hasRight) return false;
 
 	const { addTrailingComment } = prettier.util;
 	addTrailingComment(binaryExpr.right, comment);
@@ -266,11 +279,15 @@ const getCommentIndent = (
 
 /**
  * Normalizes comment start marker: /***** -> /**.
- * @param comment
+ * @param comment - The comment string to normalize.
+ * @returns The normalized comment string with exactly two asterisks at the start.
  */
 const normalizeCommentStart = (comment: string): string => {
+	const ZERO_INDEX = 0;
+	const SINGLE_OFFSET = 1;
+	const REQUIRED_ASTERISK_COUNT = 2;
 	// Find first non-whitespace character
-	let start = 0;
+	let start = ZERO_INDEX;
 	while (
 		start < comment.length &&
 		(comment[start] === ' ' || comment[start] === '\t')
@@ -279,10 +296,10 @@ const normalizeCommentStart = (comment: string): string => {
 	}
 	// Block comments always start with /* or /** after whitespace
 	// Normalize multiple asterisks to exactly two asterisks (/**)
-	const prefix = comment.substring(0, start);
-	const afterSlash = comment.substring(start + 1);
+	const prefix = comment.substring(ZERO_INDEX, start);
+	const afterSlash = comment.substring(start + SINGLE_OFFSET);
 	// Count asterisks after /
-	let asteriskCount = 0;
+	let asteriskCount = ZERO_INDEX;
 	while (
 		asteriskCount < afterSlash.length &&
 		afterSlash[asteriskCount] === '*'
@@ -290,7 +307,7 @@ const normalizeCommentStart = (comment: string): string => {
 		asteriskCount++;
 	}
 	// Normalize to exactly two asterisks (/**)
-	if (asteriskCount !== 2) {
+	if (asteriskCount !== REQUIRED_ASTERISK_COUNT) {
 		return prefix + '/**' + afterSlash.substring(asteriskCount);
 	}
 	return comment;
@@ -298,35 +315,41 @@ const normalizeCommentStart = (comment: string): string => {
 
 /**
  * Normalizes comment end marker: multiple asterisks before slash to single asterisk.
- * @param comment
+ * @param comment - The comment string to normalize.
+ * @returns The normalized comment string with single asterisk before closing slash.
  */
 const normalizeCommentEnd = (comment: string): string => {
 	// Replace **/ or more with */ - scan for patterns and replace
 	let result = comment;
-	let pos = 0;
+	const ZERO_INDEX = 0;
+	const SINGLE_OFFSET = 1;
+	const MIN_ASTERISK_COUNT = 2;
+	const SLASH_OFFSET = 2;
+	let pos = ZERO_INDEX;
 	while (pos < result.length) {
 		// Look for */ pattern
 		const slashPos = result.indexOf('/', pos);
-		if (slashPos === -1) break;
+		const NOT_FOUND = -1;
+		if (slashPos === NOT_FOUND) break;
 
 		// Count asterisks before /
-		let asteriskCount = 0;
-		let checkPos = slashPos - 1;
-		while (checkPos >= 0 && result[checkPos] === '*') {
+		let asteriskCount = ZERO_INDEX;
+		let checkPos = slashPos - SINGLE_OFFSET;
+		while (checkPos >= ZERO_INDEX && result[checkPos] === '*') {
 			asteriskCount++;
 			checkPos--;
 		}
 
 		// If we have 2+ asterisks before /, normalize to */
-		if (asteriskCount >= 2) {
-			const replaceStart = checkPos + 1;
+		if (asteriskCount >= MIN_ASTERISK_COUNT) {
+			const replaceStart = checkPos + SINGLE_OFFSET;
 			result =
-				result.substring(0, replaceStart) +
+				result.substring(ZERO_INDEX, replaceStart) +
 				'*/' +
-				result.substring(slashPos + 1);
-			pos = replaceStart + 2;
+				result.substring(slashPos + SINGLE_OFFSET);
+			pos = replaceStart + SLASH_OFFSET;
 		} else {
-			pos = slashPos + 1;
+			pos = slashPos + SINGLE_OFFSET;
 		}
 	}
 	return result;
@@ -334,9 +357,10 @@ const normalizeCommentEnd = (comment: string): string => {
 
 /**
  * Normalizes a single comment line with asterisk prefix.
- * @param line
- * @param baseIndent
- * @param isFirstOrLast
+ * @param line - The comment line to normalize.
+ * @param baseIndent - The base indentation string.
+ * @param isFirstOrLast - Whether this is the first or last line of the comment.
+ * @returns The normalized comment line.
  */
 const normalizeCommentLine = (
 	line: string,
@@ -349,8 +373,11 @@ const normalizeCommentLine = (
 	}
 
 	// Find asterisk position
-	let asteriskPos = -1;
-	for (let i = 0; i < line.length; i++) {
+	const NOT_FOUND_POS = -1;
+	const ZERO_INDEX = 0;
+	const SINGLE_OFFSET = 1;
+	let asteriskPos = NOT_FOUND_POS;
+	for (let i = ZERO_INDEX; i < line.length; i++) {
 		const char = line[i];
 		if (char === ' ' || char === '\t') continue;
 		if (char === '*') {
@@ -360,7 +387,7 @@ const normalizeCommentLine = (
 		break;
 	}
 
-	if (asteriskPos === -1) {
+	if (asteriskPos === NOT_FOUND_POS) {
 		// asteriskPos === -1 means no asterisk found after whitespace
 		// so trimmed cannot start with '*' (would have been found by loop)
 		const trimmed = line.trimStart();
@@ -368,13 +395,13 @@ const normalizeCommentLine = (
 	}
 
 	// Found asterisk - normalize
-	let afterAsterisk = line.substring(asteriskPos + 1);
+	let afterAsterisk = line.substring(asteriskPos + SINGLE_OFFSET);
 	// Skip multiple asterisks and whitespace
 	while (afterAsterisk.startsWith('*')) {
-		afterAsterisk = afterAsterisk.substring(1);
+		afterAsterisk = afterAsterisk.substring(SINGLE_OFFSET);
 	}
 	// Count leading whitespace using character scanning (replaces regex /^\s*/)
-	let leadingWhitespaceCount = 0;
+	let leadingWhitespaceCount = ZERO_INDEX;
 	while (
 		leadingWhitespaceCount < afterAsterisk.length &&
 		(afterAsterisk[leadingWhitespaceCount] === ' ' ||
@@ -383,17 +410,17 @@ const normalizeCommentLine = (
 		leadingWhitespaceCount++;
 	}
 	const spaceAfterAsterisk = afterAsterisk.substring(
-		0,
+		ZERO_INDEX,
 		leadingWhitespaceCount,
 	);
 	// Remove first space if present, preserve additional spaces (code indentation)
 	afterAsterisk =
 		spaceAfterAsterisk.length > EMPTY
-			? afterAsterisk.substring(1)
+			? afterAsterisk.substring(SINGLE_OFFSET)
 			: afterAsterisk.trimStart();
 	// Remove any remaining asterisks at start of content
 	while (afterAsterisk.startsWith('*')) {
-		afterAsterisk = afterAsterisk.substring(1).trimStart();
+		afterAsterisk = afterAsterisk.substring(SINGLE_OFFSET).trimStart();
 	}
 	return `${baseIndent} * ${afterAsterisk}`;
 };
@@ -428,9 +455,10 @@ const normalizeBlockComment = (
 		options.tabWidth,
 		options.useTabs,
 	);
+	// lines comes from normalizedComment.split('\n') which never creates undefined entries
+	// Array indexing check removed: lines array has no holes
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
-		const line = lines[i]!;
-		// lines comes from normalizedComment.split('\n') which never creates undefined entries
+		const line = lines[i];
 		normalizedLines.push(
 			normalizeCommentLine(
 				line,
@@ -475,7 +503,9 @@ const CommentPrefix = {
 	 * @returns The length of the comment prefix.
 	 */
 	getLength: (indentLevel: number): number => {
-		return indentLevel + ' * '.length;
+		/** ' * '.length. */
+		const COMMENT_PREFIX_LENGTH = 4;
+		return indentLevel + COMMENT_PREFIX_LENGTH;
 	},
 };
 
@@ -496,19 +526,26 @@ const removeCommentPrefix = (line: string, preserveIndent = false): string => {
 		if (match) {
 			// match[4] is capturing group (.*) which always matches (even if empty string)
 			// so rest will always be a string, never undefined
-			const rest = match[4]!;
+			// Non-null assertion safe: MATCH_GROUP_INDEX element always exists per regex pattern
+			const MATCH_GROUP_INDEX = 4;
+			const rest = match[MATCH_GROUP_INDEX]!;
 			// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
 			// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
 			// But preserve any additional spaces (indentation) - they're part of the content
 			// Check if rest starts with a single space followed by non-space (normal case)
 			// or multiple spaces (indentation case) - using character scanning instead of regex
 			const trimmed = rest.trimStart();
+			const ZERO_LENGTH = 0;
+			const SINGLE_SPACE_LENGTH = 1;
 			if (trimmed.length < rest.length) {
-				const spaces = rest.slice(0, rest.length - trimmed.length);
+				const spaces = rest.slice(
+					ZERO_LENGTH,
+					rest.length - trimmed.length,
+				);
 				const content = trimmed;
 				// If exactly one space, remove it (it's the separator after asterisk)
 				// If multiple spaces, keep them (they're indentation)
-				if (spaces.length === 1) {
+				if (spaces.length === SINGLE_SPACE_LENGTH) {
 					return content;
 				}
 				// Multiple spaces - preserve as indentation
@@ -526,7 +563,8 @@ const removeCommentPrefix = (line: string, preserveIndent = false): string => {
 
 /**
  * Converts string lines to Doc array (strings are valid Docs).
- * @param lines
+ * @param lines - Array of string lines to convert.
+ * @returns Array of Doc elements (strings are valid Docs).
  */
 const linesToDocLines = (lines: readonly string[]): readonly Doc[] =>
 	lines.map((line) => line as Doc);
@@ -534,16 +572,22 @@ const linesToDocLines = (lines: readonly string[]): readonly Doc[] =>
 /**
  * Converts string content to Doc (string is a valid Doc).
  * For multi-line content, joins with hardline.
- * @param _content
- * @param lines
+ * @param _content - The string content (unused but kept for API compatibility).
+ * @param lines - Array of string lines to convert to Doc.
+ * @returns The Doc representation of the content.
  */
 const contentToDoc = (_content: string, lines: readonly string[]): Doc => {
 	const { join, hardline } = docBuilders;
-	if (lines.length === 0) {
+	const ZERO_LENGTH = 0;
+	const SINGLE_LINE = 1;
+	const ZERO_INDEX = 0;
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- lines are strings which are valid Docs
+	if (lines.length === ZERO_LENGTH) {
 		return '' as Doc;
 	}
-	if (lines.length === 1) {
-		return lines[0] as Doc;
+	if (lines.length === SINGLE_LINE) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- lines are strings which are valid Docs
+		return lines[ZERO_INDEX] as Doc;
 	}
 	return join(hardline, [...linesToDocLines(lines)]);
 };
@@ -551,47 +595,59 @@ const contentToDoc = (_content: string, lines: readonly string[]): Doc => {
 /**
  * Extracts string content from a Doc for text operations.
  * If Doc is a string, returns it. Otherwise, prints it to string.
- * @param doc
- * @param options
- * @param options.printWidth
+ * @param doc - The Doc to extract string content from.
+ * @param options - Optional options including printWidth.
+ * @param options.printWidth - The print width for formatting complex Docs.
+ * @returns The string representation of the Doc.
  */
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- options parameter needs to be mutable for prettier API
 const docToString = (doc: Doc, options?: { printWidth?: number }): string => {
 	if (typeof doc === 'string') {
 		return doc;
 	}
 	// For complex Docs, print to string
+	const DEFAULT_PRINT_WIDTH = 80;
+	const DEFAULT_TAB_WIDTH_VALUE = 2;
 	return prettier.doc.printer.printDocToString(doc, {
-		printWidth: options?.printWidth ?? 80,
-		tabWidth: 2,
+		printWidth: options?.printWidth ?? DEFAULT_PRINT_WIDTH,
+		tabWidth: DEFAULT_TAB_WIDTH_VALUE,
 	}).formatted;
 };
 
 /**
  * Extracts string content from ApexDocContent for text operations.
- * @param doc
+ * @param doc - The ApexDocContent to extract string content from.
+ * @returns The string representation of the content Doc.
  */
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access
 const getContentString = (doc: ApexDocContent): string =>
 	docToString(doc.content);
 
 /**
  * Extracts string lines from ApexDocContent for text operations.
- * @param doc
+ * @param doc - The ApexDocContent to extract lines from.
+ * @returns Array of string lines extracted from the content.
  */
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
 const getContentLines = (doc: ApexDocContent): readonly string[] =>
-	doc.lines.map((line) => docToString(line));
+	doc.lines.map((lineItem) => docToString(lineItem));
 
 /**
  * Creates an ApexDocContent from string content and lines.
- * @param type
- * @param content
- * @param lines
- * @param isContinuation
+ * @param type - The type of content ('paragraph' or 'text').
+ * @param content - The string content.
+ * @param lines - Array of string lines.
+ * @param isContinuation - Optional flag indicating if this is a continuation.
+ * @returns The created ApexDocContent object.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for doc content creation
 const createDocContent = (
 	type: 'paragraph' | 'text',
-	content: string,
+	content: Readonly<string>,
 	lines: readonly string[],
 	isContinuation?: boolean,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): ApexDocContent => {
 	// Preserve lines as-is - comment prefix and indentation will be handled later when needed
 	// This preserves code block indentation that would be lost if we strip prefixes here
@@ -644,9 +700,10 @@ const parseCommentToDocs = (
 		}
 	};
 
+	// contentLines comes from lines.slice() which never creates undefined entries
+	// Array indexing check removed: contentLines array has no holes
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
-		const line = contentLines[i]!;
-		// contentLines comes from lines.slice() which never creates undefined entries
+		const line = contentLines[i];
 
 		// Remove comment prefix (*) to check if line is empty
 		const trimmedLine = removeCommentPrefix(line);
@@ -667,9 +724,10 @@ const parseCommentToDocs = (
 			const currentContent = currentParagraph.join(' ');
 			// Use simple string scanning instead of regex for better performance
 			for (let j = 0; j < currentContent.length; j++) {
+				const CODE_TAG_LENGTH = 6;
 				if (currentContent.slice(j).startsWith('{@code')) {
 					codeBlockOpenCount++;
-					j += 6; // Skip past '{@code'
+					j += CODE_TAG_LENGTH; // Skip past '{@code'
 				} else if (currentContent[j] === '}') {
 					codeBlockCloseCount++;
 				}
@@ -688,18 +746,22 @@ const parseCommentToDocs = (
 			// Check for sentence boundary: ends with sentence-ending punctuation
 			// and next line starts with capital letter
 			const trimmedEnd = trimmedLine.trimEnd();
+			const ZERO_LENGTH = 0;
 			const endsWithSentencePunctuation =
-				trimmedEnd.length > 0 &&
+				trimmedEnd.length > ZERO_LENGTH &&
 				(trimmedEnd.endsWith('.') ||
 					trimmedEnd.endsWith('!') ||
 					trimmedEnd.endsWith('?'));
 			const nextLine = contentLines[i + INDEX_ONE];
 			const nextTrimmed =
 				nextLine !== undefined ? removeCommentPrefix(nextLine) : '';
+			const CAPITAL_A = 'A';
+			const CAPITAL_Z = 'Z';
+			const FIRST_CHAR_INDEX = 0;
 			const nextStartsWithCapital =
 				isNotEmpty(nextTrimmed) &&
-				nextTrimmed.charAt(0) >= 'A' &&
-				nextTrimmed.charAt(0) <= 'Z';
+				nextTrimmed.charAt(FIRST_CHAR_INDEX) >= CAPITAL_A &&
+				nextTrimmed.charAt(FIRST_CHAR_INDEX) <= CAPITAL_Z;
 
 			// Add current line to paragraph
 			currentParagraph.push(trimmedLine);
@@ -737,13 +799,15 @@ const parseCommentToDocs = (
 /**
  * Converts Doc tokens back to a formatted comment string.
  * Uses wrapped paragraphs if they've been wrapped.
- * @param tokens - Array of Doc-based comment tokens.
- * @param docs
+ * @param docs - Array of Doc-based comment tokens.
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Options including tabWidth and useTabs.
  * @returns The formatted comment string.
  */
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- docs parameter needs array iteration
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- docs parameter needs array iteration
 const tokensToCommentString = (
+	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- docs parameter needs array iteration
 	docs: readonly ApexDocComment[],
 	commentIndent: number,
 	options: Readonly<{
@@ -759,12 +823,12 @@ const tokensToCommentString = (
 	);
 	const lines: string[] = [`${baseIndent}/**`];
 
-	for (let i = 0; i < docs.length; i++) {
-		const doc = docs[i]!;
+	for (const doc of docs) {
 		// docs is readonly ApexDocComment[] and arrays created via push() never have undefined holes
 		// Note: Code block docs are converted to content docs in docsToApexDocString
 		// before reaching tokensToCommentString, so doc.type is always 'text' or 'paragraph'
 		// Annotation docs are handled separately, so we can directly process content docs
+		// Type check removed: doc.type is always 'text' or 'paragraph' per above comment
 
 		// Extract string lines from Doc
 		const docLines = getContentLines(doc);
@@ -787,10 +851,11 @@ const tokensToCommentString = (
  * Unified async text wrapping utility that provides consistent wrapping behavior.
  * Used by both token processing and direct content wrapping to ensure uniform results.
  * Splits text into words and wraps using Prettier's fill builder with proper width constraints.
+ * Breaks long lines at word boundaries to fit within the specified width.
  * @param textContent - The text content to wrap.
  * @param effectiveWidth - The effective width available for content.
  * @param options - Options including tabWidth and useTabs.
- * @returns Array of wrapped lines.
+ * @returns Array of wrapped lines without comment prefix.
  */
 const wrapTextToWidth = (
 	textContent: string,
@@ -820,7 +885,9 @@ const wrapTextToWidth = (
 		tabWidth: options.tabWidth,
 		...useTabsOption,
 	}).formatted;
-	return wrappedText.split('\n').filter((line) => isNotEmpty(line.trim()));
+	return wrappedText
+		.split('\n')
+		.filter((lineItem) => isNotEmpty(lineItem.trim()));
 };
 
 /**
@@ -832,57 +899,60 @@ const wrapTextToWidth = (
  * @param _print - Print function (unused but required by Prettier API).
  * @param _originalPrintComment - Original print comment function (unused but required by Prettier API).
  * @param options - Parser options for processing.
- * @param getCurrentOriginalText - Function to get the original source text.
- * @param getFormattedCodeBlock - Function to get cached embed-formatted comments.
- * @param _getCurrentOriginalText
- * @param _getFormattedCodeBlock
+ * @param _getCurrentOriginalText - Function to get the original source text (unused but required by Prettier API).
+ * @param _getFormattedCodeBlock - Function to get cached embed-formatted comments (unused but required by Prettier API).
  * @returns The formatted comment as a Prettier Doc.
  */
+/* eslint-disable @typescript-eslint/max-params, @typescript-eslint/prefer-readonly-parameter-types -- Prettier API requires 7 parameters and mutable types */
 const printComment = (
-	path: Readonly<AstPath<ApexNode>>,
-	_options: Readonly<ParserOptions>,
-	_print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+	path: AstPath<ApexNode>,
+	_options: ParserOptions,
+	_print: (path: AstPath<ApexNode>) => Doc,
 	_originalPrintComment: (
-		path: Readonly<AstPath<ApexNode>>,
-		options: Readonly<ParserOptions>,
-		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		path: AstPath<ApexNode>,
+		options: ParserOptions,
+		print: (path: AstPath<ApexNode>) => Doc,
 	) => Doc,
 	options: ParserOptions,
 	_getCurrentOriginalText: () => string | undefined,
 	_getFormattedCodeBlock: (key: string) => string | undefined,
-	// eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires parameters
 ): Doc => {
 	const node = path.getNode();
 
 	if (node !== null && 'value' in node && typeof node['value'] === 'string') {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- node is confirmed to have value property
 		const commentNode = node as unknown as { value: string };
 		const commentValue = commentNode.value;
+		const ZERO_INDENT = 0;
 		if (commentValue === '') return '';
 
 		if (isApexDoc(node)) {
 			// Check if there's a pre-formatted version from embed processing
 			// Use the same cache key calculation as embed function
 			const codeTagPos = commentValue.indexOf('{@code');
-			const commentKey =
-				codeTagPos !== -1
-					? `${String(commentValue.length)}-${String(codeTagPos)}`
-					: null;
-			const embedFormattedComment = commentKey
-				? _getFormattedCodeBlock(commentKey)
+			const NOT_FOUND_POS = -1;
+			const hasCodeTag = codeTagPos !== NOT_FOUND_POS;
+			const commentKey = hasCodeTag
+				? `${String(commentValue.length)}-${String(codeTagPos)}`
 				: null;
+			const embedFormattedComment =
+				commentKey !== null ? _getFormattedCodeBlock(commentKey) : null;
+			const hasEmbedComment =
+				embedFormattedComment !== null &&
+				embedFormattedComment !== undefined;
 			// Use embed-formatted comment if available, otherwise normalize the original comment
 			// Normalize the embed-formatted comment to match Prettier's indentation (single space before *)
 			// Pass isEmbedFormatted=true to preserve formatted code from embed function
-			const commentDoc = embedFormattedComment
+			const commentDoc = hasEmbedComment
 				? normalizeSingleApexDocComment(
 						embedFormattedComment,
-						0,
+						ZERO_INDENT,
 						options,
 						true,
 					)
 				: normalizeSingleApexDocComment(
 						commentValue,
-						0,
+						ZERO_INDENT,
 						options,
 						false,
 					);
@@ -902,10 +972,15 @@ const printComment = (
 			// Parse to docs, normalize annotations, then convert back
 			const docs = parseCommentToDocs(commentValue);
 			const normalizedDocs = normalizeAnnotations(docs);
-			const normalizedComment = tokensToCommentString(normalizedDocs, 0, {
-				tabWidth: options.tabWidth,
-				useTabs: options.useTabs,
-			});
+			const ZERO_INDENT_VALUE = 0;
+			const normalizedComment = tokensToCommentString(
+				normalizedDocs,
+				ZERO_INDENT_VALUE,
+				{
+					tabWidth: options.tabWidth,
+					useTabs: options.useTabs,
+				},
+			);
 
 			// Return the normalized comment as Prettier documents
 			const lines = normalizedComment.split('\n');
@@ -919,8 +994,9 @@ const printComment = (
 
 /**
  * Tries handlers in order until one returns true.
- * @param comment
- * @param handlers
+ * @param comment - The comment to process.
+ * @param handlers - Array of handler functions to try.
+ * @returns True if any handler successfully processed the comment, false otherwise.
  */
 const tryHandlers = (
 	comment: unknown,

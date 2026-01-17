@@ -332,9 +332,9 @@ describe('apexdoc', () => {
 				// The else branch at line 890 uses lines.join('\n') instead of map+removeCommentPrefix
 				// This tests the branch when doc.type !== 'paragraph'
 				const textDoc: ApexDocComment = {
-					type: 'text',
 					content: '   \n   ',
 					lines: ['   ', '   '], // Whitespace lines - getContentLines expects this
+					type: 'text',
 				};
 				const result = detectCodeBlockDocs([textDoc], '', false);
 				// processContentForCodeBlocks is called which executes line 890 else branch

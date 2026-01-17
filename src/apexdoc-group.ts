@@ -1,5 +1,5 @@
 /**
- * @file Functions for normalizing ApexDoc @group annotation group names.
+ * @file Functions for normalizing ApexDoc group annotation group names.
  */
 
 import { APEXDOC_GROUP_NAMES } from './refs/apexdoc-annotations.js';
@@ -22,13 +22,13 @@ const normalizeGroupName = (groupName: string): string => {
 	}
 	const lowerGroupName = groupName.toLowerCase();
 	const mappedValue = APEXDOC_GROUP_NAMES[lowerGroupName];
-	return mappedValue !== undefined ? mappedValue : groupName;
+	return mappedValue ?? groupName;
 };
 
 /**
- * Normalizes the group name in @group annotation content.
+ * Normalizes the group name in group annotation content.
  * Extracts the first word (group name) and normalizes it, preserving any description that follows.
- * @param content - The @group annotation content (e.g., "class My description").
+ * @param content - The group annotation content (e.g., "class My description").
  * @returns The normalized content with proper case group name (e.g., "Class My description").
  * @example
  * ```typescript
@@ -41,19 +41,22 @@ const normalizeGroupContent = (content: string): string => {
 		return content;
 	}
 	const contentTrimmed = content.trim();
-	const firstSpaceIndex = contentTrimmed.indexOf(' ');
+	const ZERO_INDEX = 0;
+	const SPACE_CHAR = ' ';
+	const OFFSET_ONE = 1;
+	const firstSpaceIndex = contentTrimmed.indexOf(SPACE_CHAR);
 	const groupName =
-		firstSpaceIndex > 0
-			? contentTrimmed.substring(0, firstSpaceIndex)
+		firstSpaceIndex > ZERO_INDEX
+			? contentTrimmed.substring(ZERO_INDEX, firstSpaceIndex)
 			: contentTrimmed;
 	const description =
-		firstSpaceIndex > 0
-			? contentTrimmed.substring(firstSpaceIndex + 1)
+		firstSpaceIndex > ZERO_INDEX
+			? contentTrimmed.substring(firstSpaceIndex + OFFSET_ONE)
 			: '';
 
 	const normalizedGroupName = normalizeGroupName(groupName);
 
-	if (description.length > 0) {
+	if (description.length > ZERO_INDEX) {
 		return `${normalizedGroupName} ${description}`;
 	}
 	return normalizedGroupName;

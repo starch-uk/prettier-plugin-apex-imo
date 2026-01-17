@@ -4,6 +4,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AstPath } from 'prettier';
+import type { ParserOptions } from 'prettier';
+import { vi, beforeEach } from 'vitest';
 import type { ApexNode } from '../src/types.js';
 import {
 	printComment,
@@ -13,10 +15,8 @@ import {
 	normalizeBlockComment,
 	handleOwnLineComment,
 } from '../src/comments.js';
-import type { ParserOptions } from 'prettier';
 import { docBuilders } from '../src/utils.js';
 import { PrettierMockSuite } from './prettier-mock.js';
-import { vi, beforeEach } from 'vitest';
 
 describe('comments internal functions', () => {
 	describe('printComment', () => {

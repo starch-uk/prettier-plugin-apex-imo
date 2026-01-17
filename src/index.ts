@@ -16,7 +16,6 @@ import {
 } from './comments.js';
 import {
 	canAttachComment,
-	getCurrentPrintOptions,
 	getCurrentOriginalText,
 	getFormattedCodeBlock,
 	isBlockComment,
@@ -28,7 +27,10 @@ const APEX_PARSERS_SET = new Set<string>(APEX_PARSERS);
 const APEX_PRINTER_ERROR_MESSAGE =
 	'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. The apex printer was not found.';
 
-const getApexPrinter = (): Parameters<typeof createWrappedPrinter>[0] => {
+// eslint-disable-next-line @typescript-eslint/no-type-alias -- Need to extract array element type
+type ApexPrinterType = Parameters<typeof createWrappedPrinter>[0]; // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array index 0 is required for type extraction
+
+const getApexPrinter = (): ApexPrinterType => {
 	const apexPrinter = (apexPlugin as { printers?: { apex?: unknown } })
 		.printers?.apex;
 	if (
@@ -38,7 +40,7 @@ const getApexPrinter = (): Parameters<typeof createWrappedPrinter>[0] => {
 	) {
 		throw new Error(APEX_PRINTER_ERROR_MESSAGE);
 	}
-	return apexPrinter as Parameters<typeof createWrappedPrinter>[0];
+	return apexPrinter as ApexPrinterType;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -58,6 +60,7 @@ const originalApexPrinter = getApexPrinter();
  * const doc = printComment(path);
  * ```
  */
+/* eslint-disable-next-line @typescript-eslint/max-params -- Prettier printComment API requires 4 parameters */
 const printComment = (
 	path: Readonly<AstPath<ApexNode>>,
 	options: Readonly<ParserOptions>,
@@ -119,16 +122,20 @@ const wrapParsers = (
 	if (!parsers) return parsers;
 	const wrappedParsers: Record<string, unknown> = {};
 	for (const parserName in parsers) {
+		const parser = parsers[parserName];
 		if (
 			!Object.prototype.hasOwnProperty.call(parsers, parserName) ||
-			parsers[parserName] === undefined ||
-			typeof parsers[parserName]?.parse !== 'function'
+			parser === undefined
 		) {
 			continue;
 		}
-		const originalParser = parsers[parserName];
+		if (typeof parser.parse !== 'function') {
+			continue;
+		}
+		const originalParser = parser;
 		wrappedParsers[parserName] = {
 			...originalParser,
+			// eslint-disable-next-line @typescript-eslint/max-params -- parse function requires 2 parameters
 			parse: async (
 				text: Readonly<string>,
 				options: Readonly<ParserOptions<ApexNode>>,
@@ -139,10 +146,14 @@ const wrapParsers = (
 };
 
 const apexPluginTyped = apexPlugin as unknown as Plugin<ApexNode>;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Plugin extension requires spreading
 const plugin: Plugin<ApexNode> = {
 	...apexPluginTyped,
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Printer assignment requires any type
 	printers: {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Printer requires any type
 		apex: wrappedPrinter,
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Printer requires any type
 		'apex-anonymous': wrappedPrinter,
 	},
 };

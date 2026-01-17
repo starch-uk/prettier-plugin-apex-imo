@@ -12,15 +12,15 @@ describe('apexdoc internal functions', () => {
 			'should pass through non-text/non-paragraph docs (line 1046)',
 			() => {
 				const codeDoc: ApexDocComment = {
-					type: 'code',
-					startPos: 0,
-					endPos: 10,
 					code: 'test',
+					endPos: 10,
+					startPos: 0,
+					type: 'code',
 				};
 				const annotationDoc: ApexDocComment = {
-					type: 'annotation',
-					name: 'param',
 					content: 'test',
+					name: 'param',
+					type: 'annotation',
 				};
 
 				const result1 = detectCodeBlockDocs([codeDoc], '');

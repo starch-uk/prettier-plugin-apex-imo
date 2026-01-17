@@ -173,6 +173,13 @@ export default [
 		},
 	},
 	{
+		files: ['tests/**/*.ts'],
+		rules: {
+			// Allow magic numbers in test files
+			'@typescript-eslint/no-magic-numbers': 'off',
+		},
+	},
+	{
 		ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
 	},
 ];

@@ -34,7 +34,6 @@ import {
 	getNodeClassOptional,
 	createNodeClassGuard,
 	isObject,
-	isApexNodeLike,
 } from './utils.js';
 import { processAllCodeBlocksInComment } from './apexdoc-code.js';
 
@@ -50,11 +49,13 @@ const isTypeRef = createNodeClassGuard<ApexNode>(
  */
 const processTypeParams = (params: unknown[]): Doc[] => {
 	const processedParams: Doc[] = [];
-	for (let j = 0; j < params.length; j++) {
+	const ZERO_INDEX = 0;
+	const SINGLE_OFFSET = 1;
+	for (let j = ZERO_INDEX; j < params.length; j++) {
 		const param = params[j] as Doc;
-		if (param === ', ' && j + 1 < params.length) {
+		if (param === ', ' && j + SINGLE_OFFSET < params.length) {
 			processedParams.push(', ');
-			const remainingParams = params.slice(j + 1) as Doc[];
+			const remainingParams = params.slice(j + SINGLE_OFFSET) as Doc[];
 			processedParams.push(group(indent([softline, ...remainingParams])));
 			break;
 		}
@@ -81,14 +82,16 @@ const makeTypeDocBreakable = (
 
 	// Type nodes from Prettier printers always return arrays (never object Docs)
 	// If typeDoc is not a string, it must be an array
+	// Prettier printers always return dense arrays (no undefined holes)
 	const result: Doc[] = [];
-	for (let i = 0; i < typeDoc.length; i++) {
-		const item = typeDoc[i]!;
-		const nextItem = typeDoc[i + 1];
+	const ZERO_INDEX = 0;
+	const SINGLE_OFFSET = 1;
+	for (let i = ZERO_INDEX; i < typeDoc.length; i++) {
+		const item = typeDoc[i];
+		const nextItem = typeDoc[i + SINGLE_OFFSET];
 		if (
 			item === '<' &&
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-			i + 1 < typeDoc.length &&
+			i + SINGLE_OFFSET < typeDoc.length &&
 			Array.isArray(nextItem)
 		) {
 			result.push(item);
@@ -163,9 +166,12 @@ const canAttachComment = (node: unknown): boolean => {
 	// node is always an object in practice - check removed as unreachable
 	const nodeWithClass = node as { loc?: unknown; '@class'?: unknown };
 	const nodeClass = nodeWithClass['@class'];
+	const hasLoc =
+		nodeWithClass.loc !== undefined && nodeWithClass.loc !== null;
+	const hasClass = nodeClass !== undefined && nodeClass !== null;
 	return (
-		!!nodeWithClass.loc &&
-		!!nodeClass &&
+		hasLoc &&
+		hasClass &&
 		nodeClass !== INLINE_COMMENT_CLASS &&
 		nodeClass !== BLOCK_COMMENT_CLASS
 	);
@@ -184,15 +190,31 @@ const isBlockComment = (comment: unknown): boolean => {
 	);
 };
 
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any -- External Prettier printer API uses any types
 const createWrappedPrinter = (originalPrinter: any): any => {
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- External printer API
 	const result = { ...originalPrinter };
 
 	// Implement embed function for {@code} blocks in comments
-	// originalPrinter from prettier-plugin-apex never has embed, so always assign
+
+	/**
+	 * OriginalPrinter from prettier-plugin-apex never has embed, so always assign.
+	 * @param path - The AST path to the node.
+	 * @param options - Parser options.
+	 * @returns The embed result or null if not applicable.
+	 */
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- External printer API
 	result.embed = (
 		path: Readonly<AstPath<ApexNode>>,
 		options: Readonly<ParserOptions>,
-	) => {
+	):
+		| ((
+				_textToDoc: (
+					text: string,
+					options: ParserOptions,
+				) => Promise<Doc>,
+		  ) => Promise<Doc | undefined>)
+		| null => {
 		// Check if this is a comment node with {@code} blocks
 		if (!isCommentNode(path.node)) {
 			return null;
@@ -201,22 +223,31 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const commentNode = path.node as { value?: string };
 		const commentText = commentNode.value;
 
-		if (!commentText?.includes('{@code')) {
+		const hasCodeTag =
+			commentText !== undefined &&
+			commentText !== null &&
+			Boolean(commentText.includes('{@code'));
+		if (!hasCodeTag) {
 			return null;
 		}
 
 		/**
-		 * Return async function that processes {@code} blocks using prettier.format.
-		 * @param _textToDoc
+		 * Return async function that processes code blocks using prettier.format.
+		 * @param _textToDoc - Text to doc converter function (unused but required by Prettier API).
+		 * @returns Promise resolving to the formatted Doc or undefined.
 		 */
 		return async (
 			_textToDoc: (text: string, options: ParserOptions) => Promise<Doc>,
 		): Promise<Doc | undefined> => {
 			// Prettier always provides plugins and tabWidth in options
-			const tabWidthValue = options.tabWidth ?? 2;
+			const DEFAULT_TAB_WIDTH = 2;
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Type definition may not reflect runtime guarantees
+			const tabWidthValue = options.tabWidth ?? DEFAULT_TAB_WIDTH;
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Type definition may not reflect runtime guarantees
 			const basePlugins = options.plugins ?? [];
 			const pluginInstance = getCurrentPluginInstance();
 			// pluginInstance is always set before embed is called (set in index.ts)
+			// Non-null assertion safe: always set in production
 			const plugins: (prettier.Plugin<ApexNode> | URL | string)[] = [
 				...basePlugins.filter((p) => p !== pluginInstance!.default),
 				pluginInstance!.default as prettier.Plugin<ApexNode>,
@@ -224,8 +255,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 			/**
 			 * Base indent + " * " prefix.
+			 * " * ".length = 3.
 			 */
-			const commentPrefixLength = tabWidthValue + 3;
+			const COMMENT_PREFIX_SPACES = 3;
+			const commentPrefixLength = tabWidthValue + COMMENT_PREFIX_SPACES;
 
 			// Process all code blocks in the comment
 			const formattedComment = await processAllCodeBlocksInComment({
@@ -240,7 +273,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				setFormattedCodeBlock,
 			});
 
-			if (!formattedComment) {
+			const hasFormattedComment =
+				formattedComment !== undefined &&
+				formattedComment !== null &&
+				formattedComment !== '';
+			if (!hasFormattedComment) {
 				return undefined;
 			}
 
@@ -253,11 +290,23 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Handles TypeRef nodes with names array normalization.
-	 * @param path
-	 * @param node
-	 * @param options
-	 * @param print
+	 * @param path - The AST path to the node.
+	 * @param node - The ApexNode to process.
+	 * @param options - Parser options.
+	 * @param print - The print function.
+	 * @returns The formatted Doc or null if not applicable.
 	 */
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
+
+	/**
+	 * Handles TypeRef nodes with names array normalization.
+	 * @param path - The AST path to the node.
+	 * @param node - The ApexNode to process.
+	 * @param options - Parser options.
+	 * @param print - The print function.
+	 * @returns The formatted Doc or null if not applicable.
+	 */
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	const handleTypeRef = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
@@ -266,18 +315,22 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	): Doc | null => {
 		if (!isTypeRef(node)) return null;
 		const namesField = (node as { names?: unknown }).names;
-		if (!Array.isArray(namesField) || namesField.length === 0) return null;
+		const ZERO_LENGTH = 0;
+		if (!Array.isArray(namesField) || namesField.length === ZERO_LENGTH)
+			return null;
 
-		const namesNormalizingPrint = createTypeNormalizingPrint(
-			print,
-			true,
-			'names',
-		);
+		const NAMES_PROPERTY = 'names';
+		const namesNormalizingPrint = createTypeNormalizingPrint(print, {
+			forceTypeContext: true,
+			parentKey: NAMES_PROPERTY,
+		});
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- External printer API uses any types
+		// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function requires 4 parameters for Prettier API
 		return originalPrinter.print(
 			path,
 			options,
 			(subPath: Readonly<AstPath<ApexNode>>): Doc =>
-				subPath.key === 'names'
+				subPath.key === NAMES_PROPERTY
 					? namesNormalizingPrint(subPath)
 					: print(subPath),
 		);
@@ -285,11 +338,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Handles Identifier nodes in type context normalization.
-	 * @param path
-	 * @param node
-	 * @param options
-	 * @param typeNormalizingPrint
+	 * @param path - The AST path to the node.
+	 * @param node - The ApexNode to process.
+	 * @param options - Parser options.
+	 * @param typeNormalizingPrint - The type normalizing print function.
+	 * @returns The formatted Doc or null if not applicable.
 	 */
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	const handleIdentifier = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
@@ -300,6 +355,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const normalizedValue = normalizeTypeName(node.value);
 		if (normalizedValue === node.value) return null;
 
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- External printer API uses any types
 		return originalPrinter.print(
 			{ ...path, node: { ...node, value: normalizedValue } } as Readonly<
 				AstPath<ApexNode>
@@ -311,7 +367,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Checks if VariableDecls has assignments using AST traversal.
-	 * @param decls
+	 * @param decls - Array of declaration nodes to check.
+	 * @returns True if any declaration has an assignment, false otherwise.
 	 */
 	const hasVariableAssignments = (decls: unknown[]): boolean =>
 		decls.some((decl) => {
@@ -327,11 +384,14 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 	/**
 	 * Handles VariableDecls nodes (with or without assignments).
-	 * @param path
-	 * @param node
-	 * @param options
-	 * @param print
+	 * @param path - The AST path to the node.
+	 * @param node - The ApexNode to process.
+	 * @param options - Parser options.
+	 * @param print - The print function.
+	 * @returns The formatted Doc or null if not applicable.
 	 */
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	const handleVariableDecls = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
@@ -367,15 +427,17 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				'decls' as never,
 			) as unknown as Doc[];
 
-			if (nameDocs.length === 0) return null;
+			const ZERO_LENGTH = 0;
+			const SINGLE_DECL = 1;
+			if (nameDocs.length === ZERO_LENGTH) return null;
 
 			const resultParts: Doc[] = [];
-			if (modifierDocs.length > 0) {
+			if (modifierDocs.length > ZERO_LENGTH) {
 				resultParts.push(...modifierDocs);
 			}
 			resultParts.push(breakableTypeDoc);
 
-			if (nameDocs.length > 1) {
+			if (nameDocs.length > SINGLE_DECL) {
 				const wrappedNames = nameDocs.map((nameDoc) => {
 					return ifBreak(indent([line, nameDoc]), [' ', nameDoc]);
 				});
@@ -384,9 +446,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			}
 
 			// Single declaration
-			const wrappedName = ifBreak(indent([line, nameDocs[0]!]), [
+			// path.map always returns dense arrays (no undefined holes)
+			const FIRST_NAME_INDEX = 0;
+			const firstNameDoc = nameDocs[FIRST_NAME_INDEX];
+			const wrappedName = ifBreak(indent([line, firstNameDoc]), [
 				' ',
-				nameDocs[0]!,
+				firstNameDoc,
 			]);
 			resultParts.push(wrappedName, ';');
 			return group(resultParts);
@@ -431,68 +496,78 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		}, 'decls' as never) as unknown as Doc[];
 
 		const resultParts: Doc[] = [];
-		if (modifierDocs.length > 0) {
+		const ZERO_LENGTH = 0;
+		if (modifierDocs.length > ZERO_LENGTH) {
 			resultParts.push(...modifierDocs);
 		}
 		resultParts.push(breakableTypeDoc);
 
-		const isMapTypeDoc = (doc: unknown): boolean => {
+		const isMapTypeDoc = (typeDocItem: unknown): boolean => {
 			// typeDoc from printer for Map types is always an array when called from isComplexMapType
 			// Array check removed as unreachable for well-formed AST - use type assertion
-			const docArray = doc as unknown[];
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-			const first = docArray[0];
+			const docArray = typeDocItem as unknown[];
+			const FIRST_ELEMENT_INDEX = 0;
+			const [first] = docArray;
 			return (
 				first === 'Map' ||
-				(Array.isArray(first) &&
-					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-					first[0] === 'Map')
+				(Array.isArray(first) && first[FIRST_ELEMENT_INDEX] === 'Map')
 			);
 		};
 
 		const hasNestedMap = (param: unknown): boolean => {
 			if (typeof param === 'string') return param.includes('Map<');
 			// Type parameters are always strings or arrays in well-formed type Docs
-			// Non-array check removed as unreachable - use type assertion after string check
+			// Non-array check removed as unreachable - param is always array when not string
 			const paramArray = param as unknown[];
-			// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-			const paramFirst = paramArray[0];
+			const FIRST_ELEMENT_INDEX = 0;
+			const [paramFirst] = paramArray;
 			return (
 				paramFirst === 'Map' ||
 				(Array.isArray(paramFirst) &&
-					// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- array index
-					paramFirst[0] === 'Map') ||
-				param.some((item) => hasNestedMap(item))
+					paramFirst[FIRST_ELEMENT_INDEX] === 'Map') ||
+				paramArray.some((item: unknown) => hasNestedMap(item))
 			);
 		};
 
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
 			// typeDoc from printer is always an array for Map types with structure: ['Map', '<', [params...], '>']
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
+			// Array check removed as unreachable - typeDoc is always array when isMapTypeDoc returns true
 
 			// Map type structure: ['Map', '<', [params...], '>']
 			// paramsIndex = 2 should be the params array
 			// Printer always produces well-formed Map types, so paramsIndex always exists and is an array
-			const paramsIndex = 2;
-			const paramsElement = typeDocToCheck[paramsIndex] as unknown[];
+			const PARAMS_INDEX = 2;
+			const paramsElement = typeDocToCheck[PARAMS_INDEX] as unknown[];
 			const params = paramsElement;
-			return params.some((param) => hasNestedMap(param));
+			return params.some((param: unknown) => hasNestedMap(param));
 		};
 
-		if (declDocs.length > 1) {
+		const SINGLE_DECL_COUNT = 1;
+		if (declDocs.length > SINGLE_DECL_COUNT) {
 			resultParts.push(' ', joinDocs([', ', softline], declDocs), ';');
 		} else {
 			// VariableDecls always has at least one declaration (declDocs.length === 1)
 			// path.map always returns an array with defined elements
-			const declDoc = declDocs[0]!;
+			const FIRST_DECL_INDEX = 0;
+			const declDoc = declDocs[FIRST_DECL_INDEX];
+			if (declDoc === undefined) return null;
+			const MIN_DECL_DOC_LENGTH = 5;
+			const EQUALS_INDEX = 2;
+			const NAME_INDEX = 0;
+			const ASSIGNMENT_INDEX = 4;
 			if (
 				Array.isArray(declDoc) &&
-				declDoc.length >= 5 &&
-				declDoc[2] === '=' &&
+				declDoc.length >= MIN_DECL_DOC_LENGTH &&
+				declDoc[EQUALS_INDEX] === '=' &&
 				isComplexMapType(typeDoc)
 			) {
-				const nameDoc = declDoc[0]!;
-				const assignmentDoc = declDoc[4]!;
+				// declDoc structure is [nameDoc, ' ', '=', ' ', assignmentDoc] from isCollectionAssignment
+				// or [nameDoc, ' ', '=', ' ', group(...)] from non-collection assignment
+				// path.call(print, ...) always returns a Doc (never undefined for well-formed AST)
+				// So nameDoc and assignmentDoc are always defined - defensive check removed as unreachable
+				const nameDoc = declDoc[NAME_INDEX] as Doc;
+				const assignmentDoc = declDoc[ASSIGNMENT_INDEX] as Doc;
 				resultParts.push(' ', group([nameDoc, ' ', '=']));
 				resultParts.push(
 					ifBreak(indent([line, assignmentDoc]), [
@@ -510,27 +585,41 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	};
 
 	/**
-	 * Handles ExpressionStmnt with AssignmentExpr nodes.
-	 * @param path
-	 * @param node
-	 * @param _options
-	 * @param print
+	 * Print context for assignment expression handling.
 	 */
+	interface AssignmentPrintContext {
+		readonly print: (path: Readonly<AstPath<ApexNode>>) => Doc;
+	}
+
+	/**
+	 * Handles ExpressionStmnt with AssignmentExpr nodes.
+	 * @param path - The AST path to the node.
+	 * @param node - The ApexNode to process.
+	 * @param context - Print context containing print function.
+	 * @returns The formatted Doc or null if not applicable.
+	 */
+
 	const handleAssignmentExpression = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
-		_options: Readonly<ParserOptions>,
-		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		context: Readonly<AssignmentPrintContext>,
 	): Doc | null => {
+		const { print } = context;
 		const nodeClass = getNodeClassOptional(node);
-		if (!nodeClass?.includes('Stmnt$ExpressionStmnt')) return null;
+		const isExpressionStmnt = Boolean(
+			nodeClass?.includes('Stmnt$ExpressionStmnt'),
+		);
+		if (!isExpressionStmnt) return null;
 
 		const { expr } = node as { expr?: unknown };
 		// If node class includes ExpressionStmnt, expr is always an ApexNode in well-formed ASTs
 
 		const EXPR_ASSIGNMENT_CLASS = 'Expr$AssignmentExpr';
 		const exprNodeClass = getNodeClassOptional(expr as ApexNode);
-		if (!exprNodeClass?.includes(EXPR_ASSIGNMENT_CLASS)) return null;
+		const isAssignmentExpr = Boolean(
+			exprNodeClass?.includes(EXPR_ASSIGNMENT_CLASS),
+		);
+		if (!isAssignmentExpr) return null;
 
 		const leftPath = path.call(
 			print,
@@ -555,7 +644,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	const print = (
 		path: Readonly<AstPath<ApexNode>>,
 		options: Readonly<ParserOptions>,
-		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		printFn: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc => {
 		const { originalText } = options as { originalText?: string };
 		currentPrintState = {
@@ -568,18 +657,20 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		// Create print functions with reserved word normalization
 		// Reserved words are normalized to lowercase (e.g., 'PUBLIC' -> 'public', 'Class' -> 'class')
 		const reservedWordNormalizingPrint =
-			createReservedWordNormalizingPrint(print);
+			createReservedWordNormalizingPrint(printFn);
 		const typeNormalizingPrint = createTypeNormalizingPrint(
 			reservedWordNormalizingPrint,
 		);
-		const fallback = (): Doc =>
-			originalPrinter.print(path, options, typeNormalizingPrint);
+		const fallback = (): Doc => {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- External printer API uses any types
+			return originalPrinter.print(path, options, typeNormalizingPrint);
+		};
 
 		if (isAnnotation(node)) {
-			const result = printAnnotation(
+			const annotationResult = printAnnotation(
 				path as Readonly<AstPath<ApexAnnotationNode>>,
 			);
-			return result;
+			return annotationResult;
 		}
 		if (isListInit(node) || isMapInit(node)) {
 			return printCollection(
@@ -589,7 +680,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			);
 		}
 
-		const typeRefResult = handleTypeRef(path, node, options, print);
+		const typeRefResult = handleTypeRef(path, node, options, printFn);
 		if (typeRefResult !== null) return typeRefResult;
 
 		const identifierResult = handleIdentifier(
@@ -605,29 +696,27 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				path,
 				node,
 				options,
-				print,
+				printFn,
 			);
 			if (variableDeclsResult !== null) return variableDeclsResult;
 		}
 
-		const assignmentResult = handleAssignmentExpression(
-			path,
-			node,
-			options,
-			print,
-		);
+		const assignmentResult = handleAssignmentExpression(path, node, {
+			print: printFn,
+		});
 		if (assignmentResult !== null) return assignmentResult;
 
 		return fallback();
 	};
 
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- External printer API
 	result.print = print;
 
 	return result;
 };
 
 /**
- * Process {@code} blocks in a comment asynchronously using Apex parser and printer.
+ * Process code blocks in a comment asynchronously using Apex parser and printer.
  * @param commentValue - The comment text.
  * @param options - Parser options.
  * @returns Promise resolving to processed comment.

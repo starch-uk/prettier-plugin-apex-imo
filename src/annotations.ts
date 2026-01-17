@@ -28,6 +28,7 @@ const ANNOTATION_KEY_VALUE_CLASS =
 
 const isAnnotation = createNodeClassGuard<ApexAnnotationNode>(ANNOTATION_CLASS);
 
+const ZERO_INDEX = 0;
 const normalizeAnnotationName = (name: string): string =>
 	APEX_ANNOTATIONS[name.toLowerCase()] ?? name;
 
@@ -137,11 +138,13 @@ const printAnnotation = (
 			hardline,
 		]);
 	}
-	const [singleParam] = formattedParams;
+	const FIRST_PARAM_INDEX = ZERO_INDEX;
 	// singleParam cannot be undefined here because:
 	// 1. We already checked parametersLength === EMPTY above
 	// 2. formatAnnotationParam always returns a Doc (never undefined)
 	// 3. So formattedParams.length === parametersLength > 0
+	// Non-null assertion safe: singleParam is always defined per above checks
+	const singleParam = formattedParams[FIRST_PARAM_INDEX]!;
 	return group([
 		'@',
 		normalizedName,

@@ -6,12 +6,15 @@
  * returns undefined.
  */
 
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/prefer-readonly-parameter-types */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWrappedPrinter } from '../src/printer.js';
 import type { ApexNode } from '../src/types.js';
+import {
+	setCurrentPluginInstance,
+	getCurrentPluginInstance,
+} from '../src/printer.js';
 import { createMockPath, createMockOptions } from './test-utils.js';
-import { setCurrentPluginInstance } from '../src/printer.js';
 
 // Mock processAllCodeBlocksInComment to control its return value
 const mockProcessAllCodeBlocksInComment = vi.fn();
@@ -33,6 +36,13 @@ const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
 describe('printer embed function', () => {
 	beforeEach(() => {
 		mockProcessAllCodeBlocksInComment.mockClear();
+		// Ensure plugin instance is set for most tests
+		setCurrentPluginInstance({ default: {} });
+	});
+
+	afterEach(() => {
+		// Restore plugin instance after each test
+		setCurrentPluginInstance({ default: {} });
 	});
 
 	it('should add embed function when original printer does not have one (line 194)', () => {

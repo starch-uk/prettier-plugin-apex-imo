@@ -50,28 +50,28 @@
 		"format:check": "prettier --check .",
 		"prepare": "husky"
 	},
-	"packageManager": "pnpm@10.26.2",
+	"packageManager": "pnpm@10.28.0",
 	"peerDependencies": {
 		"prettier": "^3.0.0",
 		"prettier-plugin-apex": "^2.0.0"
 	},
 	"devDependencies": {
-		"@types/node": "^25.0.3",
-		"@typescript-eslint/eslint-plugin": "^8.52.0",
-		"@typescript-eslint/parser": "^8.52.0",
-		"@vitest/coverage-v8": "^4.0.16",
-		"agent-docs": "^1.0.1",
+		"@types/node": "^25.0.9",
+		"@typescript-eslint/eslint-plugin": "^8.53.0",
+		"@typescript-eslint/parser": "^8.53.0",
+		"@vitest/coverage-v8": "^4.0.17",
+		"agent-docs": "^1.4.0",
 		"eslint": "^9.39.2",
 		"eslint-plugin-import": "^2.32.0",
-		"eslint-plugin-jsdoc": "^61.5.0",
+		"eslint-plugin-jsdoc": "^62.0.0",
 		"eslint-plugin-sort-class-members": "^1.21.0",
 		"eslint-plugin-sort-keys": "^2.3.5",
 		"husky": "^9.1.7",
-		"prettier": "^3.7.4",
+		"prettier": "^3.8.0",
 		"prettier-plugin-apex": "^2.2.6",
 		"tsup": "^8.5.1",
 		"typescript": "^5.9.3",
-		"vitest": "^4.0.16"
+		"vitest": "^4.0.17"
 	},
 	"engines": {
 		"node": ">=20"

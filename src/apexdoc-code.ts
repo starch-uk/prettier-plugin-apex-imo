@@ -26,6 +26,10 @@ const COMMENT_PREFIX_LENGTH = 4;
 const CLOSING_COMMENT_LENGTH = 5;
 const ALT_CLOSING_COMMENT_LENGTH = 4;
 const SKIP_FIRST_TWO_LINES = 2;
+const FIRST_LINE_INDEX_CONST = 0;
+const INDEX_OFFSET_ONE = 1;
+const NOT_FOUND_POS = -1;
+const ZERO_LENGTH_CONST = 0;
 
 /**
  * Extracts code from a code block by counting braces.
@@ -85,16 +89,16 @@ const extractCodeFromBlock = (
 	// Preserve blank lines: remove only leading/trailing blank lines, keep middle ones
 	// Split into lines to process leading/trailing separately
 	const codeLines = code.split('\n');
-	const FIRST_LINE_INDEX = 0;
+	const FIRST_LINE_INDEX = FIRST_LINE_INDEX_CONST;
 	while (
-		codeLines.length > 0 &&
+		codeLines.length > ZERO_LENGTH_CONST &&
 		codeLines[FIRST_LINE_INDEX]?.trim().length === EMPTY
 	) {
 		codeLines.shift();
 	}
-	const LAST_LINE_INDEX = codeLines.length - 1;
+	const LAST_LINE_INDEX = codeLines.length - INDEX_OFFSET_ONE;
 	while (
-		codeLines.length > 0 &&
+		codeLines.length > ZERO_LENGTH_CONST &&
 		codeLines[LAST_LINE_INDEX]?.trim().length === EMPTY
 	) {
 		codeLines.pop();
@@ -106,9 +110,10 @@ const extractCodeFromBlock = (
 
 /**
  * Counts braces in a line and determines if code block ends.
+ * Iterates through characters in the line and tracks opening/closing braces to determine if the code block will close.
  * @param trimmedLine - The trimmed line to process.
- * @param currentBraceCount - The current brace count.
- * @returns Object with updated brace count and whether code block ends.
+ * @param currentBraceCount - The current brace count before processing this line.
+ * @returns Object with updated brace count and whether code block ends (braceCount === 0).
  */
 const countBracesAndCheckEnd = (
 	trimmedLine: string,
@@ -124,9 +129,10 @@ const countBracesAndCheckEnd = (
 
 /**
  * Determines if a line starts a code block.
+ * Checks if the line begins with the code tag and we're not already in a code block.
  * @param trimmedLine - The trimmed line to check.
- * @param inCodeBlock - Current code block state.
- * @returns True if this line starts a code block.
+ * @param inCodeBlock - Current code block state indicating if we're already inside a code block.
+ * @returns True if this line starts a new code block, false otherwise.
  */
 const shouldStartCodeBlock = (
 	trimmedLine: string,
@@ -137,12 +143,14 @@ const shouldStartCodeBlock = (
 
 /**
  * Processes a code content line and returns updated state and processed line.
+ * Removes comment prefix and counts braces to track code block state.
  * @param trimmedLine - The trimmed line being processed.
- * @param commentLine - The original comment line.
+ * @param commentLine - The original comment line with prefix.
  * @param prefix - Prefix to add to processed line.
- * @param codeBlockBraceCount - Current brace count.
- * @returns Object with updated brace count, willEnd flag, and processed line.
+ * @param codeBlockBraceCount - Current brace count before processing this line.
+ * @returns Object with updated brace count, willEnd flag indicating if block closes, and processed line.
  */
+/* eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for code content processing */
 const processCodeContentLine = (
 	trimmedLine: string,
 	commentLine: string,
@@ -152,6 +160,7 @@ const processCodeContentLine = (
 	codeBlockBraceCount: number;
 	willEnd: boolean;
 	processedLine: string;
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function with 4 params
 } => {
 	const braceResult = countBracesAndCheckEnd(
 		trimmedLine,
@@ -160,39 +169,45 @@ const processCodeContentLine = (
 	const processedLine = prefix + removeCommentPrefix(commentLine, true);
 	return {
 		codeBlockBraceCount: braceResult.braceCount,
-		willEnd: braceResult.willEnd,
 		processedLine,
+		willEnd: braceResult.willEnd,
 	};
 };
 
 /**
  * Processes a regular (non-code content) line.
- * @param trimmedLine - The trimmed line.
- * @param commentLine - The original comment line.
- * @param prefix - Prefix to add.
- * @param index - Current line index.
- * @param totalLines - Total number of lines.
- * @returns Processed line string.
+ * Adds prefix and handles last line specially to preserve original formatting.
+ * @param trimmedLine - The trimmed line without prefix.
+ * @param commentLine - The original comment line with prefix.
+ * @param prefix - Prefix to add to the line.
+ * @param index - Current line index (0-based).
+ * @param totalLines - Total number of lines being processed.
+ * @returns Processed line string with prefix added.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for regular line processing
 const processRegularLine = (
 	trimmedLine: string,
 	commentLine: string,
 	prefix: string,
 	index: number,
 	totalLines: number,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): string => {
 	return (
 		prefix +
-		(index < totalLines - 1 ? trimmedLine : commentLine.trimStart())
+		(index < totalLines - INDEX_OFFSET_ONE
+			? trimmedLine
+			: commentLine.trimStart())
 	);
 };
 
 /**
  * Computes the new code block state based on whether a code block should start.
- * @param trimmedLine - The trimmed line to check.
- * @param currentInCodeBlock - Current code block state.
- * @param currentBraceCount - Current brace count.
- * @returns Object with updated inCodeBlock and codeBlockBraceCount values.
+ * Updates code block state and brace count when a new code block tag is encountered.
+ * @param trimmedLine - The trimmed line to check for code block start.
+ * @param currentInCodeBlock - Current code block state indicating if we're inside a code block.
+ * @param currentBraceCount - Current brace count before processing this line.
+ * @returns Object with updated inCodeBlock state and codeBlockBraceCount after processing.
  */
 const computeNewCodeBlockState = (
 	trimmedLine: string,
@@ -207,22 +222,27 @@ const computeNewCodeBlockState = (
 		currentInCodeBlock,
 	);
 	return {
-		newInCodeBlock: startsCodeBlock ? true : currentInCodeBlock,
 		newBraceCount: startsCodeBlock
 			? INITIAL_BRACE_COUNT
 			: currentBraceCount,
+		newInCodeBlock: startsCodeBlock ? true : currentInCodeBlock,
 	};
 };
 
 /**
  * Processes a code content line and updates the accumulator.
+ * Adds processed code content line to result array and updates code block state.
  * @param accumulator - Current state with result array and code block tracking.
+ * @param accumulator.result - Array of processed line strings.
+ * @param accumulator.inCodeBlock - Current code block state.
+ * @param accumulator.codeBlockBraceCount - Current brace count in code block.
  * @param trimmedLine - The trimmed line being processed.
  * @param commentLine - The original comment line.
  * @param prefix - Prefix to add to processed line.
  * @param newBraceCount - Current brace count for the code block.
- * @returns Updated accumulator with processed code content line.
+ * @returns Updated accumulator with processed code content line added and state updated.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for accumulator-based processing
 const processLineAsCodeContent = (
 	accumulator: {
 		result: string[];
@@ -237,6 +257,7 @@ const processLineAsCodeContent = (
 	result: string[];
 	inCodeBlock: boolean;
 	codeBlockBraceCount: number;
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function with 5 params
 } => {
 	const contentResult = processCodeContentLine(
 		trimmedLine,
@@ -245,24 +266,29 @@ const processLineAsCodeContent = (
 		newBraceCount,
 	);
 	return {
-		result: [...accumulator.result, contentResult.processedLine],
-		inCodeBlock: !contentResult.willEnd,
 		codeBlockBraceCount: contentResult.codeBlockBraceCount,
+		inCodeBlock: !contentResult.willEnd,
+		result: [...accumulator.result, contentResult.processedLine],
 	};
 };
 
 /**
  * Processes a regular (non-code content) line and updates the accumulator.
+ * Adds processed regular line to result array and updates code block state.
  * @param accumulator - Current state with result array and code block tracking.
- * @param trimmedLine - The trimmed line.
+ * @param accumulator.result - Array of processed line strings.
+ * @param accumulator.inCodeBlock - Current code block state.
+ * @param accumulator.codeBlockBraceCount - Current brace count in code block.
+ * @param trimmedLine - The trimmed line to process.
  * @param commentLine - The original comment line.
  * @param prefix - Prefix to add.
- * @param index - Current line index.
- * @param totalLines - Total number of lines.
- * @param newInCodeBlock - New code block state.
- * @param newBraceCount - New brace count.
- * @returns Updated accumulator with processed regular line.
+ * @param index - Current line index (0-based).
+ * @param totalLines - Total number of lines being processed.
+ * @param newInCodeBlock - New code block state after processing.
+ * @param newBraceCount - New brace count after processing.
+ * @returns Updated accumulator with processed regular line added to result array and code block state updated.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 8 parameters for accumulator-based processing
 const processLineAsRegular = (
 	accumulator: {
 		result: string[];
@@ -280,6 +306,7 @@ const processLineAsRegular = (
 	result: string[];
 	inCodeBlock: boolean;
 	codeBlockBraceCount: number;
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function with 8 params
 } => {
 	const regularLine = processRegularLine(
 		trimmedLine,
@@ -289,20 +316,25 @@ const processLineAsRegular = (
 		totalLines,
 	);
 	return {
-		result: [...accumulator.result, regularLine],
-		inCodeBlock: newInCodeBlock,
 		codeBlockBraceCount: newBraceCount,
+		inCodeBlock: newInCodeBlock,
+		result: [...accumulator.result, regularLine],
 	};
 };
 
 /**
  * Processes a single line and returns updated state and result.
+ * Routes line to appropriate processor based on code block state and content.
  * @param accumulator - Current state with result array and code block tracking.
+ * @param accumulator.result - Array of processed line strings.
+ * @param accumulator.inCodeBlock - Current code block state.
+ * @param accumulator.codeBlockBraceCount - Current brace count in code block.
  * @param commentLine - The comment line to process.
- * @param index - Current line index.
- * @param totalLines - Total number of lines.
+ * @param index - Current line index (0-based).
+ * @param totalLines - Total number of lines being processed.
  * @returns Updated accumulator with new state and processed line added.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for line processing
 const processLine = (
 	accumulator: {
 		result: string[];
@@ -316,8 +348,9 @@ const processLine = (
 	result: string[];
 	inCodeBlock: boolean;
 	codeBlockBraceCount: number;
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function with 4 params
 } => {
-	const prefix = index > EMPTY ? ' ' : '';
+	const prefix = index > ZERO_LENGTH_CONST ? ' ' : '';
 	const trimmedLine = commentLine.trim();
 	const isCodeTagLine = trimmedLine.startsWith(CODE_TAG);
 
@@ -361,9 +394,9 @@ const processLine = (
  */
 const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	const initialState = {
-		result: [] as string[],
-		inCodeBlock: false,
 		codeBlockBraceCount: 0,
+		inCodeBlock: false,
+		result: [] as string[],
 	};
 
 	const finalState = lines.reduce(
@@ -392,10 +425,18 @@ const extractCodeFromEmbedResult = (embedResult: string): string[] => {
 	if (embedContent.startsWith('/**\n')) {
 		embedContent = embedContent.substring(COMMENT_PREFIX_LENGTH);
 	}
+	const ZERO_OFFSET = 0;
+	// Remove closing comment marker: either '\n */\n' or '\n */'
+	// processAllCodeBlocksInComment can return comments ending with either
+	// depending on whether original commentText had trailing newline after */
 	if (embedContent.endsWith('\n */\n')) {
-		embedContent = embedContent.slice(0, -CLOSING_COMMENT_LENGTH);
-	} else if (embedContent.endsWith('\n */')) {
-		embedContent = embedContent.slice(0, -ALT_CLOSING_COMMENT_LENGTH);
+		embedContent = embedContent.slice(ZERO_OFFSET, -CLOSING_COMMENT_LENGTH);
+	}
+	if (embedContent.endsWith('\n */')) {
+		embedContent = embedContent.slice(
+			ZERO_OFFSET,
+			-ALT_CLOSING_COMMENT_LENGTH,
+		);
 	}
 
 	const embedLines = embedContent.split('\n');
@@ -417,15 +458,17 @@ const extractCodeFromEmbedResult = (embedResult: string): string[] => {
 		return line;
 	});
 
+	// split('\n') always returns string[] (no undefined holes)
+	// So processedLines elements are always strings, never undefined
+	// line?.startsWith(...) ?? false is defensive but line is never undefined
 	const codeStart = processedLines.findIndex(
-		(line: string | undefined) => line != null && line.startsWith('{@code'),
+		(line: string) => line.startsWith('{@code'),
 	);
 	const codeEnd = processedLines.findIndex(
-		(line: string | undefined, i: number) =>
-			i > codeStart && line != null && line === '}',
+		(line: string | undefined, i: number) => i > codeStart && line === '}',
 	);
 
-	if (codeStart >= EMPTY && codeEnd > codeStart) {
+	if (codeStart >= ZERO_LENGTH_CONST && codeEnd > codeStart) {
 		return processedLines
 			.slice(codeStart + INDEX_ONE, codeEnd)
 			.filter((line): line is string => typeof line === 'string');
@@ -435,15 +478,16 @@ const extractCodeFromEmbedResult = (embedResult: string): string[] => {
 };
 
 /**
- * Processes a {&#64;code} block, returning formatted lines.
+ * Processes a code block, returning formatted lines.
+ * Extracts code content, formats it, and wraps it in code block tags.
  * @param codeBlock - The code block text to process.
  * @param _options - Parser options (unused).
- * @param getFormattedCodeBlock - Function to get formatted code blocks.
+ * @param getFormattedCodeBlock - Function to get formatted code blocks from cache.
  * @param commentKey - Key for the comment or null.
  * @param _embedOptions - Embed options (unused).
  * @returns Array of formatted lines.
  */
-// eslint-disable-next-line @typescript-eslint/max-params
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for code block processing
 function processCodeBlock(
 	codeBlock: string,
 	_options: ParserOptions,
@@ -453,22 +497,29 @@ function processCodeBlock(
 ): string[] {
 	// Use extractCodeFromBlock instead of regex to extract code content
 	if (!codeBlock.startsWith(CODE_TAG)) return [codeBlock];
-	const extractResult = extractCodeFromBlock(codeBlock, 0);
+	const EXTRACT_START_POS = 0;
+	const extractResult = extractCodeFromBlock(codeBlock, EXTRACT_START_POS);
 	if (!extractResult) return [codeBlock];
 	const codeContent = extractResult.code;
-	if (codeContent.length === EMPTY) {
+	if (codeContent.length === ZERO_LENGTH_CONST) {
 		return [codeBlock];
 	}
 
 	const codeLines = codeContent.split('\n');
 
-	if (codeLines.length === INDEX_ONE) {
+	if (codeLines.length === INDEX_OFFSET_ONE) {
 		const separator = codeContent.trim().endsWith(';') ? ' ' : '';
 		return [`{@code ${codeContent}${separator}}`];
 	}
 
-	const embedResult = commentKey ? getFormattedCodeBlock(commentKey) : null;
-	if (embedResult) {
+	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- commentKey may be null/undefined/empty, needs explicit checks
+	const embedResult =
+		commentKey !== null && commentKey !== undefined && commentKey !== ''
+			? getFormattedCodeBlock(commentKey)
+			: null;
+	const hasEmbedResult =
+		embedResult !== null && embedResult !== undefined && embedResult !== '';
+	if (hasEmbedResult) {
 		const extractedCodeLines = extractCodeFromEmbedResult(embedResult);
 		return [`{@code`, ...extractedCodeLines, `}`];
 	}
@@ -484,15 +535,19 @@ function processCodeBlock(
  * @param formattedCode - Optional formatted code string (if code was already formatted by embed function).
  * @returns The ApexDocCodeBlock object.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for code block creation
 const createDocCodeBlock = (
 	startPos: number,
 	endPos: number,
 	rawCode: string,
 	formattedCode?: string,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): ApexDocCodeBlock => {
 	// Use formattedCode if available, otherwise use rawCode for Doc content
 	const codeToUse = formattedCode ?? rawCode;
 	const codeLines = codeToUse.split('\n');
+	// split('\n') always returns at least one element (never empty array)
+	// So codeLines.length === ZERO_LENGTH_CONST is unreachable - removed
 	const { join, hardline } = docBuilders;
 	const linesToDocLines = (lines: readonly string[]): Doc[] =>
 		lines.map((line) => line as Doc);
@@ -503,11 +558,9 @@ const createDocCodeBlock = (
 		type: 'code',
 		...(formattedCode !== undefined ? { formattedCode } : {}),
 		content:
-			codeLines.length === 0
-				? ('' as Doc)
-				: codeLines.length === 1
-					? (codeLines[0] as Doc)
-					: join(hardline, [...linesToDocLines(codeLines)]),
+			codeLines.length === INDEX_OFFSET_ONE
+				? (codeLines[ZERO_LENGTH_CONST] as Doc)
+				: join(hardline, [...linesToDocLines(codeLines)]),
 	};
 };
 
@@ -546,11 +599,12 @@ const renderCodeBlockInComment = (
 };
 
 /**
- * Processes all {@code} blocks in a comment text, formats them, and returns the formatted comment.
+ * Processes all code blocks in a comment text, formats them, and returns the formatted comment.
  * This is used by the Prettier embed function to process code blocks in comments.
+ * Extracts each code block, formats it using Prettier, and replaces it in the comment.
  * @param root0 - The parameters object.
- * @param root0.commentText - The comment text containing {@code} blocks.
- * @param root0.options - Parser options.
+ * @param root0.commentText - The comment text containing code blocks.
+ * @param root0.options - Parser options for formatting.
  * @param root0.plugins - Array of plugins to use for formatting.
  * @param root0.commentPrefixLength - Length of the comment prefix (tabWidth + 3).
  * @param root0.setFormattedCodeBlock - Function to cache formatted code blocks.
@@ -579,7 +633,9 @@ const processAllCodeBlocksInComment = async ({
 	let startIndex = 0;
 	let hasChanges = false;
 
-	while ((startIndex = result.indexOf(CODE_TAG, startIndex)) !== -1) {
+	while (
+		(startIndex = result.indexOf(CODE_TAG, startIndex)) !== NOT_FOUND_POS
+	) {
 		// Use extractCodeFromBlock for proper brace-counting extraction
 		const extraction = extractCodeFromBlock(result, startIndex);
 		if (!extraction) {
@@ -605,9 +661,9 @@ const processAllCodeBlocksInComment = async ({
 		const formattedLines = formattedCode.trim().split('\n');
 		const resultLines: string[] = [];
 
+		// split('\n') always returns array without holes (no undefined elements)
 		for (let i = 0; i < formattedLines.length; i++) {
 			const formattedLine = formattedLines[i];
-			if (formattedLine === undefined) continue;
 			resultLines.push(formattedLine);
 			// Insert blank line after } when followed by annotations or access modifiers
 			if (
@@ -623,14 +679,15 @@ const processAllCodeBlocksInComment = async ({
 		formattedCode = resultLines.join('\n');
 
 		// Replace the code block with formatted version
-		const beforeCode = result.substring(0, startIndex);
+		const SUBSTRING_START = 0;
+		const beforeCode = result.substring(SUBSTRING_START, startIndex);
 		const afterCode = result.substring(extraction.endPos);
 		const formattedCodeLines = formattedCode.trim().split('\n');
 		const prefixedCodeLines = formattedCodeLines.map((line) =>
 			line ? ` * ${line}` : ' *',
 		);
 		const needsLeadingNewline = !beforeCode.endsWith('\n');
-		const isEmptyBlock = codeContent.trim().length === 0;
+		const isEmptyBlock = codeContent.trim().length === ZERO_LENGTH_CONST;
 		const newCodeBlock = isEmptyBlock
 			? (needsLeadingNewline ? '\n' : '') + ` * ${CODE_TAG}}\n`
 			: (needsLeadingNewline ? '\n' : '') +
@@ -647,13 +704,13 @@ const processAllCodeBlocksInComment = async ({
 	}
 
 	// Store formatted comment in cache for retrieval by processApexDocCommentLines
+	// commentText always contains CODE_TAG when this function is called (checked before calling)
+	// So codeTagPos is always !== NOT_FOUND_POS - check removed as unreachable
 	const codeTagPos = commentText.indexOf(CODE_TAG);
-	if (codeTagPos !== -1) {
-		setFormattedCodeBlock(
-			`${String(commentText.length)}-${String(codeTagPos)}`,
-			result,
-		);
-	}
+	setFormattedCodeBlock(
+		`${String(commentText.length)}-${String(codeTagPos)}`,
+		result,
+	);
 
 	return result;
 };
@@ -663,6 +720,7 @@ export {
 	CODE_TAG_LENGTH,
 	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
+	extractCodeFromEmbedResult,
 	processCodeBlock,
 	processCodeBlockLines,
 	processAllCodeBlocksInComment,

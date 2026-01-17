@@ -25,6 +25,13 @@ import {
 import { APEXDOC_ANNOTATIONS_SET } from './refs/apexdoc-annotations.js';
 import { normalizeGroupContent } from './apexdoc-group.js';
 
+const INDEX_OFFSET = 1;
+const SINGLE_LINE = 1;
+const ZERO_LINES = 0;
+const ZERO_WIDTH = 0;
+const EMPTY_STRING = '';
+const ZERO_LENGTH = 0;
+
 /**
  * Extracts text before an annotation, filtering out annotation patterns.
  * @param line - The line containing the annotation.
@@ -47,12 +54,14 @@ const extractBeforeText = (line: string, matchIndex: number): string => {
 
 /**
  * Collects continuation lines for an annotation from normalizedComment.
- * @param annotationName - The annotation name.
- * @param content - The initial annotation content.
+ * Searches for annotation content that spans multiple lines and combines them into a single content string.
+ * This handles cases where annotation text continues on subsequent lines without a new annotation marker.
+ * @param annotationName - The annotation name to search for.
+ * @param content - The initial annotation content found on the first line.
  * @param _line - The current line text (unused).
- * @param normalizedComment - The normalized comment text.
- * @param consumedContent - Set to track consumed content.
- * @returns The full annotation content with continuation lines.
+ * @param normalizedComment - The normalized comment text to search within.
+ * @param consumedContent - Set to track consumed content and prevent duplication.
+ * @returns The full annotation content with continuation lines combined.
  */
 const collectContinuationFromComment = (
 	annotationName: string,
@@ -60,6 +69,7 @@ const collectContinuationFromComment = (
 	_line: string,
 	normalizedComment: string,
 	consumedContent: Set<string>,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for annotation processing
 ): string => {
 	const escapedAnnotationName = annotationName.replace(
 		/[.*+?^${}()|[\]\\]/g,
@@ -71,9 +81,12 @@ const collectContinuationFromComment = (
 		's',
 	);
 	const continuationMatch = normalizedComment.match(specificAnnotationRegex);
-	if (!continuationMatch?.[INDEX_ONE]) return content;
+	const continuationMatchGroup = continuationMatch?.[INDEX_ONE];
+	if (continuationMatchGroup === undefined || continuationMatchGroup === '') {
+		return content;
+	}
 
-	let continuationContent = continuationMatch[INDEX_ONE];
+	let continuationContent = continuationMatchGroup;
 	continuationContent = continuationContent.replace(/\s*\*\s*$/, '').trim();
 	// Removed unreachable brace check: regex pattern [^@{]*? on line 70 explicitly excludes '{'
 	// from the continuation match, so continuationContent can never contain '{'
@@ -111,8 +124,9 @@ const collectContinuationFromDocLines = (
 		const continuationLine = docLines[continuationIndex];
 		// Removed unreachable undefined check: docLines comes from split('\n') or linesString
 		// both of which always return strings, never undefined
+		// Array indexing check removed: docLines array has no holes
 		// Use removeCommentPrefix instead of regex to remove comment prefix
-		const trimmedLine = removeCommentPrefix(continuationLine!).trim();
+		const trimmedLine = removeCommentPrefix(continuationLine).trim();
 		if (
 			trimmedLine.length === EMPTY ||
 			trimmedLine.startsWith('@') ||
@@ -123,12 +137,12 @@ const collectContinuationFromDocLines = (
 		annotationContent += ' ' + trimmedLine;
 		continuationIndex++;
 	}
-	return { annotationContent, nextIndex: continuationIndex - 1 };
+	return { annotationContent, nextIndex: continuationIndex - INDEX_OFFSET };
 };
 
 /**
  * Detects annotations in docs and converts ApexDocContents to ApexDocAnnotations.
- * Scans docs for @param, @return, etc. Patterns.
+ * Scans docs for annotation patterns like `@param`, `@return`, etc.
  * @param docs - Array of Doc-based comment docs.
  * @param normalizedComment - The normalized comment text (optional, for continuation detection).
  * @returns Array of Doc docs with annotations detected.
@@ -161,6 +175,8 @@ const detectAnnotationsInDocs = (
 				const line = docLines[lineIndex];
 				// Removed unreachable undefined check: docLines comes from split('\n') or linesString
 				// both of which always return strings, never undefined
+				// Array indexing check removed: line is never undefined
+				if (line === '') continue;
 				// Annotation pattern: @ followed by identifier, possibly with content
 				// After detectCodeBlockDocs, lines have their " * " prefix stripped, so we need to match lines with or without prefix
 				// Pattern matches: (optional prefix) @ (name) (content)
@@ -176,17 +192,23 @@ const detectAnnotationsInDocs = (
 						// - INDEX_ONE (annotation name) always matches if regex matches
 						// - INDEX_TWO (content) always matches (can be empty) if regex matches
 						// - match.index is always defined for matchAll results
+						// Non-null assertions safe: regex pattern guarantees both capture groups exist
 						const annotationName = match[INDEX_ONE]!;
-						const content = match[INDEX_TWO]!.trim();
+						const contentMatch = match[INDEX_TWO]!;
+						const content = contentMatch.trim();
 						const lowerName = annotationName.toLowerCase();
-						const beforeText = extractBeforeText(
-							line,
-							match.index!,
-						);
+						const matchIndex = match.index;
+						// match.index is always defined for matchAll results
+						// Non-null assertion safe: match.index is always defined per above comment
+						const beforeText = extractBeforeText(line, matchIndex!);
 
 						// Collect continuation lines for this annotation
 						let annotationContent = content;
-						if (docLines.length === 1 && normalizedComment) {
+						if (
+							docLines.length === SINGLE_LINE &&
+							normalizedComment !== undefined &&
+							normalizedComment !== ''
+						) {
 							annotationContent = collectContinuationFromComment(
 								annotationName,
 								content,
@@ -195,14 +217,19 @@ const detectAnnotationsInDocs = (
 								consumedContent,
 							);
 						} else {
+							const nextLineIndex = lineIndex + INDEX_OFFSET;
 							const continuation =
 								collectContinuationFromDocLines(
 									content,
 									docLines,
-									lineIndex + 1,
+									nextLineIndex,
 								);
-							annotationContent = continuation.annotationContent;
-							lineIndex = continuation.nextIndex;
+							const {
+								annotationContent: contContent,
+								nextIndex,
+							} = continuation;
+							annotationContent = contContent;
+							lineIndex = nextIndex;
 						}
 
 						// Create ApexDocAnnotation with Doc content
@@ -228,18 +255,18 @@ const detectAnnotationsInDocs = (
 			if (!hasAnnotations) {
 				// Check if this doc's content was consumed as annotation continuation
 				// Check if all non-empty lines (that aren't annotations or code blocks) were consumed
-				const contentString = getContentString(doc);
-				const docLinesToCheck = contentString
+				const docContentString = getContentString(doc);
+				const docLinesToCheck = docContentString
 					.split('\n')
-					.map((line) => removeCommentPrefix(line))
+					.map((docLine) => removeCommentPrefix(docLine))
 					.filter(
-						(l) =>
-							isNotEmpty(l) &&
-							!l.startsWith('@') &&
-							!l.startsWith('{@code'),
+						(docLineToCheck) =>
+							isNotEmpty(docLineToCheck) &&
+							!docLineToCheck.startsWith('@') &&
+							!docLineToCheck.startsWith('{@code'),
 					);
 				// Skip if all lines were consumed - use simple loop instead of .every()
-				if (docLinesToCheck.length > 0) {
+				if (docLinesToCheck.length > ZERO_LINES) {
 					let allConsumed = true;
 					for (const line of docLinesToCheck) {
 						if (!consumedContent.has(line)) {
@@ -274,9 +301,9 @@ const detectAnnotationsInDocs = (
 };
 
 /**
- * Normalizes annotation names in docs (e.g., @Param -> @param).
+ * Normalizes annotation names in docs (e.g., `@Param` -> `@param`).
  * Processes ApexDocAnnotation, ApexDocContent types.
- * Skips normalization within {@code} blocks.
+ * Skips normalization within code blocks using the code tag.
  * @param docs - Array of Doc-based comment docs.
  * @returns Array of Doc docs with normalized annotation names.
  */
@@ -327,33 +354,37 @@ const renderAnnotation = (
 ): RenderedAnnotationDoc | null => {
 	// Extract string content from Doc for rendering
 	const contentString = docToString(doc.content);
-	const contentLines = isNotEmpty(contentString)
-		? contentString.split('\n')
-		: [''];
+	const hasContent = isNotEmpty(contentString);
+	const contentLines = hasContent ? contentString.split('\n') : [''];
 	const lines: string[] = [];
 	const annotationName = doc.name;
 	const trimmedCommentPrefix = commentPrefix.trimEnd();
 
 	// Add followingText before annotation if it exists
-	const followingTextString = doc.followingText
-		? docToString(doc.followingText)
-		: undefined;
+	const followingTextString =
+		doc.followingText !== undefined
+			? docToString(doc.followingText)
+			: undefined;
 	const trimmedFollowingText = followingTextString?.trim();
-	if (
+	const hasFollowingText =
+		followingTextString !== undefined &&
 		trimmedFollowingText !== undefined &&
-		isNotEmpty(trimmedFollowingText)
-	) {
-		const followingLines = followingTextString!
+		isNotEmpty(trimmedFollowingText);
+	if (hasFollowingText) {
+		const followingLines = followingTextString
 			.split('\n')
-			.map((line: string) => line.trim())
-			.filter((line: string) => isNotEmpty(line));
+			.map((followingLine: string) => followingLine.trim())
+			.filter((followingLineToFilter: string) =>
+				isNotEmpty(followingLineToFilter),
+			);
 		for (const line of followingLines) {
 			lines.push(`${commentPrefix}${line}`);
 		}
 	}
 
 	// First line includes the @annotation name
-	// Removed unreachable nullish coalescing: contentLines always has at least one element (line 332-334)
+	// contentLines always has at least one element (line 332-334)
+	// Non-null assertion safe: ARRAY_START_INDEX element always exists
 	const firstContent = contentLines[ARRAY_START_INDEX]!;
 	const firstLine = isNotEmpty(firstContent)
 		? `${commentPrefix}@${annotationName} ${firstContent}`
@@ -364,7 +395,7 @@ const renderAnnotation = (
 	for (let i = INDEX_ONE; i < contentLines.length; i++) {
 		const lineContent = contentLines[i];
 		// Removed unreachable undefined check: contentLines comes from split('\n') which always returns strings
-		if (isNotEmpty(lineContent)) {
+		if (lineContent !== undefined && isNotEmpty(lineContent)) {
 			lines.push(`${commentPrefix}${lineContent}`);
 		} else {
 			lines.push(trimmedCommentPrefix);
@@ -399,6 +430,7 @@ const wrapAnnotations = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for annotation wrapping
 ): readonly ApexDocComment[] => {
 	const newDocs: ApexDocComment[] = [];
 	const printWidth = effectiveWidth + actualPrefixLength;
@@ -416,7 +448,7 @@ const wrapAnnotations = (
 			// Continuation lines only have comment prefix, so they have full effectiveWidth
 			const continuationLineAvailableWidth = effectiveWidth;
 
-			if (firstLineAvailableWidth <= EMPTY) {
+			if (firstLineAvailableWidth <= ZERO_WIDTH) {
 				newDocs.push(doc);
 				continue;
 			}
@@ -427,19 +459,19 @@ const wrapAnnotations = (
 			// Split on whitespace characters manually
 			const words = annotationContent
 				.split(/\s+/)
-				.filter((word) => word.length > 0);
+				.filter((word) => word.length > ZERO_LENGTH);
 
-			if (words.length === 0) {
+			if (words.length === ZERO_LENGTH) {
 				newDocs.push(doc);
 				continue;
 			}
 
 			// Calculate what fits on the first line
 			const firstLineWords: string[] = [];
-			let currentFirstLine = '';
+			let currentFirstLine = EMPTY_STRING;
 			for (const word of words) {
 				const testLine =
-					currentFirstLine === ''
+					currentFirstLine === EMPTY_STRING
 						? word
 						: `${currentFirstLine} ${word}`;
 				if (
@@ -456,7 +488,9 @@ const wrapAnnotations = (
 
 			// Use fill builder for remaining content with continuation width
 			const firstLineContent =
-				firstLineWords.length > 0 ? firstLineWords.join(' ') : '';
+				firstLineWords.length > ZERO_LENGTH
+					? firstLineWords.join(' ')
+					: EMPTY_STRING;
 
 			const useTabsOption =
 				options.useTabs !== null && options.useTabs !== undefined
@@ -467,12 +501,17 @@ const wrapAnnotations = (
 				...useTabsOption,
 			};
 
-			const { fill, join: joinBuilders, line, hardline } = docBuilders;
+			const {
+				fill,
+				join: joinBuilders,
+				line: lineBuilder,
+				hardline,
+			} = docBuilders;
 			let wrappedContent: prettier.Doc | string = firstLineContent;
-			if (remainingWords.length > 0) {
+			if (remainingWords.length > ZERO_LENGTH) {
 				// Use fill for continuation lines with full effectiveWidth
 				const continuationFill = fill(
-					joinBuilders(line, remainingWords),
+					joinBuilders(lineBuilder, remainingWords),
 				);
 				const continuationText = prettier.doc.printer.printDocToString(
 					continuationFill,
@@ -485,7 +524,10 @@ const wrapAnnotations = (
 				// Combine first line and continuation lines
 				const continuationLines = continuationText
 					.split('\n')
-					.filter((line) => line.trim().length > 0);
+					.filter(
+						(continuationLine) =>
+							continuationLine.trim().length > ZERO_LENGTH,
+					);
 				const allLines = firstLineContent
 					? [firstLineContent, ...continuationLines]
 					: continuationLines;

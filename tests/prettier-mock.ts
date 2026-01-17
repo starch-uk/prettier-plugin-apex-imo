@@ -1,10 +1,8 @@
 /**
  * @file Reusable Prettier mock suite for testing.
- *
  * Provides comprehensive mocks for Prettier APIs including Doc builders,
  * utilities, format function, and plugin structures that can be imported
  * and used across test modules.
- *
  * @example
  * ```typescript
  * import { PrettierMockSuite } from './prettier-mock.js';
@@ -26,6 +24,7 @@ import type { ApexNode } from '../src/types.js';
 class MockDocBuilders {
 	/**
 	 * Mock group builder - returns array with 'group' marker.
+	 * @param doc
 	 */
 	group(doc: Doc): Doc {
 		return ['group', doc];
@@ -33,6 +32,7 @@ class MockDocBuilders {
 
 	/**
 	 * Mock indent builder - returns array with 'indent' marker.
+	 * @param doc
 	 */
 	indent(doc: Doc | Doc[]): Doc {
 		return ['indent', Array.isArray(doc) ? doc : [doc]];
@@ -55,6 +55,8 @@ class MockDocBuilders {
 
 	/**
 	 * Mock ifBreak builder - returns array with 'ifBreak' marker.
+	 * @param ifBreak
+	 * @param noBreak
 	 */
 	ifBreak(ifBreak: Doc, noBreak: Doc = ''): Doc {
 		return ['ifBreak', ifBreak, noBreak];
@@ -62,6 +64,8 @@ class MockDocBuilders {
 
 	/**
 	 * Mock join builder - joins docs with separator.
+	 * @param separator
+	 * @param docs
 	 */
 	join(separator: Doc, docs: readonly Doc[]): Doc {
 		return ['join', separator, ...docs];
@@ -69,6 +73,7 @@ class MockDocBuilders {
 
 	/**
 	 * Mock fill builder - returns array with 'fill' marker.
+	 * @param docs
 	 */
 	fill(docs: readonly Doc[]): Doc {
 		return ['fill', ...docs];
@@ -81,6 +86,7 @@ class MockDocBuilders {
 class MockPrettierUtil {
 	/**
 	 * Mock getStringWidth - returns string length.
+	 * @param str
 	 */
 	getStringWidth(str: string): number {
 		return str.length;
@@ -88,6 +94,8 @@ class MockPrettierUtil {
 
 	/**
 	 * Mock skipWhitespace - returns index after whitespace.
+	 * @param text
+	 * @param startIndex
 	 */
 	skipWhitespace(text: string, startIndex: number): number {
 		let index = startIndex;
@@ -99,6 +107,8 @@ class MockPrettierUtil {
 
 	/**
 	 * Mock getIndentSize - calculates indent size based on leading spaces/tabs.
+	 * @param line
+	 * @param tabWidth
 	 */
 	getIndentSize(line: string, tabWidth: number): number {
 		const trimmed = line.trimStart();
@@ -108,6 +118,8 @@ class MockPrettierUtil {
 
 	/**
 	 * Mock addLeadingComment - adds comment before node.
+	 * @param node
+	 * @param comment
 	 */
 	addLeadingComment(node: unknown, comment: unknown): void {
 		// Mock implementation - no-op for testing
@@ -115,6 +127,8 @@ class MockPrettierUtil {
 
 	/**
 	 * Mock addTrailingComment - adds comment after node.
+	 * @param node
+	 * @param comment
 	 */
 	addTrailingComment(node: unknown, comment: unknown): void {
 		// Mock implementation - no-op for testing
@@ -122,6 +136,9 @@ class MockPrettierUtil {
 
 	/**
 	 * Mock addDanglingComment - adds dangling comment to node.
+	 * @param node
+	 * @param comment
+	 * @param marker
 	 */
 	addDanglingComment(node: unknown, comment: unknown, marker: unknown): void {
 		// Mock implementation - no-op for testing
@@ -134,6 +151,8 @@ class MockPrettierUtil {
 class MockDocPrinter {
 	/**
 	 * Mock printDocToString - converts Doc to string representation.
+	 * @param doc
+	 * @param options
 	 */
 	printDocToString(doc: Doc, options?: Readonly<ParserOptions>): string {
 		// Simple stringification for testing
@@ -156,7 +175,7 @@ class MockDocPrinter {
  * - Prettier utilities (getStringWidth, skipWhitespace, etc.)
  * - format function
  * - doc.printer
- * - Plugin structures
+ * - Plugin structures.
  */
 export class PrettierMockSuite {
 	private readonly docBuilders = new MockDocBuilders();
@@ -182,6 +201,11 @@ export class PrettierMockSuite {
 	/**
 	 * Creates a complete Prettier mock object that can be used with vi.mock.
 	 * @param customizations - Optional customizations to override default mocks.
+	 * @param customizations.format
+	 * @param customizations.doc
+	 * @param customizations.doc.builders
+	 * @param customizations.util
+	 * @param customizations.docPrinter
 	 * @returns Mock Prettier module object.
 	 * @example
 	 * ```typescript
@@ -212,11 +236,11 @@ export class PrettierMockSuite {
 		};
 
 		return {
-			format: customizations?.format ?? this.format,
 			doc: {
 				builders: customDocBuilders,
 				printer: customDocPrinter,
 			},
+			format: customizations?.format ?? this.format,
 			util: customUtil,
 		} as unknown as typeof import('prettier');
 	}
@@ -235,11 +259,11 @@ export class PrettierMockSuite {
 	 */
 	createMockPlugin(overrides?: Partial<Plugin<ApexNode>>): Plugin<ApexNode> {
 		return {
+			defaultOptions: {},
 			languages: [],
+			options: {},
 			parsers: {},
 			printers: {},
-			options: {},
-			defaultOptions: {},
 			...overrides,
 		} as Plugin<ApexNode>;
 	}
@@ -303,6 +327,8 @@ export const defaultPrettierMock = new PrettierMockSuite();
 /**
  * Helper to create a mock Prettier module with custom format implementation.
  * @param formatImpl - Custom format function implementation.
+ * @param options
+ * @param options.format
  * @returns Mock Prettier module.
  * @example
  * ```typescript

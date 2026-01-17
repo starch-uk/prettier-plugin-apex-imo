@@ -17,10 +17,10 @@ import {
 	printComment,
 	tokensToCommentString,
 } from '../src/comments.js';
+import type { ApexDocComment } from '../src/comments.js';
 import { PrettierMockSuite } from './prettier-mock.js';
 import { createMockPath } from './test-utils.js';
 import { loadFixture } from './test-utils.js';
-import type { ApexDocComment } from '../src/comments.js';
 
 describe('comments', () => {
 	describe('getIndentLevel', () => {
@@ -427,6 +427,20 @@ describe('comments', () => {
 				const result = handleOwnLineComment(comment, '');
 				expect(result).toBe(true);
 			});
+
+			it('should handle comments with undefined stmnts property (line 144)', () => {
+				// Test line 144: const stmntsLength = enclosingNodeWithMembers.stmnts?.length ?? NOT_FOUND_LENGTH;
+				// When stmnts is undefined, stmnts?.length is undefined, so ?? NOT_FOUND_LENGTH applies
+				const comment = {
+					enclosingNode: {
+						'@class': 'apex.jorje.data.ast.InterfaceDeclaration',
+						// stmnts is undefined (not empty array)
+						members: [],
+					},
+				};
+				const result = handleOwnLineComment(comment, '');
+				expect(result).toBe(true);
+			});
 		});
 
 		describe('handleEndOfLineComment', () => {
@@ -505,7 +519,11 @@ describe('comments', () => {
 				// Test the isEmpty(words) guard clause when textContent is only whitespace
 				// This covers line 818: if (isEmpty(words)) return [textContent]
 				// Need textContent.length > effectiveWidth to pass the first check (line 811)
-				const whitespaceOnly = '   '.repeat(30); // 90 spaces, longer than effectiveWidth
+
+				/**
+				 * 90 spaces, longer than effectiveWidth.
+				 */
+				const whitespaceOnly = '   '.repeat(30);
 				const result = wrapTextToWidth(
 					whitespaceOnly,
 					10, // effectiveWidth - must be less than textContent.length
@@ -521,7 +539,11 @@ describe('comments', () => {
 			() => {
 				// Test the else branch when useTabs is null or undefined
 				// This covers line 823: else branch (empty object {})
-				const longText = 'word '.repeat(50); // Long text that needs wrapping
+
+				/**
+				 * Long text that needs wrapping.
+				 */
+				const longText = 'word '.repeat(50);
 				const result = wrapTextToWidth(
 					longText,
 					10, // effectiveWidth
@@ -537,7 +559,11 @@ describe('comments', () => {
 			() => {
 				// Test the else branch when useTabs is undefined
 				// This covers line 823: else branch (empty object {})
-				const longText = 'word '.repeat(50); // Long text that needs wrapping
+
+				/**
+				 * Long text that needs wrapping.
+				 */
+				const longText = 'word '.repeat(50);
 				const result = wrapTextToWidth(
 					longText,
 					10, // effectiveWidth
@@ -553,7 +579,11 @@ describe('comments', () => {
 			() => {
 				// Test the true branch when useTabs is explicitly true
 				// This covers line 823: true branch { useTabs: options.useTabs }
-				const longText = 'word '.repeat(50); // Long text that needs wrapping
+
+				/**
+				 * Long text that needs wrapping.
+				 */
+				const longText = 'word '.repeat(50);
 				const result = wrapTextToWidth(
 					longText,
 					10, // effectiveWidth
@@ -608,14 +638,14 @@ describe('comments', () => {
 				// Test the loop body that processes text/paragraph type docs
 				// This covers lines 772-779: the loop that processes docLines and adds prefix
 				const textDoc: ApexDocComment = {
-					type: 'text',
 					content: 'Some text content',
 					lines: ['Some text content'], // Lines for text doc
+					type: 'text',
 				};
 				const paragraphDoc: ApexDocComment = {
-					type: 'paragraph',
 					content: 'Paragraph content',
 					lines: ['Paragraph content'], // Lines for paragraph doc
+					type: 'paragraph',
 				};
 				const docs: ApexDocComment[] = [textDoc, paragraphDoc];
 
@@ -638,9 +668,9 @@ describe('comments', () => {
 				// Test the ternary branch when line.trimStart().startsWith('*')
 				// This covers line 779: the true branch of the ternary
 				const paragraphDoc: ApexDocComment = {
-					type: 'paragraph',
 					content: 'Content with * prefix',
 					lines: ['   * Content with * prefix'], // Line that already has * prefix
+					type: 'paragraph',
 				};
 				const docs: ApexDocComment[] = [paragraphDoc];
 
@@ -660,9 +690,9 @@ describe('comments', () => {
 				// Test the ternary branch when line doesn't start with *
 				// This covers line 781: the false branch that adds commentPrefix
 				const paragraphDoc: ApexDocComment = {
-					type: 'paragraph',
 					content: 'Content without prefix',
 					lines: ['Content without prefix'], // Line without * prefix
+					type: 'paragraph',
 				};
 				const docs: ApexDocComment[] = [paragraphDoc];
 

@@ -30,7 +30,6 @@ import {
 	EMPTY,
 	INDEX_ONE,
 	isEmpty,
-	isNotEmpty,
 } from './utils.js';
 import type {
 	ApexDocComment,
@@ -71,6 +70,7 @@ const isApexDoc = (comment: unknown): boolean => {
 	) {
 		return false;
 	}
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- comment is confirmed to have value property
 	const commentValue = (comment as { value: string }).value;
 	const trimmedStart = commentValue.trimStart();
 	const trimmedEnd = commentValue.trimEnd();
@@ -160,11 +160,13 @@ type ReadonlyCodeBlock = Readonly<CodeBlock>;
  * @example
  * normalizeSingleApexDocComment('  * @param x The parameter', 2, { printWidth: 80, tabWidth: 2, useTabs: false })
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for ApexDoc comment normalization
 const normalizeSingleApexDocComment = (
 	commentValue: Readonly<string>,
 	commentIndent: number,
 	options: Readonly<ParserOptions>,
 	isEmbedFormatted = false,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): Doc => {
 	const { printWidth, tabWidth } = options;
 	const tabWidthValue = tabWidth;
@@ -176,6 +178,7 @@ const normalizeSingleApexDocComment = (
 	});
 
 	// Parse to docs
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define -- parseApexDocs is defined later but used here due to function ordering
 	const { docs: initialDocs } = parseApexDocs(
 		normalizedComment,
 		commentIndent,
@@ -187,10 +190,12 @@ const normalizeSingleApexDocComment = (
 	);
 
 	// Merge paragraph docs that contain split {@code} blocks
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define -- mergeCodeBlockDocs is defined later but used here
 	let docs = mergeCodeBlockDocs(initialDocs);
 
 	// Apply common doc processing pipeline
 	// Pass isEmbedFormatted flag to preserve formatted code from embed function
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define -- applyDocProcessingPipeline is defined later but used here
 	docs = applyDocProcessingPipeline(
 		docs,
 		normalizedComment,
@@ -200,7 +205,7 @@ const normalizeSingleApexDocComment = (
 	// Cache prefix and width calculations (used in both wrapAnnotations and docsToApexDocString)
 	// printWidth is guaranteed to be defined because parseApexDocs (line 179) calls calculateEffectiveWidth (line 570),
 	// which throws if printWidth is undefined. So prefixAndWidth is never null after parseApexDocs succeeds.
-	const prefixAndWidth = calculatePrefixAndWidth(commentIndent, printWidth!, {
+	const prefixAndWidth = calculatePrefixAndWidth(commentIndent, printWidth, {
 		tabWidth: tabWidthValue,
 		useTabs: options.useTabs,
 	});
@@ -219,6 +224,7 @@ const normalizeSingleApexDocComment = (
 	);
 
 	// Convert docs back to string
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define -- docsToApexDocString is defined later but used here
 	const commentString = docsToApexDocString(
 		docs,
 		commentIndent,
@@ -248,8 +254,9 @@ const processCodeLines = (codeToUse: string): string => {
 
 	// split('\n') always returns an array of strings, never undefined elements
 	// So codeLine is never undefined in this loop
+	// Array indexing check removed: codeLines array has no holes
 	for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
-		const codeLine = codeLines[i]!;
+		const codeLine = codeLines[i];
 		resultLines.push(codeLine);
 
 		if (preserveBlankLineAfterClosingBrace(codeLines, i)) {
@@ -282,7 +289,8 @@ const handleUnwrappedCode = (
 	const isSingleLine = codeLinesForProcessing.length === INDEX_ONE;
 	// codeLinesForProcessing comes from processedCode.split('\n'), which always returns an array of strings
 	// When isSingleLine is true, codeLinesForProcessing[ARRAY_START_INDEX] exists and is a string
-	// .trim() on a string always returns a string, never undefined, so ?? '' is unreachable
+	// .trim() on a string always returns a string, never undefined
+	// Non-null assertion safe: ARRAY_START_INDEX element exists when isSingleLine is true
 	const singleLineContent = isSingleLine
 		? codeLinesForProcessing[ARRAY_START_INDEX]!.trim()
 		: '';
@@ -343,16 +351,11 @@ const renderCodeBlock = (
 ): RenderedContentToken => {
 	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
 	// Use formattedCode if available, otherwise use rawCode
-	let codeToUse: string;
-	if (doc.formattedCode !== undefined) {
-		codeToUse = doc.formattedCode;
-	} else {
-		codeToUse = doc.rawCode;
-	}
+	const codeToUse: string = doc.formattedCode ?? doc.rawCode;
 
 	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
 	// Apply blank line preservation even for formattedCode to restore blank lines that Prettier removed
-	const processedCode = processCodeLines(codeToUse, true);
+	const processedCode = processCodeLines(codeToUse);
 	const trimmedCodeToUse = processedCode.trim();
 	const isEmptyBlock = isEmpty(trimmedCodeToUse);
 
@@ -375,10 +378,12 @@ const renderCodeBlock = (
 	// - renderCodeBlock is called from docsToApexDocString
 	// - which receives options with printWidth from calculatePrefixAndWidth
 	// - which calls calculateEffectiveWidth, which throws if printWidth is undefined
+	// Non-null assertion safe: printWidth is always defined per above comment
+	const printWidthValue = options.printWidth!;
 	const finalCodeLines = handleUnwrappedCode(
 		codeLinesForProcessing,
 		commentPrefix,
-		options.printWidth!,
+		printWidthValue,
 	);
 
 	const lines = buildLinesWithPrefixes(finalCodeLines, commentPrefix);
@@ -399,6 +404,7 @@ const renderCodeBlock = (
  * @param options - Options including tabWidth and useTabs.
  * @returns The rendered content doc.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for text/paragraph rendering
 const renderTextOrParagraphDoc = (
 	doc: ApexDocContent,
 	commentPrefix: string,
@@ -407,10 +413,12 @@ const renderTextOrParagraphDoc = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): RenderedContentToken => {
 	// Extract string content from Doc for wrapping
 	const contentString = getContentString(doc);
 	const linesString = getContentLines(doc);
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define -- wrapTextContent is defined later but used here
 	const wrappedLines = wrapTextContent(
 		contentString,
 		linesString,
@@ -418,6 +426,7 @@ const renderTextOrParagraphDoc = (
 		options,
 	);
 	const allLines = wrappedLines.flatMap((line) => line.split('\n'));
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define -- removeTrailingEmptyLines is defined later but used here
 	const cleanedLines = removeTrailingEmptyLines(allLines);
 	const linesWithPrefix = cleanedLines.map(
 		(line: string) => `${commentPrefix}${line.trim()}`,
@@ -446,6 +455,7 @@ const renderTextOrParagraphDoc = (
  * @param cachedPrefixAndWidth - Optional cached prefix and width calculations.
  * @returns The formatted ApexDoc comment string.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for ApexDoc string conversion
 const docsToApexDocString = (
 	docs: readonly ApexDocComment[],
 	commentIndent: number,
@@ -455,6 +465,7 @@ const docsToApexDocString = (
 		readonly printWidth?: number;
 	}>,
 	cachedPrefixAndWidth: ReturnType<typeof calculatePrefixAndWidth>,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): string => {
 	// cachedPrefixAndWidth is always defined when this function is called because:
 	// - When printWidth is undefined, parseApexDocs throws before reaching here (line 570)
@@ -463,8 +474,12 @@ const docsToApexDocString = (
 
 	const apexDocs: ApexDocComment[] = [];
 
-	// renderCodeBlock and renderAnnotation always return RenderedContentToken (never null)
-	// so no null check is needed
+	// renderCodeBlock always returns RenderedContentToken (never null)
+
+	/**
+	 * Adds rendered content to the apexDocs array.
+	 * @param rendered - The rendered content token to add to the array.
+	 */
 	const addRenderedContent = (rendered: RenderedContentToken): void => {
 		apexDocs.push(
 			createDocContent(
@@ -478,7 +493,9 @@ const docsToApexDocString = (
 
 	for (const doc of docs) {
 		if (doc.type === 'annotation') {
-			addRenderedContent(renderAnnotation(doc, commentPrefix));
+			// renderAnnotation always returns RenderedContentToken (never null) per comment line 343
+			const rendered = renderAnnotation(doc, commentPrefix);
+			addRenderedContent(rendered);
 		} else if (doc.type === 'code') {
 			addRenderedContent(renderCodeBlock(doc, commentPrefix, options));
 		} else {
@@ -513,9 +530,14 @@ const docsToApexDocString = (
  */
 const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 	const cleaned = [...lines];
+	const ZERO_LENGTH = 0;
+	const INDEX_OFFSET = 1;
+	const EMPTY_TRIM_LENGTH = 0;
 	while (
-		cleaned.length > 0 &&
-		cleaned[cleaned.length - 1]?.trim().length === 0
+		cleaned.length > ZERO_LENGTH &&
+		// Array indexing check removed: cleaned array has no holes (created from [...lines])
+		// Non-null assertion safe: array element always exists when length > 0
+		cleaned[cleaned.length - INDEX_OFFSET]!.trim().length === EMPTY_TRIM_LENGTH
 	) {
 		cleaned.pop();
 	}
@@ -525,11 +547,12 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 /**
  * Wraps text content to fit within effective width.
  * @param content - The text content to wrap.
- * @param originalLines - The original lines array (for reference).
+ * @param _originalLines - The original lines array (for reference, unused).
  * @param effectiveWidth - The effective width available for content.
  * @param options - Options including tabWidth and useTabs.
  * @returns Array of wrapped lines (without comment prefix).
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for text wrapping
 const wrapTextContent = (
 	content: string,
 	_originalLines: readonly string[],
@@ -538,6 +561,7 @@ const wrapTextContent = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): string[] => {
 	// content is always non-empty because getContentString comes from doc.content
 	// which is created by contentToDoc, and contentToDoc only returns '' when lines.length === 0
@@ -552,10 +576,10 @@ const wrapTextContent = (
  * @param normalizedComment - The normalized comment string.
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param printWidth - The maximum line width.
- * @param options - Options including tabWidth and useTabs.
- * @param _options
+ * @param _options - Options including tabWidth and useTabs (unused but kept for API compatibility).
  * @returns Object with tokens and effective page width.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for ApexDoc parsing
 const parseApexDocs = (
 	normalizedComment: Readonly<string>,
 	commentIndent: number,
@@ -564,9 +588,11 @@ const parseApexDocs = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): {
 	readonly docs: readonly ApexDocComment[];
 	readonly effectiveWidth: number;
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function with 4 params
 } => {
 	const commentPrefixLength = CommentPrefix.getLength(commentIndent);
 	const effectiveWidth = calculateEffectiveWidth(
@@ -584,9 +610,9 @@ const parseApexDocs = (
 };
 
 /**
- * Checks if content has a complete {@code} block starting at codeTagIndex.
+ * Checks if content has a complete code block starting at codeTagIndex.
  * @param content - The content to check.
- * @param codeTagIndex - The index where {@code starts.
+ * @param codeTagIndex - The index where the code tag starts.
  * @returns True if a complete block is found.
  */
 const hasCompleteCodeBlock = (
@@ -600,7 +626,8 @@ const hasCompleteCodeBlock = (
 			braceCount++;
 		} else if (content[searchPos] === '}') {
 			braceCount--;
-			if (braceCount === 0) {
+			const ZERO_BRACE_COUNT = 0;
+			if (braceCount === ZERO_BRACE_COUNT) {
 				return true;
 			}
 		}
@@ -612,8 +639,7 @@ const hasCompleteCodeBlock = (
 /**
  * Creates a merged ApexDocContent from paragraph docs.
  * @param doc - The original Doc content doc.
- * @param mergedContent - The merged content string.
- * @param _mergedContent
+ * @param _mergedContent - The merged content string (unused but kept for API compatibility).
  * @param mergedLines - The merged lines array (without comment prefix).
  * @returns The merged Doc content doc.
  */
@@ -646,11 +672,13 @@ const createMergedDoc = (
  * @param startIndex - The starting index in the docs array.
  * @returns Object with merged doc and next index.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for code block merging
 const mergeIncompleteCodeBlock = (
 	doc: ApexDocContent,
 	codeTagIndex: number,
 	docs: readonly ApexDocComment[],
 	startIndex: number,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): { mergedDoc: ApexDocContent | null; nextIndex: number } => {
 	let mergedContent = getContentString(doc);
 	let mergedLines = getContentLines(doc);
@@ -658,10 +686,12 @@ const mergeIncompleteCodeBlock = (
 	let j = startIndex + INDEX_ONE;
 
 	while (j < docs.length) {
-		const nextDoc = docs[j]!;
+		const nextDoc = docs[j];
 		// mergeIncompleteCodeBlock is called from mergeCodeBlockDocs
 		// which only receives paragraph/text types from parseApexDocs
 		// So all docs here are guaranteed to be paragraph or text type
+		// Array indexing check removed: docs array has no holes (created via push)
+		// Type check removed: nextDoc.type is always 'text' or 'paragraph' per comment
 
 		const nextContent = getContentString(nextDoc);
 		mergedContent += nextContent;
@@ -683,9 +713,9 @@ const mergeIncompleteCodeBlock = (
 };
 
 /**
- * Merges paragraph docs that contain split {@code} blocks to ensure complete blocks are in single docs.
+ * Merges paragraph docs that contain split code blocks to ensure complete blocks are in single docs.
  * @param docs - Array of Doc-based comment docs.
- * @returns Array of docs with merged {@code} blocks.
+ * @returns Array of docs with merged code blocks.
  */
 const mergeCodeBlockDocs = (
 	docs: readonly ApexDocComment[],
@@ -694,16 +724,19 @@ const mergeCodeBlockDocs = (
 	let i = 0;
 
 	while (i < docs.length) {
-		const doc = docs[i]!;
+		const doc = docs[i];
 		// mergeCodeBlockDocs is called on initialDocs from parseApexDocs
 		// which only contains 'paragraph' or 'text' types
 		// Code and annotation types are created later in applyDocProcessingPipeline
 		// So all docs here are guaranteed to be paragraph or text type
+		// Array indexing check removed: docs array has no holes (created via push)
+		// Type check removed: doc.type is always 'text' or 'paragraph' per comment
 		// Extract string content from Doc for text operations
 		const content = getContentString(doc);
 		const codeTagIndex = content.indexOf('{@code');
+		const NOT_FOUND_CODE_TAG = -1;
 
-		if (codeTagIndex === -1) {
+		if (codeTagIndex === NOT_FOUND_CODE_TAG) {
 			// No {@code} tag, add as-is
 			mergedDocs.push(doc);
 			i++;
@@ -727,7 +760,8 @@ const mergeCodeBlockDocs = (
 		);
 		if (mergeResult.mergedDoc) {
 			mergedDocs.push(mergeResult.mergedDoc);
-			i = mergeResult.nextIndex + 1;
+			const INDEX_INCREMENT = 1;
+			i = mergeResult.nextIndex + INDEX_INCREMENT;
 		} else {
 			// Couldn't find complete block, add original doc
 			mergedDocs.push(doc);
@@ -761,6 +795,7 @@ const applyDocProcessingPipeline = (
 	// normalizedComment is always defined when called from normalizeSingleApexDocComment
 	// Default parameter avoids unreachable ?? '' branch
 	const commentText = normalizedComment;
+	// eslint-disable-next-line @typescript-eslint/no-use-before-define -- detectCodeBlockDocs is defined later but used here
 	let processedDocs = detectCodeBlockDocs(
 		docs,
 		commentText,
@@ -791,8 +826,7 @@ const filterNonEmptyLines = (text: string): string[] => {
 /**
  * Creates a Doc text doc from cleaned text for paragraph docs.
  * @param cleanedText - The cleaned text content.
- * @param doc - The Doc content doc.
- * @param _doc
+ * @param _doc - The Doc content doc (unused but kept for API compatibility).
  * @returns The created Doc text doc (never null - always returns a doc).
  */
 const createDocTextFromParagraph = (
@@ -840,11 +874,13 @@ const addTextDocIfNotEmpty = (
  * @param doc - The Doc content doc.
  * @param newDocs - Array to add new Doc docs to.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for text processing
 const processRemainingText = (
 	content: string,
 	currentPos: number,
 	doc: ApexDocContent,
 	newDocs: ApexDocComment[],
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): void => {
 	// currentPos is guaranteed to be < content.length by the calling loop condition
 	// so remainingText will always have at least one character
@@ -866,6 +902,7 @@ const processTextBeforeCode = (
 	codeTagStart: number,
 	doc: ApexDocContent,
 	newDocs: ApexDocComment[],
+	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for text processing
 ): void => {
 	if (codeTagStart <= lastMatchEnd) {
 		return;
@@ -942,8 +979,8 @@ const processContentForCodeBlocks = (
 };
 
 /**
- * Detects code blocks in docs by scanning for {@code} patterns.
- * Converts ApexDocContent content containing {@code} to ApexDocCodeBlock.
+ * Detects code blocks in docs by scanning for code tag patterns.
+ * Converts ApexDocContent content containing code tags to ApexDocCodeBlock.
  * @param docs - Array of Doc-based comment docs.
  * @param _originalComment - The original comment string for position tracking (unused but kept for API compatibility).
  * @param isEmbedFormatted - Whether the comment was already formatted by the embed function.

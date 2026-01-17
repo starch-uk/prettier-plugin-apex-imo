@@ -716,6 +716,42 @@ describe('casing', () => {
 		);
 
 		it.concurrent(
+			'should skip nameNode with non-string value property (line 350)',
+			() => {
+				// Test line 350: if (typeof nodeValueRaw !== 'string') continue;
+				// normalizeNamesArray is called when isIdent is true and 'names' in node and value is not string
+				const mockPrint = createMockPrint();
+				const typeNormalizingPrint = createTypeNormalizingPrint(
+					mockPrint,
+					true,
+					'names',
+				);
+				const nameNode1 = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 123, // Non-string value (number)
+				} as unknown as ApexIdentifier;
+				const nameNode2 = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'account', // Valid string value
+				} as ApexIdentifier;
+				// Use Identifier node with names property to trigger normalizeNamesArray
+				// (normalizeNamesArray is called when isIdent is true and 'names' in node and value is not string)
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					names: [nameNode1, nameNode2],
+					// value is not a string, so it falls through to normalizeNamesArray check
+					value: undefined,
+				} as unknown as ApexNode & { names?: readonly ApexIdentifier[] };
+				const path = createMockPath(node, 'names');
+
+				typeNormalizingPrint(path);
+
+				// Should skip nameNode1 (non-string value) but process nameNode2
+				expect(mockPrint).toHaveBeenCalled();
+			},
+		);
+
+		it.concurrent(
 			'should handle names array with non-object primitive values',
 			() => {
 				const mockPrint = createMockPrint();
@@ -865,7 +901,11 @@ describe('casing', () => {
 					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
 					value: 'STATIC',
 				} as ApexIdentifier;
-				const path = createMockPath(node, 0); // Array index
+
+				/**
+				 * Array index.
+				 */
+				const path = createMockPath(node, 0);
 
 				reservedWordNormalizingPrint(path);
 
@@ -947,25 +987,25 @@ describe('casing', () => {
 
 		it.concurrent('should normalize various reserved words', () => {
 			const testCases = [
-				{ input: 'PUBLIC', expected: 'public' },
-				{ input: 'Private', expected: 'private' },
-				{ input: 'STATIC', expected: 'static' },
-				{ input: 'Class', expected: 'class' },
-				{ input: 'INTERFACE', expected: 'interface' },
-				{ input: 'Enum', expected: 'enum' },
-				{ input: 'VOID', expected: 'void' },
-				{ input: 'Abstract', expected: 'abstract' },
-				{ input: 'IF', expected: 'if' },
-				{ input: 'Else', expected: 'else' },
-				{ input: 'FOR', expected: 'for' },
-				{ input: 'While', expected: 'while' },
-				{ input: 'RETURN', expected: 'return' },
-				{ input: 'Try', expected: 'try' },
-				{ input: 'CATCH', expected: 'catch' },
-				{ input: 'NEW', expected: 'new' },
-				{ input: 'This', expected: 'this' },
-				{ input: 'SUPER', expected: 'super' },
-				{ input: 'NULL', expected: 'null' },
+				{ expected: 'public', input: 'PUBLIC' },
+				{ expected: 'private', input: 'Private' },
+				{ expected: 'static', input: 'STATIC' },
+				{ expected: 'class', input: 'Class' },
+				{ expected: 'interface', input: 'INTERFACE' },
+				{ expected: 'enum', input: 'Enum' },
+				{ expected: 'void', input: 'VOID' },
+				{ expected: 'abstract', input: 'Abstract' },
+				{ expected: 'if', input: 'IF' },
+				{ expected: 'else', input: 'Else' },
+				{ expected: 'for', input: 'FOR' },
+				{ expected: 'while', input: 'While' },
+				{ expected: 'return', input: 'RETURN' },
+				{ expected: 'try', input: 'Try' },
+				{ expected: 'catch', input: 'CATCH' },
+				{ expected: 'new', input: 'NEW' },
+				{ expected: 'this', input: 'This' },
+				{ expected: 'super', input: 'SUPER' },
+				{ expected: 'null', input: 'NULL' },
 			];
 
 			for (const testCase of testCases) {

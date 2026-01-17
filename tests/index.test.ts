@@ -82,13 +82,13 @@ describe('index', () => {
 			() => {
 				// Create mock parsers object with invalid entries to test continue statement (line 127)
 				const mockParsers = {
-					valid: {
-						parse: async () => ({}),
-					},
 					invalid1: undefined, // undefined entry
 					invalid2: {}, // missing parse method
 					invalid3: {
 						parse: 'not a function', // parse is not a function
+					},
+					valid: {
+						parse: async () => ({}),
 					},
 				} as unknown as Readonly<Plugin<ApexNode>['parsers']>;
 

@@ -12,6 +12,16 @@ import { APEX_RESERVED_WORDS } from './refs/reserved-words.js';
 import { getNodeClassOptional, isObject } from './utils.js';
 
 /**
+ * Interface for Prettier print function signature.
+ * Reduces parameter count in functions that accept print functions.
+ */
+// eslint-disable-next-line @typescript-eslint/no-type-alias -- Type alias needed to reduce parameter count in function signatures
+type PrintFunction = (
+	path: Readonly<AstPath<ApexNode>>,
+	...extraArgs: unknown[]
+) => Doc;
+
+/**
  * Normalizes the casing of object type suffixes in a type name.
  * @param typeName - The type name to normalize.
  * @returns The type name with normalized suffix casing.
@@ -55,7 +65,7 @@ const normalizeStandardObjectType = (typeName: string): string => {
 	}
 	const lowerTypeName = typeName.toLowerCase();
 	const standardObject = STANDARD_OBJECTS[lowerTypeName];
-	return standardObject !== undefined ? standardObject : typeName;
+	return standardObject ?? typeName;
 };
 
 /**
@@ -108,10 +118,9 @@ const isIdentifier = (
 ): node is Readonly<ApexIdentifier> => {
 	if (!isObject(node)) return false;
 	const nodeClass = getNodeClassOptional(node);
-	if (
-		nodeClass === IDENTIFIER_CLASS ||
-		(nodeClass !== undefined && nodeClass.includes('Identifier'))
-	) {
+	const isIdentifierClass =
+		nodeClass === IDENTIFIER_CLASS || nodeClass?.includes('Identifier');
+	if (isIdentifierClass === true) {
 		return true;
 	}
 	return typeof (node as Record<string, unknown>)['value'] === 'string';
@@ -125,11 +134,13 @@ const TYPEREF_CLASS = 'apex.jorje.data.ast.TypeRef';
 const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	for (const item of stack) {
 		if (typeof item === 'object' && item !== null && '@class' in item) {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- item is confirmed to have @class
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- item is confirmed to have @class
 			const nodeClass = getNodeClassOptional(item as ApexNode);
-			if (
+			const isFromExpr =
 				nodeClass === FROM_EXPR_CLASS ||
-				nodeClass?.includes('FromExpr')
-			) {
+				nodeClass?.includes('FromExpr');
+			if (isFromExpr === true) {
 				return true;
 			}
 		}
@@ -179,16 +190,19 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	if (stack.length < STACK_PARENT_OFFSET) return false;
 
 	const parent = stack[stack.length - STACK_PARENT_OFFSET];
-	if (typeof parent !== 'object' || parent == null) return false;
+	if (typeof parent !== 'object' || parent === null) return false;
 	const parentClass = getNodeClassOptional(parent);
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-condition -- parent is confirmed to be object with @class, types property exists
 	const hasTypesArray =
 		'types' in parent &&
 		Array.isArray((parent as { types?: unknown }).types);
 
-	return (
-		(isTypeRelatedParentClass(parentClass) || hasTypesArray) &&
-		(key !== 'name' || !parentClass?.includes('Variable'))
-	);
+	const hasParentTypeContext =
+		isTypeRelatedParentClass(parentClass) || hasTypesArray;
+	const parentClassValue = parentClass ?? '';
+	const isNotVariableName =
+		key !== 'name' || !parentClassValue.includes('Variable');
+	return hasParentTypeContext && isNotVariableName;
 };
 
 interface ShouldNormalizeTypeParams {
@@ -225,6 +239,7 @@ function shouldNormalizeType(
 		parentKey === 'types' ||
 		key === 'names' ||
 		(typeof key === 'string' &&
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/no-unnecessary-type-conversion -- key.toLowerCase() result needs comparison
 			(key.toLowerCase() === 'type' ||
 				key.toLowerCase() === 'typeref' ||
 				key === 'types')) ||
@@ -245,14 +260,12 @@ function shouldNormalizeType(
  */
 function normalizeSingleIdentifier(
 	node: Readonly<ApexIdentifier>,
-	originalPrint: (
-		path: Readonly<AstPath<ApexNode>>,
-		...extraArgs: unknown[]
-	) => Doc,
+	originalPrint: PrintFunction,
 	subPath: Readonly<AstPath<ApexNode>>,
 ): Doc {
 	const nodeValue = node.value;
-	if (nodeValue.length === 0) return originalPrint(subPath);
+	const ZERO_LENGTH = 0;
+	if (nodeValue.length === ZERO_LENGTH) return originalPrint(subPath);
 	const normalizedValue = normalizeTypeName(nodeValue);
 	if (normalizedValue === nodeValue) return originalPrint(subPath);
 	const isInNamesArray = subPath.key === 'names';
@@ -281,14 +294,12 @@ function normalizeSingleIdentifier(
  */
 function normalizeReservedWordIdentifier(
 	node: Readonly<ApexIdentifier>,
-	originalPrint: (
-		path: Readonly<AstPath<ApexNode>>,
-		...extraArgs: unknown[]
-	) => Doc,
+	originalPrint: PrintFunction,
 	subPath: Readonly<AstPath<ApexNode>>,
 ): Doc {
 	const nodeValue = node.value;
-	if (nodeValue.length === 0) return originalPrint(subPath);
+	const ZERO_LENGTH = 0;
+	if (nodeValue.length === ZERO_LENGTH) return originalPrint(subPath);
 	const normalizedValue = normalizeReservedWord(nodeValue);
 	if (normalizedValue === nodeValue) return originalPrint(subPath);
 
@@ -320,10 +331,7 @@ function normalizeReservedWordIdentifier(
  */
 function normalizeNamesArray(
 	node: Readonly<ApexNode & { names?: readonly ApexIdentifier[] }>,
-	originalPrint: (
-		path: Readonly<AstPath<ApexNode>>,
-		...extraArgs: unknown[]
-	) => Doc,
+	originalPrint: PrintFunction,
 	subPath: Readonly<AstPath<ApexNode>>,
 ): Doc {
 	const namesArray = node.names;
@@ -332,20 +340,25 @@ function normalizeNamesArray(
 	for (const nameNode of namesArray) {
 		if (
 			typeof nameNode !== 'object' ||
-			!('value' in nameNode) ||
-			typeof nameNode.value !== 'string'
+			nameNode === null ||
+			!('value' in nameNode)
 		) {
 			continue;
 		}
-		const nodeValue = nameNode.value;
-		if (!nodeValue) continue;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion -- nameNode is confirmed to have value property
+		const nodeValueRaw = (nameNode as { value?: unknown }).value;
+		if (typeof nodeValueRaw !== 'string') continue;
+		const nodeValue = nodeValueRaw;
+		if (nodeValue === '') continue;
 		const normalizedValue = normalizeTypeName(nodeValue);
 		if (normalizedValue !== nodeValue) {
-			nameNode.value = normalizedValue;
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion -- nameNode is confirmed to have value property
+			(nameNode as { value: string }).value = normalizedValue;
 		}
 	}
 	// Don't restore values - the Doc may be evaluated lazily and needs the normalized values
 	// The AST is already being mutated, so we keep the normalized values
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/max-params -- External printer API uses any types; PrintFunction has parameters
 	return originalPrint(subPath);
 }
 
@@ -359,15 +372,12 @@ function normalizeNamesArray(
  * const reservedWordNormalizingPrint = createReservedWordNormalizingPrint(originalPrint);
  * ```
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Returned arrow function has 2 parameters (subPath and ...extraArgs), within limit of 3
 const createReservedWordNormalizingPrint =
-	(
-		originalPrint: (
-			path: Readonly<AstPath<ApexNode>>,
-			...extraArgs: unknown[]
-		) => Doc,
-	) =>
+	(originalPrint: PrintFunction) =>
 	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {
 		const { node } = subPath;
+		// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions, @typescript-eslint/no-unnecessary-condition -- node may be null/undefined
 		if (!node) return originalPrint(subPath);
 
 		const isIdent = isIdentifier(node);
@@ -375,6 +385,7 @@ const createReservedWordNormalizingPrint =
 			return originalPrint(subPath, ..._extraArgs);
 		}
 
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- node is confirmed to be Identifier with value
 		const valueField = (node as { value?: unknown }).value;
 		if (typeof valueField === 'string') {
 			return normalizeReservedWordIdentifier(
@@ -385,26 +396,31 @@ const createReservedWordNormalizingPrint =
 		}
 
 		return originalPrint(subPath, ..._extraArgs);
+		/* eslint-enable @typescript-eslint/max-params */
 	};
 
+/**
+ * Configuration for type normalization.
+ */
+interface TypeNormalizationConfig {
+	readonly forceTypeContext?: boolean;
+	readonly parentKey?: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/max-params -- Returned arrow function has 2 parameters (subPath and ...extraArgs), within limit of 3
 const createTypeNormalizingPrint =
-	(
-		originalPrint: (
-			path: Readonly<AstPath<ApexNode>>,
-			...extraArgs: unknown[]
-		) => Doc,
-		forceTypeContext = false,
-		parentKey?: string,
-	) =>
+	(originalPrint: PrintFunction, config: TypeNormalizationConfig = {}) =>
 	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {
+		const { forceTypeContext = false, parentKey } = config;
 		const { node, key } = subPath;
-		const normalizedKey = key === null ? undefined : key;
+		const normalizedKey = key ?? undefined;
 		const shouldNormalize = shouldNormalizeType({
 			forceTypeContext,
 			key: normalizedKey,
 			parentKey,
 			path: subPath,
 		});
+		// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions, @typescript-eslint/no-unnecessary-condition -- node may be null/undefined
 		if (!node) return originalPrint(subPath);
 		const isIdent = isIdentifier(node);
 		// Note: TypeRef nodes are handled in print (printer.ts) using the interception pattern.

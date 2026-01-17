@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { doc, type AstPath, type Doc } from 'prettier';
 import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
+import { createTypeNormalizingPrint } from './casing.js';
 import {
 	getNodeClass,
 	getNodeClassOptional,
@@ -13,7 +14,6 @@ import {
 	isObject,
 	isApexNodeLike,
 } from './utils.js';
-import { createTypeNormalizingPrint } from './casing.js';
 
 const MIN_ENTRIES_FOR_MULTILINE = 2;
 const LIST_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewListLiteral';
@@ -26,6 +26,7 @@ const isListInit = (
 	return cls === LIST_LITERAL_CLASS || cls === SET_LITERAL_CLASS;
 };
 
+const ZERO_LENGTH = 0;
 const isMapInit = (
 	node: Readonly<ApexNode>,
 ): node is Readonly<ApexMapInitNode> =>
@@ -44,8 +45,9 @@ const isNestedInCollection = (
 	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
 ): boolean => {
 	const { stack } = path;
-	if (!Array.isArray(stack) || stack.length === 0) return false;
-	return stack.some((parent) => {
+	if (!Array.isArray(stack) || stack.length === ZERO_LENGTH) return false;
+	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- parent parameter needs type checking
+	return stack.some((parent: unknown) => {
 		if (!isObject(parent) || !('@class' in parent)) {
 			return false;
 		}
@@ -60,16 +62,19 @@ const isNestedInCollection = (
 
 /**
  * Creates type document for collections.
- * @param typeName
- * @param printedTypes
- * @param typeSeparator
- * @param isNested
+ * @param typeName - The name of the collection type.
+ * @param printedTypes - Array of printed type documents.
+ * @param typeSeparator - The separator document between types.
+ * @param isNested - Whether this is a nested collection type.
+ * @returns The created type document.
  */
+// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for type document creation
 const createTypeDoc = (
 	typeName: string,
 	printedTypes: readonly Doc[],
 	typeSeparator: Doc,
 	isNested: boolean,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): Doc => {
 	const baseTypeDoc: Doc = [
 		typeName,
@@ -207,11 +212,10 @@ const printCollection = (
 	const isList =
 		nodeClass === LIST_LITERAL_CLASS || nodeClass === SET_LITERAL_CLASS;
 
-	const typeNormalizingPrint = createTypeNormalizingPrint(
-		print,
-		true,
-		'types',
-	);
+	const typeNormalizingPrint = createTypeNormalizingPrint(print, {
+		forceTypeContext: true,
+		parentKey: 'types',
+	});
 	const printedTypes = path.map(typeNormalizingPrint, 'types' as never);
 	const isNested = isNestedInCollection(path);
 

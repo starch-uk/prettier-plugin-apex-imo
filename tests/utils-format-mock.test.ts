@@ -29,7 +29,11 @@ describe('formatApexCodeWithFallback with mocked prettier.format', () => {
 
 	it('should return result from apex parser when apex-anonymous fails (line 180)', async () => {
 		const code = 'Integer x = 10;';
-		const formattedResult = 'Integer x = 10;'; // Formatted result
+
+		/**
+		 * Formatted result.
+		 */
+		const formattedResult = 'Integer x = 10;';
 
 		// Mock: first call (apex-anonymous) fails, second call (apex) succeeds
 		mockFormat
@@ -76,7 +80,11 @@ describe('formatApexCodeWithFallback with mocked prettier.format', () => {
 
 	it('should return result from apex-anonymous parser when it succeeds', async () => {
 		const code = 'Integer x = 10;';
-		const formattedResult = 'Integer x = 10;'; // Formatted result
+
+		/**
+		 * Formatted result.
+		 */
+		const formattedResult = 'Integer x = 10;';
 
 		// Mock: first call succeeds
 		mockFormat.mockResolvedValueOnce(formattedResult);

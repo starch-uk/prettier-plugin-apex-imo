@@ -35,7 +35,7 @@ const isObject = (value: unknown): value is object =>
  */
 const isApexNodeLike = (
 	value: unknown,
-): value is { '@class': unknown; [key: string]: unknown } =>
+): value is { [key: string]: unknown; '@class': unknown } =>
 	isObject(value) && '@class' in value;
 
 /**
@@ -60,12 +60,15 @@ const createNodeClassGuard = <T extends ApexNode>(
 	};
 };
 
-const startsWithAccessModifier = (line: string): boolean => {
+const startsWithAccessModifier = (line: Readonly<string>): boolean => {
 	const trimmed = line.trim();
-	if (trimmed.length === 0) return false;
+	const ZERO_LENGTH = 0;
+	if (trimmed.length === ZERO_LENGTH) return false;
 	// Use character scanning instead of regex to find first whitespace
-	let spaceIndex = -1;
-	for (let i = 0; i < trimmed.length; i++) {
+	const NOT_FOUND = -1;
+	const ZERO_INDEX = 0;
+	let spaceIndex = NOT_FOUND;
+	for (let i = ZERO_INDEX; i < trimmed.length; i++) {
 		const char = trimmed[i];
 		if (char === ' ' || char === '\t') {
 			spaceIndex = i;
@@ -73,7 +76,9 @@ const startsWithAccessModifier = (line: string): boolean => {
 		}
 	}
 	const firstWord = (
-		spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex)
+		spaceIndex === NOT_FOUND
+			? trimmed
+			: trimmed.slice(ZERO_INDEX, spaceIndex)
 	).toLowerCase();
 	return DECLARATION_MODIFIERS_SET.has(firstWord);
 };
@@ -88,20 +93,25 @@ const STRING_OFFSET = 1;
  * @param value - The value to check.
  * @returns True if the value is empty.
  */
-const isEmpty = (value: unknown[] | string): boolean => value.length === EMPTY;
+const isEmpty = (value: Readonly<unknown[] | string>): boolean =>
+	value.length === EMPTY;
 
 /**
  * Checks if a value is not empty (string or array).
  * @param value - The value to check.
  * @returns True if the value is not empty.
  */
-const isNotEmpty = (value: unknown[] | string): boolean => value.length > EMPTY;
+const isNotEmpty = (value: Readonly<unknown[] | string>): boolean =>
+	value.length > EMPTY;
 
 /**
  * Calculates effective width by subtracting comment prefix length from print width.
+ * Computes the available width for content by subtracting the comment prefix length from the total print width.
+ * Throws an error if printWidth is undefined.
  * @param printWidth - The print width option.
- * @param commentPrefixLength - The length of the comment prefix.
- * @returns The effective width available for content.
+ * @param commentPrefixLength - The length of the comment prefix to subtract from print width.
+ * @returns The effective width available for content after accounting for prefix.
+ * @throws {Error} If printWidth is undefined, indicating invalid configuration.
  */
 const calculateEffectiveWidth = (
 	printWidth: number | undefined,
@@ -123,13 +133,15 @@ const calculateEffectiveWidth = (
  * @returns True if a blank line should be preserved.
  */
 const preserveBlankLineAfterClosingBrace = (
-	formattedLines: readonly string[],
+	formattedLines: Readonly<readonly string[]>,
 	index: number,
 ): boolean => {
+	const ZERO_INDEX = 0;
+	const INDEX_OFFSET = 1;
 	if (
-		index < 0 ||
+		index < ZERO_INDEX ||
 		index >= formattedLines.length ||
-		index + 1 >= formattedLines.length
+		index + INDEX_OFFSET >= formattedLines.length
 	) {
 		return false;
 	}
@@ -140,8 +152,9 @@ const preserveBlankLineAfterClosingBrace = (
 		return false;
 	}
 
-	const nextLine = formattedLines[index + 1]?.trim();
-	if (!nextLine || isEmpty(nextLine)) {
+	const nextLine = formattedLines[index + INDEX_OFFSET]?.trim();
+	const hasNextLine = nextLine !== undefined && nextLine !== '';
+	if (!hasNextLine || isEmpty(nextLine)) {
 		return false;
 	}
 	return nextLine.startsWith('@') || startsWithAccessModifier(nextLine);
@@ -160,7 +173,8 @@ const preserveBlankLineAfterClosingBrace = (
  * @returns Promise resolving to formatted code string.
  */
 const formatApexCodeWithFallback = async (
-	code: string,
+	code: Readonly<string>,
+	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Options type is already Readonly wrapper
 	options: Readonly<ParserOptions & { plugins?: unknown[] }>,
 ): Promise<string> => {
 	try {
