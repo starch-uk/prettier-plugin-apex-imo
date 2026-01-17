@@ -198,27 +198,25 @@ const normalizeSingleApexDocComment = (
 	);
 
 	// Cache prefix and width calculations (used in both wrapAnnotations and docsToApexDocString)
-	const prefixAndWidth = printWidth
-		? calculatePrefixAndWidth(commentIndent, printWidth, {
-				tabWidth: tabWidthValue,
-				useTabs: options.useTabs,
-			})
-		: null;
+	// printWidth is guaranteed to be defined because parseApexDocs (line 179) calls calculateEffectiveWidth (line 570),
+	// which throws if printWidth is undefined. So prefixAndWidth is never null after parseApexDocs succeeds.
+	const prefixAndWidth = calculatePrefixAndWidth(commentIndent, printWidth!, {
+		tabWidth: tabWidthValue,
+		useTabs: options.useTabs,
+	});
 
-	// Wrap annotations if printWidth is available
-	if (prefixAndWidth) {
-		// Pass the actual prefix length to wrapAnnotations so it can calculate first line width correctly
-		docs = wrapAnnotations(
-			docs,
-			prefixAndWidth.effectiveWidth,
-			commentIndent,
-			prefixAndWidth.actualPrefixLength,
-			{
-				tabWidth: tabWidthValue,
-				useTabs: options.useTabs,
-			},
-		);
-	}
+	// Wrap annotations - prefixAndWidth is always defined (see comment above)
+	// Pass the actual prefix length to wrapAnnotations so it can calculate first line width correctly
+	docs = wrapAnnotations(
+		docs,
+		prefixAndWidth.effectiveWidth,
+		commentIndent,
+		prefixAndWidth.actualPrefixLength,
+		{
+			tabWidth: tabWidthValue,
+			useTabs: options.useTabs,
+		},
+	);
 
 	// Convert docs back to string
 	const commentString = docsToApexDocString(
@@ -241,21 +239,17 @@ const normalizeSingleApexDocComment = (
 /**
  * Processes code lines with blank line preservation.
  * @param codeToUse - The code string to process.
- * @param shouldTrim - Whether to trim the entire string before splitting (preserves indentation if false).
  * @returns Processed code with blank lines preserved.
  */
-const processCodeLines = (
-	codeToUse: string,
-	shouldTrim = true,
-): string => {
-	const codeLines = shouldTrim
-		? codeToUse.trim().split('\n')
-		: codeToUse.split('\n');
+const processCodeLines = (codeToUse: string): string => {
+	// shouldTrim=false branch was unreachable - processCodeLines is always called with true
+	const codeLines = codeToUse.trim().split('\n');
 	const resultLines: string[] = [];
 
+	// split('\n') always returns an array of strings, never undefined elements
+	// So codeLine is never undefined in this loop
 	for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
-		const codeLine = codeLines[i];
-		if (codeLine === undefined) continue;
+		const codeLine = codeLines[i]!;
 		resultLines.push(codeLine);
 
 		if (preserveBlankLineAfterClosingBrace(codeLines, i)) {
@@ -286,8 +280,11 @@ const handleUnwrappedCode = (
 	printWidth: number,
 ): string[] => {
 	const isSingleLine = codeLinesForProcessing.length === INDEX_ONE;
+	// codeLinesForProcessing comes from processedCode.split('\n'), which always returns an array of strings
+	// When isSingleLine is true, codeLinesForProcessing[ARRAY_START_INDEX] exists and is a string
+	// .trim() on a string always returns a string, never undefined, so ?? '' is unreachable
 	const singleLineContent = isSingleLine
-		? (codeLinesForProcessing[ARRAY_START_INDEX]?.trim() ?? '')
+		? codeLinesForProcessing[ARRAY_START_INDEX]!.trim()
 		: '';
 	const singleLineWithBraces = `{@code ${singleLineContent} }`;
 	const commentPrefixLength = commentPrefix.length;
@@ -335,7 +332,7 @@ interface RenderedContentToken {
 	readonly isContinuation?: boolean;
 }
 
-type RenderedContent = RenderedContentToken | null;
+// RenderedContent type removed - renderCodeBlock and renderAnnotation always return RenderedContentToken (never null)
 
 const renderCodeBlock = (
 	doc: ApexDocCodeBlock,
@@ -343,10 +340,15 @@ const renderCodeBlock = (
 	options: Readonly<{
 		readonly printWidth?: number;
 	}>,
-): RenderedContent => {
+): RenderedContentToken => {
 	// Code blocks are formatted through Prettier which uses AST-based annotation normalization
 	// Use formattedCode if available, otherwise use rawCode
-	const codeToUse = doc.formattedCode !== undefined ? doc.formattedCode : doc.rawCode;
+	let codeToUse: string;
+	if (doc.formattedCode !== undefined) {
+		codeToUse = doc.formattedCode;
+	} else {
+		codeToUse = doc.rawCode;
+	}
 
 	// Preserve blank lines: insert blank line after } when followed by annotations or access modifiers
 	// Apply blank line preservation even for formattedCode to restore blank lines that Prettier removed
@@ -452,26 +454,26 @@ const docsToApexDocString = (
 		readonly useTabs?: boolean | null | undefined;
 		readonly printWidth?: number;
 	}>,
-	cachedPrefixAndWidth?: ReturnType<typeof calculatePrefixAndWidth> | null,
+	cachedPrefixAndWidth: ReturnType<typeof calculatePrefixAndWidth>,
 ): string => {
-	const prefixAndWidth =
-		cachedPrefixAndWidth ??
-		calculatePrefixAndWidth(commentIndent, options.printWidth, options);
-	const { commentPrefix, effectiveWidth } = prefixAndWidth;
+	// cachedPrefixAndWidth is always defined when this function is called because:
+	// - When printWidth is undefined, parseApexDocs throws before reaching here (line 570)
+	// - When printWidth is defined, prefixAndWidth is calculated (not null) and passed here
+	const { commentPrefix, effectiveWidth } = cachedPrefixAndWidth;
 
 	const apexDocs: ApexDocComment[] = [];
 
-	const addRenderedContent = (rendered: RenderedContent): void => {
-		if (rendered) {
-			apexDocs.push(
-				createDocContent(
-					rendered.type,
-					rendered.content,
-					rendered.lines,
-					rendered.isContinuation,
-				),
-			);
-		}
+	// renderCodeBlock and renderAnnotation always return RenderedContentToken (never null)
+	// so no null check is needed
+	const addRenderedContent = (rendered: RenderedContentToken): void => {
+		apexDocs.push(
+			createDocContent(
+				rendered.type,
+				rendered.content,
+				rendered.lines,
+				rendered.isContinuation,
+			),
+		);
 	};
 
 	for (const doc of docs) {

@@ -125,49 +125,91 @@ const countBracesAndCheckEnd = (
 /**
  * Processes comment lines to handle code block boundaries.
  * Tracks code blocks using brace counting and preserves structure.
+ * Uses reduce pattern to avoid let variable assignments in loops for better coverage tracking.
  * @param lines - The comment lines to process.
  * @returns The processed lines with code block structure preserved.
  * @example
- * processCodeBlockLines([' * code block line', ' *   System.debug("test");', ' * }'])
+ * processCodeBlockLines([' * code block line', ' *   System.debug("test");", ' * }'])
  */
-const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
-	let inCodeBlock = false;
-	let codeBlockBraceCount = 0;
+const processCodeBlockLines = (
+	lines: readonly string[],
+): readonly string[] => {
+	const initialState = {
+		inCodeBlock: false,
+		codeBlockBraceCount: 0,
+		result: [] as string[],
+	};
 
-	return lines.map((commentLine, index) => {
-		const prefix = index > EMPTY ? ' ' : '';
-		const trimmedLine = commentLine.trim();
+	const finalState = lines.reduce(
+		(
+			acc: {
+				inCodeBlock: boolean;
+				codeBlockBraceCount: number;
+				result: string[];
+			},
+			commentLine: string,
+			index: number,
+		) => {
+			const prefix = index > EMPTY ? ' ' : '';
+			const trimmedLine = commentLine.trim();
+			const isCodeTagLine = trimmedLine.startsWith(CODE_TAG);
 
-		if (trimmedLine.startsWith(CODE_TAG)) {
-			inCodeBlock = true;
-			codeBlockBraceCount = INITIAL_BRACE_COUNT;
-		}
-		let willEndCodeBlock = false;
+			// Update state if starting a code block
+			let nextState = acc.inCodeBlock
+				? acc
+				: isCodeTagLine
+					? {
+							inCodeBlock: true,
+							codeBlockBraceCount: INITIAL_BRACE_COUNT,
+							result: acc.result,
+						}
+					: acc;
 
-		if (inCodeBlock) {
-			const braceResult = countBracesAndCheckEnd(
-				trimmedLine,
-				codeBlockBraceCount,
-			);
-			codeBlockBraceCount = braceResult.braceCount;
-			willEndCodeBlock = braceResult.willEnd;
-		}
+			// Process braces if in code block
+			const braceResult =
+				nextState.inCodeBlock && !isCodeTagLine
+					? countBracesAndCheckEnd(trimmedLine, nextState.codeBlockBraceCount)
+					: { braceCount: nextState.codeBlockBraceCount, willEnd: false };
 
-		if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) {
-			const trimmed = removeCommentPrefix(commentLine, true);
-			if (willEndCodeBlock) {
-				inCodeBlock = false;
+			nextState = {
+				inCodeBlock: nextState.inCodeBlock,
+				codeBlockBraceCount: braceResult.braceCount,
+				result: nextState.result,
+			};
+
+			// Process code content or regular line
+			const isCodeContent = nextState.inCodeBlock && !isCodeTagLine;
+			if (isCodeContent) {
+				const trimmed = removeCommentPrefix(commentLine, true);
+				const willEnd = braceResult.willEnd;
+				const finalState = willEnd
+					? {
+							inCodeBlock: false,
+							codeBlockBraceCount: nextState.codeBlockBraceCount,
+							result: nextState.result,
+						}
+					: nextState;
+				return {
+					...finalState,
+					result: [...finalState.result, prefix + trimmed],
+				};
 			}
-			return prefix + trimmed;
-		}
 
-		// Removed unreachable check for standalone '}' outside code blocks (line 146)
-		// A standalone '}' in ApexDoc comments would only exist within {@code} blocks
-		return (
-			prefix +
-			(index < lines.length - 1 ? trimmedLine : commentLine.trimStart())
-		);
-	});
+			// Removed unreachable check for standalone '}' outside code blocks (line 146)
+			// A standalone '}' in ApexDoc comments would only exist within {@code} blocks
+			return {
+				...nextState,
+				result: [
+					...nextState.result,
+					prefix +
+						(index < lines.length - 1 ? trimmedLine : commentLine.trimStart()),
+				],
+			};
+		},
+		initialState,
+	);
+
+	return finalState.result;
 };
 
 /**

@@ -162,21 +162,30 @@ describe('apexdoc-code', () => {
 			expect(result2[1]).toBe(' *   }');
 		});
 
-		it.concurrent('should handle code block ending within a line (lines 138-142)', () => {
-			// Test when inCodeBlock is true, line doesn't start with CODE_TAG, and willEndCodeBlock is true
-			// This triggers: if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) with willEndCodeBlock = true
-			// The line with '}' that ends the block must NOT start with CODE_TAG and must have braceCount reach 0
-			const lines = [
-				' * {@code',
-				' *   Integer x = 10;',
-				' * }', // This line has '}' which decrements braceCount to 0 (willEndCodeBlock = true)
-			];
-			const result = processCodeBlockLines(lines);
-			expect(result.length).toBe(3);
-			// Line 2: inCodeBlock=true, trimmedLine='}' doesn't start with CODE_TAG, willEndCodeBlock=true
-			// Should enter the if block at line 137, set inCodeBlock=false, return prefix + trimmed
-			expect(result[2]).toContain('}');
-		});
+		it.concurrent(
+			'should handle code block ending within a line (apexdoc-code.ts lines 152-157, 161-165)',
+			() => {
+				// Test when inCodeBlock is true, line doesn't start with CODE_TAG, and willEndCodeBlock is true
+				// This exercises: countBracesAndCheckEnd call (line 152), assignments (156-157),
+				// and the willEndCodeBlock=true branch (162-163) that sets inCodeBlock=false
+				const lines = [
+					' * {@code', // Starts code block, sets inCodeBlock=true, codeBlockBraceCount=1
+					' *   Integer x = 10;', // In code block, processes braces (line 151-157)
+					' * }', // Decrements braceCount to 0, willEndCodeBlock=true (line 152-157)
+					// Then enters if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG)) (line 160)
+					// And sets inCodeBlock=false when willEndCodeBlock=true (line 162-163)
+				];
+				const result = processCodeBlockLines(lines);
+				expect(result.length).toBe(3);
+				// Verify the closing brace was processed correctly
+				expect(result[2]).toContain('}');
+				// Verify subsequent processing after code block ends
+				const linesAfter = [' * {@code', ' *   Integer x = 10;', ' * }', ' * More text'];
+				const resultAfter = processCodeBlockLines(linesAfter);
+				// After ' * }', inCodeBlock should be false, so ' * More text' should be processed normally
+				expect(resultAfter[3]).toContain('More text');
+			},
+		);
 
 		it.concurrent('should handle standalone closing brace not in code block (line 146)', () => {
 			// Test the standalone '}' case that triggers line 146
