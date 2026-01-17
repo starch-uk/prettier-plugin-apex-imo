@@ -14,34 +14,53 @@ import type { ApexDocAnnotation, ApexDocComment } from '../src/comments.js';
 
 describe('apexdoc-annotations', () => {
 	describe('renderAnnotation', () => {
-		it.concurrent('should render annotation with followingText', () => {
-			// Test followingText handling
-			const doc: ApexDocAnnotation = {
+		it.concurrent.each([
+			{
 				content: 'input The input parameter' as Doc,
+				description: 'should render annotation with followingText',
+				expectedLines: ['   * Some text before annotation'],
 				followingText: 'Some text before annotation' as Doc,
-				name: 'param',
-				type: 'annotation',
-			};
-			const result = renderAnnotation(doc, '   * ');
-			expect(result).not.toBeNull();
-			expect(result.lines).toContain('   * Some text before annotation');
-			expect(result.lines.some((l) => l.includes('@param'))).toBe(true);
-		});
-
-		it.concurrent(
-			'should render annotation with multiline followingText',
-			() => {
-				// Test followingText with multiple lines
+				shouldContainParam: true,
+			},
+			{
+				content: 'input The input parameter' as Doc,
+				description:
+					'should render annotation with multiline followingText',
+				expectedLines: ['   * Line 1', '   * Line 2'],
+				followingText: 'Line 1\nLine 2' as Doc,
+				shouldContainParam: false,
+			},
+		])(
+			'$description',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
+			({
+				content,
+				expectedLines,
+				followingText,
+				shouldContainParam,
+			}: Readonly<{
+				content: Readonly<Doc>;
+				description: string;
+				expectedLines: readonly string[];
+				followingText: Readonly<Doc>;
+				shouldContainParam: boolean;
+			}>) => {
 				const doc: ApexDocAnnotation = {
-					content: 'input The input parameter' as Doc,
-					followingText: 'Line 1\nLine 2' as Doc,
+					content,
+					followingText,
 					name: 'param',
 					type: 'annotation',
 				};
 				const result = renderAnnotation(doc, '   * ');
 				expect(result).not.toBeNull();
-				expect(result.lines).toContain('   * Line 1');
-				expect(result.lines).toContain('   * Line 2');
+				for (const expectedLine of expectedLines) {
+					expect(result.lines).toContain(expectedLine);
+				}
+				if (shouldContainParam) {
+					expect(result.lines.some((l) => l.includes('@param'))).toBe(
+						true,
+					);
+				}
 			},
 		);
 

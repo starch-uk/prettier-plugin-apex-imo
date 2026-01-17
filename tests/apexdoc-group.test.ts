@@ -7,55 +7,71 @@ import { normalizeGroupContent } from '../src/apexdoc-group.js';
 
 describe('apexdoc-group', () => {
 	describe('normalizeGroupContent', () => {
-		it.concurrent('should normalize group name with description', () => {
-			expect(normalizeGroupContent('class My description')).toBe(
-				'Class My description',
-			);
-			expect(normalizeGroupContent('method Helper methods')).toBe(
-				'Method Helper methods',
-			);
-			expect(normalizeGroupContent('interface API interfaces')).toBe(
-				'Interface API interfaces',
-			);
-		});
-
-		it.concurrent('should normalize group name without description', () => {
-			expect(normalizeGroupContent('class')).toBe('Class');
-			expect(normalizeGroupContent('method')).toBe('Method');
-			expect(normalizeGroupContent('interface')).toBe('Interface');
-			expect(normalizeGroupContent('enum')).toBe('Enum');
-			expect(normalizeGroupContent('property')).toBe('Property');
-			expect(normalizeGroupContent('variable')).toBe('Variable');
-		});
-
-		it.concurrent('should handle empty string', () => {
-			expect(normalizeGroupContent('')).toBe('');
-		});
-
-		it.concurrent('should handle whitespace-only string', () => {
-			expect(normalizeGroupContent('   ')).toBe('');
-		});
-
-		it.concurrent('should preserve case for unknown group names', () => {
-			expect(normalizeGroupContent('unknown')).toBe('unknown');
-			expect(normalizeGroupContent('UnknownGroup')).toBe('UnknownGroup');
-		});
-
-		it.concurrent(
-			'should handle group names with multiple spaces in description',
-			() => {
-				expect(normalizeGroupContent('class   My   description')).toBe(
-					'Class   My   description',
-				);
+		it.concurrent.each([
+			{ expected: 'Class', input: 'class' },
+			{ expected: 'Method', input: 'method' },
+			{ expected: 'Interface', input: 'interface' },
+			{ expected: 'Enum', input: 'enum' },
+			{ expected: 'Property', input: 'property' },
+			{ expected: 'Variable', input: 'variable' },
+			{ expected: 'Class My description', input: 'class My description' },
+			{
+				expected: 'Method Helper methods',
+				input: 'method Helper methods',
+			},
+			{
+				expected: 'Interface API interfaces',
+				input: 'interface API interfaces',
+			},
+		])(
+			'should normalize "$input" to "$expected"',
+			({
+				expected,
+				input,
+			}: Readonly<{ expected: string; input: string }>) => {
+				expect(normalizeGroupContent(input)).toBe(expected);
 			},
 		);
 
-		it.concurrent(
-			'should handle group names with leading/trailing whitespace',
-			() => {
-				expect(normalizeGroupContent('  class description  ')).toBe(
-					'Class description',
-				);
+		it.concurrent.each([
+			{ expected: '', input: '' },
+			{ expected: '', input: '   ' },
+		])(
+			'should handle "$input" as empty',
+			({
+				expected,
+				input,
+			}: Readonly<{ expected: string; input: string }>) => {
+				expect(normalizeGroupContent(input)).toBe(expected);
+			},
+		);
+
+		it.concurrent.each([
+			{ expected: 'unknown', input: 'unknown' },
+			{ expected: 'UnknownGroup', input: 'UnknownGroup' },
+		])(
+			'should preserve case for unknown group name "$input"',
+			({
+				expected,
+				input,
+			}: Readonly<{ expected: string; input: string }>) => {
+				expect(normalizeGroupContent(input)).toBe(expected);
+			},
+		);
+
+		it.concurrent.each([
+			{
+				expected: 'Class   My   description',
+				input: 'class   My   description',
+			},
+			{ expected: 'Class description', input: '  class description  ' },
+		])(
+			'should handle whitespace in "$input"',
+			({
+				expected,
+				input,
+			}: Readonly<{ expected: string; input: string }>) => {
+				expect(normalizeGroupContent(input)).toBe(expected);
 			},
 		);
 	});

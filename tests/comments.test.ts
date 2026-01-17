@@ -203,76 +203,73 @@ describe('comments', () => {
 	});
 
 	describe('getCommentIndent', () => {
-		it.concurrent('should get indent from first asterisk line', () => {
-			const text = '    /**\n     * Comment\n     */';
-			const indent = getCommentIndent(text, 4);
-			expect(indent).toBe(4);
-		});
-
-		it.concurrent('should handle comment with no asterisk lines', () => {
-			// Comment that ends without finding a * character
-			const text = '    /** Comment */';
-			const indent = getCommentIndent(text, 4);
-			// Should fall back to indent of comment start line
-			expect(indent).toBe(4);
-		});
-
-		it.concurrent('should handle comment at end of file', () => {
-			// When skipToLineEnd returns false (end of file)
-			const text = '    /** Comment';
-			const indent = getCommentIndent(text, 4);
-			// Should fall back to indent of comment start line
-			expect(indent).toBe(4);
-		});
-
-		it.concurrent(
-			'should handle comment with newline that cannot be skipped',
-			() => {
-				// When skipNewline returns false
-				const text = '    /**\r\n     * Comment\n     */';
-				const indent = getCommentIndent(text, 4);
-				expect(indent).toBe(4);
+		it.concurrent.each([
+			{
+				commentIndent: 4,
+				description: 'should get indent from first asterisk line',
+				expected: 4,
+				text: '    /**\n     * Comment\n     */',
 			},
-		);
-
-		it.concurrent('should handle multi-line comment', () => {
-			const text = '  /**\n   * Line 1\n   * Line 2\n   */';
-			const indent = getCommentIndent(text, 2);
-			expect(indent).toBe(2);
-		});
-
-		it.concurrent(
-			'should handle comment starting at beginning of line',
-			() => {
-				const text = '/**\n * Comment\n */';
-				const indent = getCommentIndent(text, 0);
-				expect(indent).toBe(0);
+			{
+				commentIndent: 4,
+				description: 'should handle comment with no asterisk lines',
+				expected: 4,
+				text: '    /** Comment */',
 			},
-		);
-
-		it.concurrent(
-			'should handle comment that ends without finding asterisk (fallback case)',
-			() => {
-				// Comment that reaches end of text without finding * or */
-				// This tests the fallback return at the end of getCommentIndent (lines 100-104)
-				// Need a comment that doesn't have * on any line and doesn't end with */
-				const text = '    /** Comment text without asterisk or closing';
-				const indent = getCommentIndent(text, 4);
-				// Should fall back to indent of comment start line
-				expect(indent).toBe(4);
+			{
+				commentIndent: 4,
+				description: 'should handle comment at end of file',
+				expected: 4,
+				text: '    /** Comment',
 			},
-		);
-
-		it.concurrent(
-			'should handle comment that breaks on finding closing marker',
-			() => {
-				// Comment that has */ without finding * on a line first
-				// This tests the break statement (line 99) when we find */ in the loop
-				// Need a comment where we encounter */ before any * on a line
-				const text = '    /** Comment text */';
-				const indent = getCommentIndent(text, 4);
-				// Should fall back to indent of comment start line since no * was found
-				expect(indent).toBe(4);
+			{
+				commentIndent: 4,
+				description:
+					'should handle comment with newline that cannot be skipped',
+				expected: 4,
+				text: '    /**\r\n     * Comment\n     */',
+			},
+			{
+				commentIndent: 2,
+				description: 'should handle multi-line comment',
+				expected: 2,
+				text: '  /**\n   * Line 1\n   * Line 2\n   */',
+			},
+			{
+				commentIndent: 0,
+				description:
+					'should handle comment starting at beginning of line',
+				expected: 0,
+				text: '/**\n * Comment\n */',
+			},
+			{
+				commentIndent: 4,
+				description:
+					'should handle comment that ends without finding asterisk (fallback case)',
+				expected: 4,
+				text: '    /** Comment text without asterisk or closing',
+			},
+			{
+				commentIndent: 4,
+				description:
+					'should handle comment that breaks on finding closing marker',
+				expected: 4,
+				text: '    /** Comment text */',
+			},
+		])(
+			'$description',
+			({
+				commentIndent,
+				expected,
+				text,
+			}: Readonly<{
+				commentIndent: number;
+				description: string;
+				expected: number;
+				text: string;
+			}>) => {
+				const indent = getCommentIndent(text, commentIndent);
+				expect(indent).toBe(expected);
 			},
 		);
 

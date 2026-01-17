@@ -472,48 +472,38 @@ describe('casing', () => {
 			expect(mockPrint).toHaveBeenCalledWith(path);
 		});
 
-		it.concurrent('should normalize various reserved words', () => {
-			const testCases = [
-				{ expected: 'public', input: 'PUBLIC' },
-				{ expected: 'private', input: 'Private' },
-				{ expected: 'static', input: 'STATIC' },
-				{ expected: 'class', input: 'Class' },
-				{ expected: 'interface', input: 'INTERFACE' },
-				{ expected: 'enum', input: 'Enum' },
-				{ expected: 'void', input: 'VOID' },
-				{ expected: 'abstract', input: 'Abstract' },
-				{ expected: 'if', input: 'IF' },
-				{ expected: 'else', input: 'Else' },
-				{ expected: 'for', input: 'FOR' },
-				{ expected: 'while', input: 'While' },
-				{ expected: 'return', input: 'RETURN' },
-				{ expected: 'try', input: 'Try' },
-				{ expected: 'catch', input: 'CATCH' },
-				{ expected: 'new', input: 'NEW' },
-				{ expected: 'this', input: 'This' },
-				{ expected: 'super', input: 'SUPER' },
-				{ expected: 'null', input: 'NULL' },
-			];
+		it.concurrent(
+			'should normalize reserved words in print context (integration test)',
+			() => {
+				// Test integration: verify that reserved word normalization works
+				// in the context of the print function. Only test a few examples
+				// since normalization.test.ts already tests all reserved words.
+				const testCases = [
+					{ expected: 'public', input: 'PUBLIC' },
+					{ expected: 'static', input: 'STATIC' },
+					{ expected: 'class', input: 'Class' },
+				];
 
-			for (const testCase of testCases) {
-				const mockPrint = createMockPrint();
-				const reservedWordNormalizingPrint =
-					createReservedWordNormalizingPrint(mockPrint);
-				const node = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: testCase.input,
-				} as ApexIdentifier;
-				// Use array index to test normalization without restoration
-				const path = createMockPath(node, 0);
+				for (const testCase of testCases) {
+					const mockPrint = createMockPrint();
+					const reservedWordNormalizingPrint =
+						createReservedWordNormalizingPrint(mockPrint);
+					const node = {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: testCase.input,
+					} as ApexIdentifier;
+					// Use array index to test normalization without restoration
+					const path = createMockPath(node, 0);
 
-				reservedWordNormalizingPrint(path);
+					reservedWordNormalizingPrint(path);
 
-				// For array indices, value should remain normalized (not restored)
-				expect((node as { value: string }).value).toBe(
-					testCase.expected,
-				);
-				expect(mockPrint).toHaveBeenCalled();
-			}
-		});
+					// For array indices, value should remain normalized (not restored)
+					expect((node as { value: string }).value).toBe(
+						testCase.expected,
+					);
+					expect(mockPrint).toHaveBeenCalled();
+				}
+			},
+		);
 	});
 });

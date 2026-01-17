@@ -163,12 +163,31 @@ describe('apexdoc', () => {
 	});
 
 	describe('normalizeSingleApexDocComment with isEmbedFormatted', () => {
-		it.concurrent(
-			'should handle isEmbedFormatted=true for code blocks (apexdoc.ts line 920)',
-			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
-			async () => {
-				// Test the isEmbedFormatted=true branch when code blocks are processed
-				// This happens when embed function has already formatted the comment
+		it.concurrent.each([
+			{
+				description:
+					'should handle isEmbedFormatted=true for code blocks (apexdoc.ts line 920)',
+				isEmbedFormatted: true,
+				lineNote: 'line 920 (if (isEmbedFormatted))',
+			},
+			{
+				description:
+					'should handle isEmbedFormatted=false for code blocks (apexdoc.ts line 353)',
+				isEmbedFormatted: false,
+				lineNote: 'line 353 (else: codeToUse = doc.rawCode)',
+			},
+		])(
+			'$description',
+			async ({
+				isEmbedFormatted,
+				lineNote: _lineNote,
+			}: Readonly<{
+				description: string;
+				isEmbedFormatted: boolean;
+				lineNote: string;
+				// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
+			}>) => {
+				// Test the isEmbedFormatted branch when code blocks are processed
 				const commentWithCode = `/**
  * Example method.
  * {@code Integer x = 10; }
@@ -179,49 +198,15 @@ describe('apexdoc', () => {
 					tabWidth: 2,
 				} as ParserOptions;
 
-				// Call with isEmbedFormatted=true to exercise line 920 branch
 				const result = normalizeSingleApexDocComment(
 					commentWithCode,
 					0,
 					options,
-					true, // isEmbedFormatted = true
+					isEmbedFormatted,
 				);
 
 				// Should process successfully - the isEmbedFormatted branch should execute
 				expect(result).toBeDefined();
-				// The important part is that line 920 (if (isEmbedFormatted)) gets executed
-				// when isEmbedFormatted is true and code blocks are detected
-			},
-		);
-
-		it.concurrent(
-			'should handle isEmbedFormatted=false for code blocks (apexdoc.ts line 353)',
-			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
-			async () => {
-				// Test the isEmbedFormatted=false branch when code blocks are processed
-				// This exercises the else branch at line 353: codeToUse = doc.rawCode
-				const commentWithCode = `/**
- * Example method.
- * {@code Integer x = 10; }
- */`;
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
-
-				// Call with isEmbedFormatted=false to exercise line 353 else branch
-				const result = normalizeSingleApexDocComment(
-					commentWithCode,
-					0,
-					options,
-					false, // isEmbedFormatted = false
-				);
-
-				// Should process successfully - the else branch should execute
-				expect(result).toBeDefined();
-				// The important part is that line 353 (else: codeToUse = doc.rawCode) gets executed
-				// when isEmbedFormatted is false and code blocks are detected
 			},
 		);
 	});

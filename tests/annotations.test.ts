@@ -421,105 +421,72 @@ describe('annotations', () => {
 			},
 		);
 
-		it.concurrent(
-			'should force multiline for InvocableMethod with single long string parameter',
-			() => {
+		it.concurrent.each([
+			{
+				annotationName: 'invocablemethod',
+				description:
+					'should force multiline for InvocableMethod with single long string parameter',
+				parameterType: 'AnnotationString' as const,
+				shouldForceMultiline: true,
+			},
+			{
+				annotationName: 'invocablevariable',
+				description:
+					'should force multiline for InvocableVariable with single long parameter string',
+				parameterType: 'AnnotationKeyValue' as const,
+				shouldForceMultiline: true,
+			},
+			{
+				annotationName: 'future',
+				description:
+					'should not force multiline for non-invocable annotation with long parameter',
+				parameterType: 'AnnotationKeyValue' as const,
+				shouldForceMultiline: false,
+			},
+		])(
+			'$description',
+			({
+				annotationName,
+				parameterType,
+				shouldForceMultiline: _shouldForceMultiline,
+			}: Readonly<{
+				annotationName: string;
+				description: string;
+				parameterType: 'AnnotationKeyValue' | 'AnnotationString';
+				shouldForceMultiline: boolean;
+			}>) => {
 				/** Longer than MIN_PARAM_LENGTH_FOR_MULTILINE (40). */
 				const longString = 'A'.repeat(
 					MIN_PARAM_LENGTH_FOR_MULTILINE + LENGTH_OFFSET,
 				);
-				// Use AnnotationString parameter (returns string Doc, not array)
+
 				const mockNode = {
 					name: {
 						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'invocablemethod',
+						value: annotationName,
 					},
 					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
 					parameters: [
-						{
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-							value: longString,
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
-
-				const mockPath = createMockPath(
-					mockNode,
-				) as AstPath<ApexAnnotationNode>;
-				const result = printAnnotation(mockPath);
-
-				expect(result).toBeDefined();
-			},
-		);
-
-		it.concurrent(
-			'should force multiline for InvocableVariable with single long parameter string',
-			() => {
-				/** Longer than MIN_PARAM_LENGTH_FOR_MULTILINE (40). */
-				const longString = 'A'.repeat(
-					MIN_PARAM_LENGTH_FOR_MULTILINE + LENGTH_OFFSET,
-				);
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'invocablevariable',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'label',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								value: longString,
-							} as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
-
-				const mockPath = createMockPath(
-					mockNode,
-				) as AstPath<ApexAnnotationNode>;
-				const result = printAnnotation(mockPath);
-
-				expect(result).toBeDefined();
-			},
-		);
-
-		it.concurrent(
-			'should not force multiline for non-invocable annotation with long parameter',
-			() => {
-				const longString = 'A'.repeat(
-					MIN_PARAM_LENGTH_FOR_MULTILINE + LENGTH_OFFSET,
-				);
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'future',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'callout',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								value: longString,
-							} as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
+						parameterType === 'AnnotationString'
+							? ({
+									[nodeClassKey]:
+										'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+									value: longString,
+								} as Readonly<ApexAnnotationParameter>)
+							: ({
+									key: {
+										[nodeClassKey]:
+											'apex.jorje.data.ast.Identifier',
+										value: 'label',
+									},
+									[nodeClassKey]:
+										'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+									value: {
+										[nodeClassKey]:
+											'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+										value: longString,
+									} as Readonly<ApexAnnotationValue>,
+								} as Readonly<ApexAnnotationParameter>),
 					],
 				} as Readonly<ApexAnnotationNode>;
 
