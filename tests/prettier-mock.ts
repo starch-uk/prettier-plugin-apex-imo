@@ -189,6 +189,7 @@ class MockDocPrinter {
 		if (Array.isArray(doc)) {
 			// Type assertion needed for array map - elements are Doc type but TypeScript can't infer
 			return doc
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Array elements may be any Doc type in mock implementation
 				.map((d: unknown) => this.printDocToString(d as Doc, _options))
 				.join('');
 		}
@@ -225,6 +226,7 @@ class MockDocPrinter {
  * - doc.printer
  * - Plugin structures.
  */
+// eslint-disable-next-line import/group-exports -- Exports consolidated below
 export class PrettierMockSuite {
 	/**
 	 * Mock implementation of prettier.format.
@@ -236,6 +238,7 @@ export class PrettierMockSuite {
 			_options?: Readonly<
 				ParserOptions & { parser?: string; plugins?: unknown[] }
 			>,
+			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for mock compatibility
 		): Promise<string> => {
 			// Default: return code as-is (identity formatter)
 			return code;
@@ -269,29 +272,35 @@ export class PrettierMockSuite {
 			util?: Readonly<Partial<MockPrettierUtil>>;
 			docPrinter?: Readonly<Partial<MockDocPrinter>>;
 		}>,
+		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
 	): typeof import('prettier') {
 		const customDocBuilders = {
+			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
 			...this.docBuilders,
 			...(customizations?.doc?.builders ?? {}),
 		};
 
 		const customUtil = {
+			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
 			...this.util,
 			...(customizations?.util ?? {}),
 		};
 
 		const customDocPrinter = {
+			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
 			...this.docPrinter,
 			...(customizations?.docPrinter ?? {}),
 		};
 
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock assignment for test utilities
 		const format = customizations?.format ?? this.format;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock type assertion for test utilities
 		return {
 			doc: {
 				builders: customDocBuilders,
 				printer: customDocPrinter,
 			},
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- format is assigned above
 			format,
 			util: customUtil,
 			// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
@@ -339,6 +348,7 @@ export class PrettierMockSuite {
 		>,
 	): Printer<ApexNode> {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock type assertion for test utilities
 		return {
 			print: printImplementation ?? vi.fn(() => 'mock output'),
 		} as Printer<ApexNode>;
@@ -384,6 +394,7 @@ export class PrettierMockSuite {
  * Default instance of PrettierMockSuite for convenience.
  * Can be imported directly for quick access.
  */
+// eslint-disable-next-line import/group-exports -- Exports consolidated with class export above
 export const defaultPrettierMock = new PrettierMockSuite();
 
 /**
@@ -400,6 +411,7 @@ export const defaultPrettierMock = new PrettierMockSuite();
  * }));
  * ```
  */
+// eslint-disable-next-line import/group-exports -- Exports consolidated with class export above
 export function createPrettierMock(
 	options?: Readonly<{
 		format?: (
@@ -409,10 +421,11 @@ export function createPrettierMock(
 			>,
 		) => Promise<string>;
 	}>,
-): typeof import('prettier') {
-	const suite = new PrettierMockSuite();
-	if (options?.format) {
-		suite.format = options.format;
-	}
-	return suite.getPrettierMock();
+		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
+	): typeof import('prettier') {
+		const suite = new PrettierMockSuite();
+		if (options?.format) {
+			suite.format = options.format;
+		}
+		return suite.getPrettierMock();
 }
