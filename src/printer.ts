@@ -228,11 +228,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const commentNode = path.node as { value?: string };
 		const commentText = commentNode.value;
 
-		// eslint-disable-next-line @typescript-eslint/prefer-optional-chain, @typescript-eslint/no-unnecessary-condition -- commentText may be null/undefined, needs explicit check
-		const hasCodeTag =
-			commentText !== undefined &&
-			commentText !== null &&
-			commentText.includes('{@code');
+		const hasCodeTag = commentText?.includes('{@code') ?? false;
 		if (!hasCodeTag) {
 			return null;
 		}
@@ -254,8 +250,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const pluginInstance = getCurrentPluginInstance();
 			// pluginInstance is always set before embed is called (set in index.ts)
 			// Non-null assertion safe: always set in production
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- pluginInstance is always set before embed is called
-			if (pluginInstance === null || pluginInstance === undefined) {
+			if (!pluginInstance) {
 				return undefined;
 			}
 			const plugins: (prettier.Plugin<ApexNode> | URL | string)[] = [
@@ -271,6 +266,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const commentPrefixLength = tabWidthValue + COMMENT_PREFIX_SPACES;
 
 			// Process all code blocks in the comment
+			// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- commentText is checked for hasCodeTag above
+			if (!commentText) {
+				return undefined;
+			}
 			const formattedComment = await processAllCodeBlocksInComment({
 				commentPrefixLength,
 				commentText,
@@ -283,12 +282,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				setFormattedCodeBlock,
 			});
 
-			// eslint-disable-next-line @typescript-eslint/prefer-optional-chain, @typescript-eslint/no-unnecessary-condition -- formattedComment may be null/undefined, needs explicit check
-			const hasFormattedComment =
-				formattedComment !== undefined &&
-				formattedComment !== null &&
-				formattedComment !== '';
-			if (!hasFormattedComment) {
+			// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- formattedComment is checked for truthiness
+			if (!formattedComment) {
 				return undefined;
 			}
 
@@ -401,7 +396,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	 * @param print - The print function.
 	 * @returns The formatted Doc or null if not applicable.
 	 */
-	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	const handleVariableDecls = (
 		path: Readonly<AstPath<ApexNode>>,
@@ -581,9 +575,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				// or [nameDoc, ' ', '=', ' ', group(...)] from non-collection assignment
 				// path.call(print, ...) always returns a Doc (never undefined for well-formed AST)
 				// So nameDoc and assignmentDoc are always defined - defensive check removed as unreachable
-				// eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style -- Use ! assertion to remove undefined
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- Use ! assertion to remove undefined, as assertion needed for type narrowing
 				const nameDoc = declDoc[NAME_INDEX]! as Doc;
-				// eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style -- Use ! assertion to remove undefined
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- Use ! assertion to remove undefined, as assertion needed for type narrowing
 				const assignmentDoc = declDoc[ASSIGNMENT_INDEX]! as Doc;
 				resultParts.push(' ', group([nameDoc, ' ', '=']));
 				resultParts.push(

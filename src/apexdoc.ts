@@ -545,7 +545,7 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 		// eslint-disable-next-line jsdoc/convert-to-jsdoc-comments -- inline comments in code logic, not JSDoc
 		((): boolean => {
 			const lastLine = cleaned[cleaned.length - INDEX_OFFSET];
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unnecessary-condition, @typescript-eslint/prefer-optional-chain -- lastLine always exists when length > 0, but check needed for type narrowing
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unnecessary-condition -- lastLine always exists when length > 0, but check needed for type narrowing
 			return (
 				lastLine !== undefined &&
 				lastLine!.trim().length === EMPTY_TRIM_LENGTH

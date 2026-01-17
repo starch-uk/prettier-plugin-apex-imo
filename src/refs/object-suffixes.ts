@@ -8,7 +8,7 @@
  * These suffixes are used to identify different types of Salesforce objects in type declarations
  * Keys are lowercase versions of the suffixes for fast lookup, values are the original case-sensitive suffixes.
  */
-export const APEX_OBJECT_SUFFIXES: Record<string, string> = {
+const APEX_OBJECT_SUFFIXES: Record<string, string> = {
 	__b: '__b', // Big object
 	__c: '__c', // Custom object
 	__changeevent: '__ChangeEvent', // Custom Object Change Event
@@ -47,7 +47,8 @@ export const APEX_OBJECT_SUFFIXES: Record<string, string> = {
  * Derived from APEX_OBJECT_SUFFIXES to avoid duplication.
  */
 const SORTED_SUFFIXES = Object.entries(APEX_OBJECT_SUFFIXES).sort(
-	([, a], [, b]) => b.length - a.length,
+	([, a]: readonly [string, string], [, b]: readonly [string, string]) =>
+		b.length - a.length,
 );
 
-export { SORTED_SUFFIXES };
+export { APEX_OBJECT_SUFFIXES, SORTED_SUFFIXES };

@@ -865,7 +865,7 @@ const tokensToCommentString = (
  * Used by both token processing and direct content wrapping to ensure uniform results.
  * Splits text into words and wraps using Prettier's fill builder with proper width constraints.
  * Breaks long lines at word boundaries to fit within the specified width.
- * @param textContent - Text content to wrap.
+ * @param textContent - Text content to wrap and format.
  * @param effectiveWidth - Effective width available for content.
  * @param options - Options including tabWidth and useTabs.
  * @returns Array of wrapped lines without comment prefix.
