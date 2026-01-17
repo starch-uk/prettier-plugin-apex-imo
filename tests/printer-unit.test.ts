@@ -2,7 +2,6 @@
  * @file Unit tests for the printer module.
  */
 
-/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types, @typescript-eslint/no-unsafe-type-assertion */
 import { describe, it, expect, vi } from 'vitest';
 import type { AstPath } from 'prettier';
 import { createWrappedPrinter } from '../src/printer.js';
@@ -767,7 +766,8 @@ describe('printer', () => {
 
 				// Mock path.call to return objectDoc when called with 'type'
 				(mockPath.call as ReturnType<typeof vi.fn>).mockImplementation(
-					(_print: unknown, key: unknown) => {
+					// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return value for test
+					(_print: unknown, key: unknown): Doc => {
 						if (key === 'type') {
 							return objectDoc as unknown as Doc;
 						}
@@ -885,30 +885,6 @@ describe('printer', () => {
 					decls: [
 						{
 							'@class': 'apex.jorje.data.ast.Variable',
-							type: {
-								'@class': 'apex.jorje.data.ast.TypeRef',
-								names: [
-									{
-										'@class':
-											'apex.jorje.data.ast.Identifier',
-										value: 'Map',
-									},
-									{
-										'@class':
-											'apex.jorje.data.ast.Identifier',
-										value: 'String',
-									},
-									{
-										'@class':
-											'apex.jorje.data.ast.Identifier',
-										value: 'Map',
-									},
-								],
-							},
-							name: {
-								'@class': 'apex.jorje.data.ast.Identifier',
-								value: 'nestedMap',
-							},
 							assignment: {
 								value: {
 									'@class':
@@ -926,7 +902,6 @@ describe('printer', () => {
 				} as unknown as ApexNode;
 
 				const mockPath = createMockPath(mockNode);
-				let mapCallCount = 0;
 				const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
 					const { key } = path as { key?: number | string };
 					if (key === 'type') {
@@ -955,15 +930,15 @@ describe('printer', () => {
 					(
 						callback: (path: Readonly<AstPath<ApexNode>>) => Doc,
 						key: string,
-					) => {
+						// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return value for test
+					): Doc[] => {
 						if (key === 'decls') {
 							// Call callback with declPath, which will use mockPrint
 							// The callback calls declPath.call(print, 'name') and declPath.call(print, 'assignment')
 							// We need to mock declPath.call to use mockPrint
-							const declPath = {
+							const declPath: AstPath<ApexNode> = {
+								// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock path customization
 								...mockPath,
-								node: (mockNode as { decls: unknown[] })
-									.decls[0],
 								call: vi.fn(
 									(
 										_print: unknown,
