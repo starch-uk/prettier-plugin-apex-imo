@@ -744,10 +744,10 @@ describe('printer', () => {
 		);
 
 		it.concurrent(
-			'should handle variable declarations with object typeDoc (line 106)',
+			'should handle variable declarations with object typeDoc (line 87)',
 			() => {
 				// Test makeTypeDocBreakable with object Doc (neither string nor array)
-				// This tests line 106: return typeDoc; (fallback for object Doc)
+				// This tests line 87: return typeDoc; (fallback for object Doc)
 				const mockNode = {
 					decls: [{ '@class': 'apex.jorje.data.ast.Variable' }],
 					modifiers: [],
@@ -765,6 +765,16 @@ describe('printer', () => {
 					return '';
 				});
 
+				// Mock path.call to return objectDoc when called with 'type'
+				(mockPath.call as ReturnType<typeof vi.fn>).mockImplementation(
+					(_print: unknown, key: unknown) => {
+						if (key === 'type') {
+							return objectDoc as unknown as Doc;
+						}
+						return '';
+					},
+				);
+
 				const mockOriginalPrinter = {
 					print: vi.fn(() => 'original output'),
 				};
@@ -777,7 +787,7 @@ describe('printer', () => {
 					mockPrint,
 				);
 
-				// Should handle object Doc and pass through
+				// Should handle object Doc and pass through (line 87)
 				expect(result).toBeDefined();
 			},
 		);

@@ -549,8 +549,13 @@ const createDocCodeBlock = (
 	// split('\n') always returns at least one element (never empty array)
 	// So codeLines.length === ZERO_LENGTH_CONST is unreachable - removed
 	const { join, hardline } = docBuilders;
+	/**
+	 * Converts string lines to Doc array.
+	 * @param lines - String lines to convert.
+	 * @returns Array of Doc elements.
+	 */
 	const linesToDocLines = (lines: readonly string[]): Doc[] =>
-		lines.map((line) => line as Doc);
+		lines.map((line: string): Doc => line as Doc);
 	return {
 		endPos,
 		rawCode,
@@ -664,8 +669,7 @@ const processAllCodeBlocksInComment = async ({
 		// split('\n') always returns array without holes (no undefined elements)
 		for (let i = 0; i < formattedLines.length; i++) {
 			const formattedLine = formattedLines[i];
-			// Type assertion safe: formattedLine is never undefined per array iteration guarantee
-			if (formattedLine === undefined) continue;
+			// Removed unreachable undefined check: formattedLines from split('\n') always contains strings
 			resultLines.push(formattedLine);
 			// Insert blank line after } when followed by annotations or access modifiers
 			if (

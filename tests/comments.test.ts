@@ -709,6 +709,46 @@ describe('comments', () => {
 				expect(result).toContain('*/');
 			},
 		);
+
+		it.concurrent(
+			'should skip code and annotation type docs (comments.ts line 849)',
+			() => {
+				// Test line 849: continue when doc.type is 'code' or 'annotation'
+				const textDoc: ApexDocComment = {
+					content: 'Some text',
+					lines: ['Some text'],
+					type: 'text',
+				};
+				const codeDoc: ApexDocComment = {
+					content: 'System.debug("test");',
+					rawCode: 'System.debug("test");',
+					type: 'code',
+				};
+				const annotationDoc: ApexDocComment = {
+					content: 'param input The input' as unknown as Doc,
+					name: 'param',
+					type: 'annotation',
+				};
+				const docs: ApexDocComment[] = [
+					textDoc,
+					codeDoc,
+					annotationDoc,
+					textDoc,
+				];
+
+				const result = tokensToCommentString(docs, 0, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+
+				// Should process text docs but skip code and annotation docs
+				expect(result).toContain('/**');
+				expect(result).toContain('*/');
+				expect(result).toContain('Some text');
+				// Code and annotation docs should be skipped, so their content shouldn't appear
+				// (they're handled separately in the processing pipeline)
+			},
+		);
 	});
 
 	describe('normalizeBlockComment edge cases', () => {

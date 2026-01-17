@@ -256,9 +256,8 @@ const processCodeLines = (codeToUse: string): string => {
 	// So codeLine is never undefined in this loop
 	// Array indexing check removed: codeLines array has no holes
 	for (let i = ARRAY_START_INDEX; i < codeLines.length; i++) {
-		const codeLine = codeLines[i];
-		// Type assertion safe: codeLine is never undefined per array iteration guarantee
-		if (codeLine === undefined) continue;
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- codeLines array has no holes, codeLine is always defined
+		const codeLine = codeLines[i]!;
 		resultLines.push(codeLine);
 
 		if (preserveBlankLineAfterClosingBrace(codeLines, i)) {
@@ -290,12 +289,12 @@ const handleUnwrappedCode = (
 ): string[] => {
 	const isSingleLine = codeLinesForProcessing.length === INDEX_ONE;
 	// codeLinesForProcessing comes from processedCode.split('\n'), which always returns an array of strings
-	// When isSingleLine is true, codeLinesForProcessing[ARRAY_START_INDEX] exists and is a string
+	// When isSingleLine is true, codeLinesForProcessing[FIRST_ELEMENT_INDEX] exists and is a string
 	// .trim() on a string always returns a string, never undefined
-	// Type assertion safe: ARRAY_START_INDEX element exists when isSingleLine is true
-	const ARRAY_START_INDEX = 0;
+	// Type assertion safe: first element exists when isSingleLine is true
+	const FIRST_ELEMENT_INDEX = 0;
 	const singleLineContent = isSingleLine
-		? (codeLinesForProcessing[ARRAY_START_INDEX]?.trim() ?? '')
+		? codeLinesForProcessing[FIRST_ELEMENT_INDEX]!.trim()
 		: '';
 	const singleLineWithBraces = `{@code ${singleLineContent} }`;
 	const commentPrefixLength = commentPrefix.length;
@@ -497,11 +496,10 @@ const docsToApexDocString = (
 
 	for (const doc of docs) {
 		if (doc.type === 'annotation') {
-			// renderAnnotation can return null if empty, but in practice annotations have content
+			// renderAnnotation always returns a rendered doc (never null)
+			// Removed unreachable null check: renderAnnotation always returns an object
 			const rendered = renderAnnotation(doc, commentPrefix);
-			if (rendered !== null) {
-				addRenderedContent(rendered);
-			}
+			addRenderedContent(rendered);
 		} else if (doc.type === 'code') {
 			addRenderedContent(renderCodeBlock(doc, commentPrefix, options));
 		} else {
@@ -545,7 +543,7 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 		// Type assertion safe: array element always exists when length > 0
 		(() => {
 			const lastLine = cleaned[cleaned.length - INDEX_OFFSET];
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- lastLine always exists when length > 0
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- lastLine always exists when length > 0
 			return (
 				lastLine !== undefined &&
 				lastLine!.trim().length === EMPTY_TRIM_LENGTH
@@ -703,17 +701,7 @@ const mergeIncompleteCodeBlock = (
 		// mergeIncompleteCodeBlock is called from mergeCodeBlockDocs
 		// which only receives paragraph/text types from parseApexDocs
 		// So all docs here are guaranteed to be paragraph or text type
-		// Array indexing check removed: docs array has no holes (created via push)
-		// Type check removed: nextDoc.type is always 'text' or 'paragraph' per comment
-		// Type assertion safe: nextDoc is never undefined per array iteration guarantee
-		if (
-			nextDoc === undefined ||
-			nextDoc.type === 'code' ||
-			nextDoc.type === 'annotation'
-		) {
-			j++;
-			continue;
-		}
+		// Removed unreachable checks: nextDoc is never undefined and always 'text' or 'paragraph'
 		// Type guard: nextDoc is now ApexDocContent (text or paragraph)
 		const nextContent = getContentString(nextDoc);
 		mergedContent += nextContent;
@@ -751,17 +739,7 @@ const mergeCodeBlockDocs = (
 		// which only contains 'paragraph' or 'text' types
 		// Code and annotation types are created later in applyDocProcessingPipeline
 		// So all docs here are guaranteed to be paragraph or text type
-		// Array indexing check removed: docs array has no holes (created via push)
-		// Type check removed: doc.type is always 'text' or 'paragraph' per comment
-		// Type assertion safe: doc is never undefined per array iteration guarantee
-		if (
-			doc === undefined ||
-			doc.type === 'code' ||
-			doc.type === 'annotation'
-		) {
-			i++;
-			continue;
-		}
+		// Removed unreachable checks: doc is never undefined and always 'text' or 'paragraph'
 		// Type guard: doc is now ApexDocContent (text or paragraph)
 		// Extract string content from Doc for text operations
 		const content = getContentString(doc);

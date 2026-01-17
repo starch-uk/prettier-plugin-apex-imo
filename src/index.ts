@@ -27,8 +27,8 @@ const APEX_PARSERS_SET = new Set<string>(APEX_PARSERS);
 const APEX_PRINTER_ERROR_MESSAGE =
 	'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed. The apex printer was not found.';
 
-// eslint-disable-next-line @typescript-eslint/no-type-alias -- Need to extract array element type
-type ApexPrinterType = Parameters<typeof createWrappedPrinter>[0]; // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Array index 0 is required for type extraction
+// eslint-disable-next-line @typescript-eslint/no-type-alias, @typescript-eslint/no-magic-numbers -- Need to extract array element type, index 0 is required
+type ApexPrinterType = Parameters<typeof createWrappedPrinter>[0];
 
 const getApexPrinter = (): ApexPrinterType => {
 	const apexPrinter = (apexPlugin as { printers?: { apex?: unknown } })

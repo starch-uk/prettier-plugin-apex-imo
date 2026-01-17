@@ -460,8 +460,7 @@ const normalizeBlockComment = (
 	// Array indexing check removed: lines array has no holes
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
 		const line = lines[i];
-		// Type assertion safe: line is never undefined per array iteration guarantee
-		if (line === undefined) continue;
+		// Removed unreachable undefined check: lines array from split('\n') always contains strings
 		normalizedLines.push(
 			normalizeCommentLine(
 				line,
@@ -532,12 +531,9 @@ const removeCommentPrefix = (line: string, preserveIndent = false): string => {
 			// Type assertion safe: MATCH_GROUP_INDEX element always exists per regex pattern
 			const MATCH_GROUP_INDEX = 4;
 			const rest = match[MATCH_GROUP_INDEX];
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- rest always exists per regex pattern (capturing group always matches)
-			if (rest === undefined) {
-				// rest should never be undefined per regex pattern, but TypeScript doesn't know this
-				return line;
-			}
-			const restValue = rest;
+			// Removed unreachable undefined check: regex capture group (.*) always matches (even if empty string)
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- rest always exists per regex pattern
+			const restValue = rest!;
 			// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
 			// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
 			// But preserve any additional spaces (indentation) - they're part of the content
@@ -558,10 +554,10 @@ const removeCommentPrefix = (line: string, preserveIndent = false): string => {
 					return content;
 				}
 				// Multiple spaces - preserve as indentation
-				return rest;
+				return restValue;
 			}
 			// No leading space - return as-is
-			return rest;
+			return restValue;
 		}
 		return line;
 	}
@@ -637,10 +633,9 @@ const getContentString = (doc: ApexDocContent): string =>
  * @param doc - The ApexDocContent to extract lines from.
  * @returns Array of string lines extracted from the content.
  */
-// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
 const getContentLines = (
 	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
-	doc: ApexDocContent,
+	doc: Readonly<ApexDocContent>,
 ): readonly string[] => doc.lines.map((lineItem) => docToString(lineItem));
 
 /**
@@ -714,9 +709,7 @@ const parseCommentToDocs = (
 	// Array indexing check removed: contentLines array has no holes
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
 		const line = contentLines[i];
-		// Type assertion safe: line is never undefined per array iteration guarantee
-		if (line === undefined) continue;
-
+		// Removed unreachable undefined check: contentLines from slice() always contains strings
 		// Remove comment prefix (*) to check if line is empty
 		const trimmedLine = removeCommentPrefix(line);
 
@@ -776,12 +769,9 @@ const parseCommentToDocs = (
 				nextTrimmed.charAt(FIRST_CHAR_INDEX) <= CAPITAL_Z;
 
 			// Add current line to paragraph
-			// line is never undefined per array iteration guarantee
-			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- line is typed as possibly undefined but never is in practice
-			if (line !== undefined) {
-				currentParagraph.push(trimmedLine);
-				currentParagraphLines.push(line);
-			}
+			// Removed unreachable undefined check: lines array from split('\n') always contains strings
+			currentParagraph.push(trimmedLine);
+			currentParagraphLines.push(line);
 
 			// If this is a sentence boundary or we're at an annotation line, finish current paragraph
 			if (
@@ -872,8 +862,8 @@ const tokensToCommentString = (
  * Used by both token processing and direct content wrapping to ensure uniform results.
  * Splits text into words and wraps using Prettier's fill builder with proper width constraints.
  * Breaks long lines at word boundaries to fit within the specified width.
- * @param textContent - The text content to wrap.
- * @param effectiveWidth - The effective width available for content.
+ * @param textContent - Text content to wrap.
+ * @param effectiveWidth - Effective width available for content.
  * @param options - Options including tabWidth and useTabs.
  * @returns Array of wrapped lines without comment prefix.
  */

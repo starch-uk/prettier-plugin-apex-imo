@@ -102,9 +102,8 @@ const makeTypeDocBreakable = (
 			i++;
 		} else {
 			// Type assertion safe: item is never undefined per array iteration guarantee
-			if (item !== undefined) {
-				result.push(item);
-			}
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- item is never undefined per array iteration guarantee
+			result.push(item!);
 		}
 	}
 	return result;
@@ -229,10 +228,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const commentNode = path.node as { value?: string };
 		const commentText = commentNode.value;
 
+		// eslint-disable-next-line @typescript-eslint/prefer-optional-chain, @typescript-eslint/no-unnecessary-condition -- commentText may be null/undefined, needs explicit check
 		const hasCodeTag =
 			commentText !== undefined &&
 			commentText !== null &&
-			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- commentText check is necessary for null/undefined
 			commentText.includes('{@code');
 		if (!hasCodeTag) {
 			return null;
@@ -255,9 +254,13 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const pluginInstance = getCurrentPluginInstance();
 			// pluginInstance is always set before embed is called (set in index.ts)
 			// Non-null assertion safe: always set in production
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- pluginInstance is always set before embed is called
+			if (pluginInstance === null || pluginInstance === undefined) {
+				return undefined;
+			}
 			const plugins: (prettier.Plugin<ApexNode> | URL | string)[] = [
-				...basePlugins.filter((p) => p !== pluginInstance!.default),
-				pluginInstance!.default as prettier.Plugin<ApexNode>,
+				...basePlugins.filter((p) => p !== pluginInstance.default),
+				pluginInstance.default as prettier.Plugin<ApexNode>,
 			];
 
 			/**
@@ -280,6 +283,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				setFormattedCodeBlock,
 			});
 
+			// eslint-disable-next-line @typescript-eslint/prefer-optional-chain, @typescript-eslint/no-unnecessary-condition -- formattedComment may be null/undefined, needs explicit check
 			const hasFormattedComment =
 				formattedComment !== undefined &&
 				formattedComment !== null &&
@@ -331,8 +335,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			forceTypeContext: true,
 			parentKey: NAMES_PROPERTY,
 		});
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- External printer API uses any types
 		// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function requires 4 parameters for Prettier API
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- External printer API uses any types
 		return originalPrinter.print(
 			path,
 			options,
@@ -455,11 +459,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// Single declaration
 			// path.map always returns dense arrays (no undefined holes)
 			const FIRST_NAME_INDEX = 0;
-			const firstNameDoc = nameDocs[FIRST_NAME_INDEX];
-			// Type assertion safe: firstNameDoc is never undefined per array iteration guarantee
-			if (firstNameDoc === undefined) {
-				return originalPrinter.print(path, options, print);
-			}
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- path.map always returns dense arrays, firstNameDoc is always defined
+			const firstNameDoc = nameDocs[FIRST_NAME_INDEX]!;
 			const wrappedName = ifBreak(indent([line, firstNameDoc]), [
 				' ',
 				firstNameDoc,
@@ -543,15 +544,16 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
 			// typeDoc from printer is always an array for Map types with structure: ['Map', '<', [params...], '>']
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
-			// Array check: typeDoc must be array to index it
-			if (!Array.isArray(typeDocToCheck)) return false;
+			// Array check removed: isMapTypeDoc already ensures typeDocToCheck is an array
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- isMapTypeDoc ensures typeDocToCheck is an array
+			const typeDocArray = typeDocToCheck as unknown[];
 
 			// Map type structure: ['Map', '<', [params...], '>']
 			// paramsIndex = 2 should be the params array
 			// Printer always produces well-formed Map types, so paramsIndex always exists and is an array
 			const PARAMS_INDEX = 2;
-			const paramsElement = typeDocToCheck[PARAMS_INDEX] as unknown[];
-			if (!Array.isArray(paramsElement)) return false;
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Printer always produces well-formed Map types, paramsElement is always an array
+			const paramsElement = typeDocArray[PARAMS_INDEX]! as unknown[];
 			const params = paramsElement;
 			return params.some((param: unknown) => hasNestedMap(param));
 		};
@@ -579,8 +581,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				// or [nameDoc, ' ', '=', ' ', group(...)] from non-collection assignment
 				// path.call(print, ...) always returns a Doc (never undefined for well-formed AST)
 				// So nameDoc and assignmentDoc are always defined - defensive check removed as unreachable
-				const nameDoc = declDoc[NAME_INDEX] as Doc;
-				const assignmentDoc = declDoc[ASSIGNMENT_INDEX] as Doc;
+				// eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style -- Use ! assertion to remove undefined
+				const nameDoc = declDoc[NAME_INDEX]! as Doc;
+				// eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style -- Use ! assertion to remove undefined
+				const assignmentDoc = declDoc[ASSIGNMENT_INDEX]! as Doc;
 				resultParts.push(' ', group([nameDoc, ' ', '=']));
 				resultParts.push(
 					ifBreak(indent([line, assignmentDoc]), [
