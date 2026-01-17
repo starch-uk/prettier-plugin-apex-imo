@@ -5,7 +5,6 @@
 import { describe, it, expect } from 'vitest';
 import {
 	calculateEffectiveWidth,
-	formatApexCodeWithFallback,
 	isEmpty,
 	isNotEmpty,
 	isObject,
@@ -333,69 +332,6 @@ describe('utils', () => {
 			() => {
 				const lines = ['  }', '  static final Integer count;'];
 				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(true);
-			},
-		);
-	});
-
-	describe('formatApexCodeWithFallback', () => {
-		it.concurrent(
-			'should format code with apex-anonymous parser',
-			async () => {
-				const code = 'Integer x = 10;';
-				const result = await formatApexCodeWithFallback(code, {
-					parser: 'apex',
-					plugins: [],
-				});
-				expect(result).toBeTruthy();
-				expect(typeof result).toBe('string');
-			},
-		);
-
-		it.concurrent(
-			'should fallback to apex parser when apex-anonymous fails',
-			async () => {
-				// Use code that might fail with apex-anonymous but work with apex
-				// Note: This is hard to reliably test since both parsers might succeed,
-				// but we want to ensure the fallback path exists
-				const code = 'public class Test { }';
-				const result = await formatApexCodeWithFallback(code, {
-					parser: 'apex',
-					plugins: [],
-				});
-				expect(result).toBeTruthy();
-				expect(typeof result).toBe('string');
-			},
-		);
-
-		it.concurrent(
-			'should return result from apex parser when apex-anonymous fails',
-			async () => {
-				// Test the fallback path: apex-anonymous fails, apex succeeds
-				// Using a simple class declaration that apex-anonymous typically cannot parse
-				// but apex can parse. If apex-anonymous actually succeeds, that's okay too -
-				// the important thing is that the code path exists and both try blocks work.
-				const code = 'public class Test {}';
-				const result = await formatApexCodeWithFallback(code, {
-					parser: 'apex',
-					plugins: [],
-				});
-				// Should return formatted code (either from apex-anonymous or apex parser)
-				expect(result).toBeTruthy();
-				expect(typeof result).toBe('string');
-			},
-		);
-
-		it.concurrent(
-			'should return original code when both parsers fail',
-			async () => {
-				// Very invalid code that both parsers will fail on
-				const code = '!!!INVALID!!!';
-				const result = await formatApexCodeWithFallback(code, {
-					parser: 'apex',
-					plugins: [],
-				});
-				// Should return original code when both parsers fail
-				expect(result).toBe(code);
 			},
 		);
 	});

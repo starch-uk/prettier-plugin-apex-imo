@@ -23,6 +23,9 @@ describe('apexdoc-group', () => {
 			expect(normalizeGroupContent('class')).toBe('Class');
 			expect(normalizeGroupContent('method')).toBe('Method');
 			expect(normalizeGroupContent('interface')).toBe('Interface');
+			expect(normalizeGroupContent('enum')).toBe('Enum');
+			expect(normalizeGroupContent('property')).toBe('Property');
+			expect(normalizeGroupContent('variable')).toBe('Variable');
 		});
 
 		it.concurrent('should handle empty string', () => {
@@ -39,18 +42,6 @@ describe('apexdoc-group', () => {
 		});
 
 		it.concurrent(
-			'should normalize known group names to proper case',
-			() => {
-				expect(normalizeGroupContent('class')).toBe('Class');
-				expect(normalizeGroupContent('method')).toBe('Method');
-				expect(normalizeGroupContent('interface')).toBe('Interface');
-				expect(normalizeGroupContent('enum')).toBe('Enum');
-				expect(normalizeGroupContent('property')).toBe('Property');
-				expect(normalizeGroupContent('variable')).toBe('Variable');
-			},
-		);
-
-		it.concurrent(
 			'should handle group names with multiple spaces in description',
 			() => {
 				expect(normalizeGroupContent('class   My   description')).toBe(
@@ -64,23 +55,6 @@ describe('apexdoc-group', () => {
 			() => {
 				expect(normalizeGroupContent('  class description  ')).toBe(
 					'Class description',
-				);
-			},
-		);
-
-		it.concurrent('should handle single word after normalization', () => {
-			expect(normalizeGroupContent('class')).toBe('Class');
-			expect(normalizeGroupContent('method')).toBe('Method');
-		});
-
-		it.concurrent(
-			'should handle multiple words (group name + description)',
-			() => {
-				expect(normalizeGroupContent('class Test class')).toBe(
-					'Class Test class',
-				);
-				expect(normalizeGroupContent('method Helper method')).toBe(
-					'Method Helper method',
 				);
 			},
 		);

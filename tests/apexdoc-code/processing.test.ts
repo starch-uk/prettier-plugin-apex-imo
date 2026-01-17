@@ -5,7 +5,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ParserOptions } from 'prettier';
 import {
-	extractCodeFromEmbedResult,
 	processCodeBlockLines,
 	processCodeBlock,
 	processAllCodeBlocksInComment,
@@ -360,14 +359,10 @@ describe('apexdoc-code', () => {
 		);
 
 		it.concurrent('should handle embedResult ending with \n */', () => {
-			// Test else if (embedContent.endsWith('\n */')) branch
-			// Directly test extractCodeFromEmbedResult with embedResult ending with \n */ (not \n */\n)
-			// After removing '/**\n' prefix (4 chars), embedContent ends with '\n */' not '\n */\n'
+			// Test else if (embedContent.endsWith('\n */')) branch in extractCodeFromEmbedResult
+			// After removing '/**\n' prefix, embedContent ends with '\n */' not '\n */\n'
 			const embedResult =
 				'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
-			const result = extractCodeFromEmbedResult(embedResult);
-			expect(result.length).toBeGreaterThan(0);
-			// Also test via processCodeBlock to ensure full path is covered
 			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
 			const getFormattedCodeBlock = (key: string): string | undefined => {
 				if (key === 'test-key') return embedResult;
@@ -375,15 +370,15 @@ describe('apexdoc-code', () => {
 			};
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {} as ParserOptions;
-			const processResult = processCodeBlock(
+			const result = processCodeBlock(
 				codeBlock,
 				options,
 				getFormattedCodeBlock,
 				'test-key',
 				options,
 			);
-			expect(processResult.length).toBeGreaterThan(1);
-			expect(processResult[0]).toBe('{@code');
+			expect(result.length).toBeGreaterThan(1);
+			expect(result[0]).toBe('{@code');
 		});
 
 		it.concurrent('should handle asterisk without space after it', () => {
@@ -441,31 +436,35 @@ describe('apexdoc-code', () => {
 	});
 
 	describe('processAllCodeBlocksInComment', () => {
+		const createProcessAllArgs = (
+			commentText: string,
+		): Parameters<typeof processAllCodeBlocksInComment>[0] => {
+			const formattedCodeBlocks = new Map<string, string>();
+			const setFormattedCodeBlock = (
+				key: string,
+				value: string,
+			): void => {
+				formattedCodeBlocks.set(key, value);
+			};
+			return {
+				commentPrefixLength: 5,
+				commentText,
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
+				options: { printWidth: 80, tabWidth: 2 } as ParserOptions,
+				plugins: [plugin],
+				setFormattedCodeBlock,
+			};
+		};
+
 		it.concurrent(
 			'should return undefined when comment has no code blocks',
 			async () => {
 				const commentText =
 					'/**\n * This is a regular comment\n * with no code blocks\n */';
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
-				const formattedCodeBlocks = new Map<string, string>();
-				const setFormattedCodeBlock = (
-					key: string,
-					value: string,
-				): void => {
-					formattedCodeBlocks.set(key, value);
-				};
 
-				const result = await processAllCodeBlocksInComment({
-					commentPrefixLength: 5,
-					commentText,
-					options,
-					plugins: [plugin],
-					setFormattedCodeBlock,
-				});
+				const result = await processAllCodeBlocksInComment(
+					createProcessAllArgs(commentText),
+				);
 
 				expect(result).toBeUndefined();
 			},
@@ -478,26 +477,10 @@ describe('apexdoc-code', () => {
 				// Need code that formats to have } followed by @annotation or access modifier
 				const commentText =
 					'/**\n * {@code\n *   public void method() {\n *     return;\n *   }\n *   @Future\n *   public void next() {}\n * }\n */';
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
-				const formattedCodeBlocks = new Map<string, string>();
-				const setFormattedCodeBlock = (
-					key: string,
-					value: string,
-				): void => {
-					formattedCodeBlocks.set(key, value);
-				};
 
-				const result = await processAllCodeBlocksInComment({
-					commentPrefixLength: 5,
-					commentText,
-					options,
-					plugins: [plugin],
-					setFormattedCodeBlock,
-				});
+				const result = await processAllCodeBlocksInComment(
+					createProcessAllArgs(commentText),
+				);
 
 				expect(result).toBeDefined();
 				expect(result).toContain('{@code');
@@ -514,26 +497,10 @@ describe('apexdoc-code', () => {
 				// Need blank line without ' * ' prefix before code block to make beforeCode end with '\n'
 				// Format: /**\n * text\n\n{@code } - blank line has no ' * ' prefix
 				const commentText = '/**\n * Some text before\n\n{@code }\n */';
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
-				const formattedCodeBlocks = new Map<string, string>();
-				const setFormattedCodeBlock = (
-					key: string,
-					value: string,
-				): void => {
-					formattedCodeBlocks.set(key, value);
-				};
 
-				const result = await processAllCodeBlocksInComment({
-					commentPrefixLength: 5,
-					commentText,
-					options,
-					plugins: [plugin],
-					setFormattedCodeBlock,
-				});
+				const result = await processAllCodeBlocksInComment(
+					createProcessAllArgs(commentText),
+				);
 
 				expect(result).toBeDefined();
 				expect(result).toContain('{@code');
@@ -545,27 +512,11 @@ describe('apexdoc-code', () => {
 			async () => {
 				// Code block with unmatched braces to trigger the continue path
 				const commentText = '/**\n * {@code unmatched braces\n */';
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
-				const formattedCodeBlocks = new Map<string, string>();
-				const setFormattedCodeBlock = (
-					key: string,
-					value: string,
-				): void => {
-					formattedCodeBlocks.set(key, value);
-				};
 
 				// Should return undefined because extraction fails and no changes are made
-				const result = await processAllCodeBlocksInComment({
-					commentPrefixLength: 5,
-					commentText,
-					options,
-					plugins: [plugin],
-					setFormattedCodeBlock,
-				});
+				const result = await processAllCodeBlocksInComment(
+					createProcessAllArgs(commentText),
+				);
 
 				// When extraction fails, startIndex advances and loop continues, but if no valid blocks are found, returns undefined
 				expect(result).toBeUndefined();

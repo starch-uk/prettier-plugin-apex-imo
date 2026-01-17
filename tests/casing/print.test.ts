@@ -67,37 +67,67 @@ describe('casing', () => {
 			expect(mockPrint).toHaveBeenCalledWith(path);
 		});
 
-		it.concurrent(
-			'should handle node with names array when key is names',
-			() => {
+		it.concurrent.each([
+			{
+				desc: 'two valid nodes and parent without value',
+				expectResult: undefined as string | undefined,
+				valueSpecs: ['account', 'contact'],
+			},
+			{
+				desc: 'node with no value property',
+				expectResult: undefined as string | undefined,
+				valueSpecs: [undefined, 'account'],
+			},
+			{
+				desc: 'node with empty string value',
+				expectResult: undefined as string | undefined,
+				valueSpecs: ['', 'account'],
+			},
+			{
+				desc: 'values already normalized',
+				expectResult: 'original output',
+				valueSpecs: ['Account', 'Contact'],
+			},
+		])(
+			'should handle names array with $desc',
+			({
+				valueSpecs,
+				expectResult,
+			}: {
+				valueSpecs: (string | undefined)[];
+				expectResult: string | undefined;
+			}) => {
 				const mockPrint = createMockPrint();
 				const typeNormalizingPrint = createTypeNormalizingPrint(
 					mockPrint,
 					true,
 					'names',
 				);
-				const nameNode1 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'account',
-				} as ApexIdentifier;
-				const nameNode2 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'contact',
-				} as ApexIdentifier;
-				// Node with names array - must pass isIdentifier check (Identifier class)
-				// but NOT have a string value property (value must be undefined or non-string)
-				// so normalizeNamesArray is called instead of normalizeSingleIdentifier
+				const names = valueSpecs.map(
+					(v) =>
+						(v === undefined
+							? {
+									[nodeClassKey]:
+										'apex.jorje.data.ast.Identifier',
+								}
+							: {
+									[nodeClassKey]:
+										'apex.jorje.data.ast.Identifier',
+									value: v,
+								}) as ApexIdentifier,
+				);
 				const node = {
-					names: [nameNode1, nameNode2],
+					names: names as unknown as readonly ApexIdentifier[],
 					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					// No value property, or value is not a string
 				} as ApexNode & { names?: readonly ApexIdentifier[] };
 				const path = createMockPath(node, 'names');
 
-				typeNormalizingPrint(path);
+				const result = typeNormalizingPrint(path);
 
-				// Should call print (via normalizeNamesArray)
 				expect(mockPrint).toHaveBeenCalled();
+				if (expectResult !== undefined) {
+					expect(result).toBe(expectResult);
+				}
 			},
 		);
 
@@ -122,101 +152,6 @@ describe('casing', () => {
 				// Should return original print when names is not an array
 				expect(result).toBe('original output');
 				expect(mockPrint).toHaveBeenCalledWith(path);
-			},
-		);
-
-		it.concurrent(
-			'should handle names array with nodes that have no value property',
-			() => {
-				const mockPrint = createMockPrint();
-				const typeNormalizingPrint = createTypeNormalizingPrint(
-					mockPrint,
-					true,
-					'names',
-				);
-				const nameNode1 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					// No value property
-				} as ApexNode;
-				const nameNode2 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'account',
-				} as ApexIdentifier;
-				const node = {
-					names: [
-						nameNode1,
-						nameNode2,
-					] as unknown as readonly ApexIdentifier[],
-
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				} as ApexNode & { names?: readonly ApexIdentifier[] };
-				const path = createMockPath(node, 'names');
-
-				typeNormalizingPrint(path);
-
-				// Should call print
-				expect(mockPrint).toHaveBeenCalled();
-			},
-		);
-
-		it.concurrent(
-			'should handle names array with nodes that have empty string value',
-			() => {
-				const mockPrint = createMockPrint();
-				const typeNormalizingPrint = createTypeNormalizingPrint(
-					mockPrint,
-					true,
-					'names',
-				);
-				const nameNode1 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: '',
-				} as ApexIdentifier;
-				const nameNode2 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'account',
-				} as ApexIdentifier;
-				const node = {
-					names: [nameNode1, nameNode2],
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				} as ApexNode & { names?: readonly ApexIdentifier[] };
-				const path = createMockPath(node, 'names');
-
-				typeNormalizingPrint(path);
-
-				// Should call print
-				expect(mockPrint).toHaveBeenCalled();
-			},
-		);
-
-		it.concurrent(
-			'should handle names array with no changes (values already normalized)',
-			() => {
-				const mockPrint = createMockPrint();
-				const typeNormalizingPrint = createTypeNormalizingPrint(
-					mockPrint,
-					true,
-					'names',
-				);
-				const nameNode1 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'Account', // Already normalized
-				} as ApexIdentifier;
-				const nameNode2 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'Contact', // Already normalized
-				} as ApexIdentifier;
-				const node = {
-					names: [nameNode1, nameNode2],
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				} as ApexNode & { names?: readonly ApexIdentifier[] };
-				const path = createMockPath(node, 'names');
-
-				const result = typeNormalizingPrint(path);
-
-				// Should call print and return original output since no changes were made
-				expect(mockPrint).toHaveBeenCalled();
-				expect(result).toBe('original output');
 			},
 		);
 
@@ -290,101 +225,75 @@ describe('casing', () => {
 			},
 		);
 
-		it.concurrent(
-			'should skip nameNode with non-string value property',
-			() => {
-				// Test when nodeValueRaw is not a string - should skip that node
-				// normalizeNamesArray is called when isIdent is true and 'names' in node and value is not string
-				const mockPrint = createMockPrint();
-				const typeNormalizingPrint = createTypeNormalizingPrint(
-					mockPrint,
-					true,
-					'names',
-				);
-				const nameNode1 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 123, // Non-string value (number)
-				} as unknown as ApexIdentifier;
-				const nameNode2 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'account', // Valid string value
-				} as ApexIdentifier;
-				// Use Identifier node with names property to trigger normalizeNamesArray
-				// (normalizeNamesArray is called when isIdent is true and 'names' in node and value is not string)
-				const node = {
-					names: [nameNode1, nameNode2],
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					// value is not a string, so it falls through to normalizeNamesArray check
-					value: undefined,
-				} as unknown as ApexNode & {
-					names?: readonly ApexIdentifier[];
-				};
-				const path = createMockPath(node, 'names');
-
-				typeNormalizingPrint(path);
-
-				// Should skip nameNode1 (non-string value) but process nameNode2
-				expect(mockPrint).toHaveBeenCalled();
+		it.concurrent.each([
+			{
+				addValueUndefined: true,
+				desc: 'non-string value property',
+				names: [
+					{
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 123,
+					} as unknown as ApexIdentifier,
+					{
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'account',
+					} as ApexIdentifier,
+				],
 			},
-		);
-
-		it.concurrent(
-			'should handle names array with non-object primitive values',
-			() => {
+			{
+				addValueUndefined: false,
+				desc: 'non-object primitive',
+				names: [
+					'string' as unknown as ApexIdentifier,
+					{
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'account',
+					} as ApexIdentifier,
+				] as unknown as readonly ApexIdentifier[],
+			},
+		])(
+			'should handle names array with invalid element ($desc)',
+			({
+				addValueUndefined,
+				names,
+			}: {
+				addValueUndefined: boolean;
+				names: readonly ApexIdentifier[];
+			}) => {
 				const mockPrint = createMockPrint();
 				const typeNormalizingPrint = createTypeNormalizingPrint(
 					mockPrint,
 					true,
 					'names',
 				);
-				// Include non-object primitives to trigger continue for non-objects
-				// (typeof nameNode !== 'object' will be true for primitives)
-				const nameNode1 = 'string' as unknown as ApexIdentifier;
-				const nameNode2 = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'account',
-				} as ApexIdentifier;
 				const node = {
-					names: [
-						nameNode1,
-						nameNode2,
-					] as unknown as readonly ApexIdentifier[],
-
+					names,
 					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					...(addValueUndefined && { value: undefined }),
 				} as ApexNode & { names?: readonly ApexIdentifier[] };
 				const path = createMockPath(node, 'names');
 
 				typeNormalizingPrint(path);
 
-				// Should call print (primitive should be skipped)
 				expect(mockPrint).toHaveBeenCalled();
 			},
 		);
 
-		it.concurrent('should handle key being undefined', () => {
+		it.concurrent.each([
+			{ keyDesc: 'undefined', useNullKey: false },
+			{ keyDesc: 'null', useNullKey: true },
+		])('should handle key being $keyDesc', ({ useNullKey }) => {
 			const mockPrint = createMockPrint();
 			const typeNormalizingPrint = createTypeNormalizingPrint(mockPrint);
 			const node = {
 				[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
 			} as ApexNode;
-			const path = createMockPath(node, undefined);
-
-			const result = typeNormalizingPrint(path);
-
-			expect(result).toBe('original output');
-			expect(mockPrint).toHaveBeenCalledWith(path);
-		});
-
-		it.concurrent('should handle key being null', () => {
-			const mockPrint = createMockPrint();
-			const typeNormalizingPrint = createTypeNormalizingPrint(mockPrint);
-			const node = {
-				[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
-			} as ApexNode;
-			// Create path with null key (which gets normalized to undefined)
 			const basePath = createMockPath(node, undefined);
-			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed to override key property
-			const path = { ...basePath, key: null } as typeof basePath;
+			const path = useNullKey
+				? (Object.assign({}, basePath, { key: null }) as ReturnType<
+						typeof createMockPath
+					>)
+				: basePath;
 
 			const result = typeNormalizingPrint(path);
 

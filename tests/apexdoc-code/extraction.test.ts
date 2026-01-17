@@ -8,6 +8,7 @@ import {
 	CODE_TAG_LENGTH,
 	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
+	extractCodeFromEmbedResult,
 } from '../../src/apexdoc-code.js';
 
 describe('apexdoc-code', () => {
@@ -118,6 +119,20 @@ describe('apexdoc-code', () => {
 				const result = extractCodeFromBlock(text, 0);
 				expect(result).not.toBeNull();
 				expect(result?.code.trim()).toBe('Integer x = 10;');
+			},
+		);
+	});
+
+	describe('extractCodeFromEmbedResult', () => {
+		it.concurrent(
+			'should handle embedResult ending with */ without trailing newline',
+			() => {
+				// Test else if (embedContent.endsWith('\n */')) branch
+				// After removing '/**\n' prefix, embedContent ends with '\n */' not '\n */\n'
+				const embedResult =
+					'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
+				const result = extractCodeFromEmbedResult(embedResult);
+				expect(result.length).toBeGreaterThan(0);
 			},
 		);
 	});

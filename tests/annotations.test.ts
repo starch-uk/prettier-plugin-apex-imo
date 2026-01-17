@@ -191,165 +191,101 @@ describe('annotations', () => {
 		);
 
 		it.concurrent(
-			'should format annotation value with empty string',
+			'should handle annotation value with missing, undefined, or empty string',
 			() => {
-				const mockNode = {
-					name: {
+				// Empty string, undefined value field, and parameter without value property
+				const keyValueEmpty = {
+					key: {
 						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
+						value: 'label',
 					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'label',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								value: '',
-							} as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
-
-				const mockPath = createMockPath(
-					mockNode,
-				) as AstPath<ApexAnnotationNode>;
-				const result = printAnnotation(mockPath);
-
-				expect(result).toBeDefined();
-			},
-		);
-
-		it.concurrent(
-			'should format annotation value with non-string value field',
-			() => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'label',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								value: { someProperty: 'value' }, // Non-string value to trigger fallback
-							} as unknown as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
-
-				const mockPath = createMockPath(
-					mockNode,
-				) as AstPath<ApexAnnotationNode>;
-				const result = printAnnotation(mockPath);
-
-				expect(result).toBeDefined();
-			},
-		);
-
-		it.concurrent(
-			'should format annotation value with undefined value field',
-			() => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'label',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								// value field is undefined
-							} as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
-
-				const mockPath = createMockPath(
-					mockNode,
-				) as AstPath<ApexAnnotationNode>;
-				const result = printAnnotation(mockPath);
-
-				expect(result).toBeDefined();
-			},
-		);
-
-		it.concurrent(
-			'should handle AnnotationString parameter with non-string value (fallback to empty string)',
-			() => {
-				// This tests the fallback path when a param has a value property but it's not a string
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-							value: 123, // Non-string value to trigger fallback
-						} as unknown as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
-
-				const mockPath = createMockPath(
-					mockNode,
-				) as AstPath<ApexAnnotationNode>;
-				const result = printAnnotation(mockPath);
-
-				expect(result).toBeDefined();
-			},
-		);
-
-		it.concurrent('should handle parameter without value property', () => {
-			// Test param that doesn't have 'value' property - should fallback to empty string
-			const mockNode = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'test',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [
-					{
+					[nodeClassKey]:
+						'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+					value: {
 						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-						// No value property
-					} as unknown as Readonly<ApexAnnotationParameter>,
-				],
-			} as Readonly<ApexAnnotationNode>;
+							'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+						value: '',
+					} as Readonly<ApexAnnotationValue>,
+				} as Readonly<ApexAnnotationParameter>;
+				const keyValueUndefined = {
+					key: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'label',
+					},
+					[nodeClassKey]:
+						'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+					value: {
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+					} as Readonly<ApexAnnotationValue>,
+				} as Readonly<ApexAnnotationParameter>;
+				const stringNoValue = {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+				} as unknown as Readonly<ApexAnnotationParameter>;
 
-			const mockPath = createMockPath(
-				mockNode,
-			) as AstPath<ApexAnnotationNode>;
-			const result = printAnnotation(mockPath);
+				for (const params of [
+					[keyValueEmpty],
+					[keyValueUndefined],
+					[stringNoValue],
+				]) {
+					const mockNode = {
+						name: {
+							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+							value: 'test',
+						},
+						[nodeClassKey]:
+							'apex.jorje.data.ast.Modifier$Annotation',
+						parameters: params,
+					} as Readonly<ApexAnnotationNode>;
+					const result = printAnnotation(
+						createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
+					);
+					expect(result).toBeDefined();
+				}
+			},
+		);
 
-			expect(result).toBeDefined();
-		});
+		it.concurrent(
+			'should handle annotation parameter with non-string value (fallback to empty string)',
+			() => {
+				// AnnotationKeyValue with object value; AnnotationString with number value
+				const keyValueNonString = {
+					key: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'label',
+					},
+					[nodeClassKey]:
+						'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+					value: {
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+						value: { someProperty: 'value' },
+					} as unknown as Readonly<ApexAnnotationValue>,
+				} as Readonly<ApexAnnotationParameter>;
+				const stringNonString = {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+					value: 123,
+				} as unknown as Readonly<ApexAnnotationParameter>;
+
+				for (const params of [[keyValueNonString], [stringNonString]]) {
+					const mockNode = {
+						name: {
+							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+							value: 'test',
+						},
+						[nodeClassKey]:
+							'apex.jorje.data.ast.Modifier$Annotation',
+						parameters: params,
+					} as Readonly<ApexAnnotationNode>;
+					const result = printAnnotation(
+						createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
+					);
+					expect(result).toBeDefined();
+				}
+			},
+		);
 
 		it.concurrent(
 			'should handle multiline annotation with array params',

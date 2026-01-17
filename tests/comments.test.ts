@@ -405,6 +405,16 @@ describe('comments', () => {
 				expect(result).toBe(expected);
 			},
 		);
+
+		it.concurrent('should handle comment with leading whitespace', () => {
+			// Comment with leading whitespace before /*
+			const comment = '  /* comment */';
+			const result = normalizeBlockComment(comment, 0, {
+				tabWidth: 2,
+				useTabs: false,
+			});
+			expect(result).toContain('/*');
+		});
 	});
 
 	describe('comment attachment handlers', () => {

@@ -10,7 +10,6 @@ import {
 	printComment,
 	parseCommentToDocs,
 	createDocContent,
-	normalizeBlockComment,
 } from '../src/comments.js';
 
 describe('comments internal functions', () => {
@@ -131,18 +130,6 @@ describe('comments internal functions', () => {
 			const result = createDocContent('text', '', []);
 			expect(result.type).toBe('text');
 			expect(result.content).toBe('');
-		});
-	});
-
-	describe('normalizeBlockComment', () => {
-		it.concurrent('should handle comment with leading whitespace', () => {
-			// Comment with leading whitespace before /*
-			const comment = '  /* comment */';
-			const result = normalizeBlockComment(comment, 0, {
-				tabWidth: 2,
-				useTabs: false,
-			});
-			expect(result).toContain('/*');
 		});
 	});
 });

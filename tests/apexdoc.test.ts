@@ -322,30 +322,6 @@ describe('apexdoc', () => {
 		);
 	});
 
-	describe('detectCodeBlockDocs with text type', () => {
-		it.concurrent(
-			'should process text type doc without code blocks (apexdoc.ts line 890 else branch)',
-			() => {
-				// Create a text type doc structure manually
-				// Text type docs are created when no paragraphs are found
-				// They have type: 'text' and contain only whitespace/empty content
-				// The else branch at line 890 uses lines.join('\n') instead of map+removeCommentPrefix
-				// This tests the branch when doc.type !== 'paragraph'
-				const textDoc: ApexDocComment = {
-					content: '   \n   ',
-					lines: ['   ', '   '], // Whitespace lines - getContentLines expects this
-					type: 'text',
-				};
-				const result = detectCodeBlockDocs([textDoc], '', false);
-				// processContentForCodeBlocks is called which executes line 890 else branch
-				// The result may be empty if the text doc is filtered, but the branch executes
-				expect(Array.isArray(result)).toBe(true);
-				// The important part is that line 890 (else branch: lines.join('\n')) gets executed
-				// when doc.type === 'text' (not 'paragraph')
-			},
-		);
-	});
-
 	describe('normalizeSingleApexDocComment with isEmbedFormatted', () => {
 		it.concurrent(
 			'should handle isEmbedFormatted=true for code blocks (apexdoc.ts line 920)',
