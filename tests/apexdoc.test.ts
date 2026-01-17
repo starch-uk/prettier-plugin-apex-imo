@@ -2,7 +2,6 @@
  * @file Unit tests for the apexdoc module.
  */
 
- 
 import { describe, it, expect } from 'vitest';
 import type { ParserOptions } from 'prettier';
 import {
@@ -31,11 +30,14 @@ describe('apexdoc', () => {
 			expect(result).toEqual(['  text']);
 		});
 
-		it.concurrent('should return empty array for whitespace-only text', () => {
-			const text = '   \n  \n  ';
-			const result = filterNonEmptyLines(text);
-			expect(result).toEqual([]);
-		});
+		it.concurrent(
+			'should return empty array for whitespace-only text',
+			() => {
+				const text = '   \n  \n  ';
+				const result = filterNonEmptyLines(text);
+				expect(result).toEqual([]);
+			},
+		);
 	});
 
 	describe('removeTrailingEmptyLines', () => {
@@ -76,16 +78,22 @@ describe('apexdoc', () => {
 			expect(isApexDoc(true)).toBe(false);
 		});
 
-		it.concurrent('should return false for object without value property', () => {
-			expect(isApexDoc({})).toBe(false);
-			expect(isApexDoc({ other: 'prop' })).toBe(false);
-		});
+		it.concurrent(
+			'should return false for object without value property',
+			() => {
+				expect(isApexDoc({})).toBe(false);
+				expect(isApexDoc({ other: 'prop' })).toBe(false);
+			},
+		);
 
-		it.concurrent('should return false for object with non-string value', () => {
-			expect(isApexDoc({ value: 123 })).toBe(false);
-			expect(isApexDoc({ value: null })).toBe(false);
-			expect(isApexDoc({ value: {} })).toBe(false);
-		});
+		it.concurrent(
+			'should return false for object with non-string value',
+			() => {
+				expect(isApexDoc({ value: 123 })).toBe(false);
+				expect(isApexDoc({ value: null })).toBe(false);
+				expect(isApexDoc({ value: {} })).toBe(false);
+			},
+		);
 
 		it.concurrent('should return true for valid ApexDoc comment', () => {
 			const comment = {
@@ -106,7 +114,6 @@ describe('apexdoc', () => {
 			},
 		);
 	});
-
 
 	describe('Type casing in {@code} blocks', () => {
 		it.concurrent(
@@ -443,7 +450,12 @@ describe('apexdoc', () => {
 				} as ParserOptions;
 
 				// Call with commentIndent=0 to exercise line 123 true branch
-				const result = normalizeSingleApexDocComment(comment, 0, options, false);
+				const result = normalizeSingleApexDocComment(
+					comment,
+					0,
+					options,
+					false,
+				);
 				expect(result).toBeDefined();
 			},
 		);
@@ -462,7 +474,12 @@ describe('apexdoc', () => {
 				} as ParserOptions;
 
 				// Call with commentIndent>0 (e.g., 4) to exercise line 123 false branch
-				const result = normalizeSingleApexDocComment(comment, 4, options, false);
+				const result = normalizeSingleApexDocComment(
+					comment,
+					4,
+					options,
+					false,
+				);
 				expect(result).toBeDefined();
 			},
 		);

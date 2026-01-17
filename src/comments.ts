@@ -174,8 +174,7 @@ const handleBlockStatementLeadingComment = (comment: unknown): boolean => {
 	const { addLeadingComment, addDanglingComment } = prettier.util;
 
 	const hasStatements =
-		blockStatement.stmnts !== undefined &&
-		blockStatement.stmnts.length > 0;
+		blockStatement.stmnts !== undefined && blockStatement.stmnts.length > 0;
 	if (hasStatements) {
 		// Add as leading comment to first statement in block
 		addLeadingComment(blockStatement.stmnts[0], comment);
@@ -486,10 +485,7 @@ const CommentPrefix = {
  * @param preserveIndent - If true, only removes asterisk and single space after it to preserve code indentation. Otherwise removes all prefix and trims.
  * @returns Line with prefix removed and optionally trimmed.
  */
-const removeCommentPrefix = (
-	line: string,
-	preserveIndent = false,
-): string => {
+const removeCommentPrefix = (line: string, preserveIndent = false): string => {
 	if (preserveIndent) {
 		// Remove all asterisks (including multiple asterisks separated by spaces) and single space after, preserving indentation
 		// Pattern: leading whitespace + asterisk(s) (with optional spaces between) + optional single space + rest
@@ -527,7 +523,6 @@ const removeCommentPrefix = (
 	const result = line.replace(/^\s*(\*(\s*\*)*)\s*/, '');
 	return result.trim();
 };
-
 
 /**
  * Converts string lines to Doc array (strings are valid Docs).

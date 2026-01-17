@@ -55,10 +55,7 @@ const processTypeParams = (params: unknown[]): Doc[] => {
 		if (param === ', ' && j + 1 < params.length) {
 			processedParams.push(', ');
 			const remainingParams = params.slice(j + 1) as Doc[];
-			processedParams.push(
-				 
-				group(indent([softline, ...remainingParams])),
-			);
+			processedParams.push(group(indent([softline, ...remainingParams])));
 			break;
 		}
 		processedParams.push(param);
@@ -193,69 +190,66 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	// Implement embed function for {@code} blocks in comments
 	// originalPrinter from prettier-plugin-apex never has embed, so always assign
 	result.embed = (
-			path: Readonly<AstPath<ApexNode>>,
-			options: Readonly<ParserOptions>,
-		) => {
-			// Check if this is a comment node with {@code} blocks
-			if (!isCommentNode(path.node)) {
-				return null;
-			}
+		path: Readonly<AstPath<ApexNode>>,
+		options: Readonly<ParserOptions>,
+	) => {
+		// Check if this is a comment node with {@code} blocks
+		if (!isCommentNode(path.node)) {
+			return null;
+		}
 
-			const commentNode = path.node as { value?: string };
-			const commentText = commentNode.value;
+		const commentNode = path.node as { value?: string };
+		const commentText = commentNode.value;
 
-			if (!commentText?.includes('{@code')) {
-				return null;
-			}
+		if (!commentText?.includes('{@code')) {
+			return null;
+		}
+
+		/**
+		 * Return async function that processes {@code} blocks using prettier.format.
+		 * @param _textToDoc
+		 */
+		return async (
+			_textToDoc: (text: string, options: ParserOptions) => Promise<Doc>,
+		): Promise<Doc | undefined> => {
+			// Prettier always provides plugins and tabWidth in options
+			const tabWidthValue = options.tabWidth ?? 2;
+			const basePlugins = options.plugins ?? [];
+			const pluginInstance = getCurrentPluginInstance();
+			// pluginInstance is always set before embed is called (set in index.ts)
+			const plugins: (prettier.Plugin<ApexNode> | URL | string)[] = [
+				...basePlugins.filter((p) => p !== pluginInstance!.default),
+				pluginInstance!.default as prettier.Plugin<ApexNode>,
+			];
 
 			/**
-			 * Return async function that processes {@code} blocks using prettier.format.
-			 * @param _textToDoc
+			 * Base indent + " * " prefix.
 			 */
-			return async (
-				_textToDoc: (
-					text: string,
-					options: ParserOptions,
-				) => Promise<Doc>,
-			): Promise<Doc | undefined> => {
-				// Prettier always provides plugins and tabWidth in options
-				const tabWidthValue = options.tabWidth ?? 2;
-				const basePlugins = options.plugins ?? [];
-				const pluginInstance = getCurrentPluginInstance();
-				// pluginInstance is always set before embed is called (set in index.ts)
-				const plugins: (prettier.Plugin<ApexNode> | URL | string)[] = [
-					...basePlugins.filter(
-						(p) => p !== pluginInstance!.default,
-					),
-					pluginInstance!.default as prettier.Plugin<ApexNode>,
-				];
+			const commentPrefixLength = tabWidthValue + 3;
 
-				/**
-				 * Base indent + " * " prefix.
-				 */
-			 const commentPrefixLength = tabWidthValue + 3; 
+			// Process all code blocks in the comment
+			const formattedComment = await processAllCodeBlocksInComment({
+				commentPrefixLength,
+				commentText,
+				options,
+				plugins: [...plugins] as (
+					| prettier.Plugin<unknown>
+					| URL
+					| string
+				)[],
+				setFormattedCodeBlock,
+			});
 
-				// Process all code blocks in the comment
-				const formattedComment = await processAllCodeBlocksInComment({
-					commentPrefixLength,
-					commentText,
-					options,
-					plugins: [...plugins] as (
-						prettier.Plugin<unknown> | URL | string
-					)[],
-					setFormattedCodeBlock,
-				});
+			if (!formattedComment) {
+				return undefined;
+			}
 
-				if (!formattedComment) {
-					return undefined;
-				}
-
-				// Return formatted comment as Doc (split into lines)
-				const lines = formattedComment.split('\n');
-				const { join, hardline } = doc.builders;
-				return join(hardline, lines) as Doc;
-			};
+			// Return formatted comment as Doc (split into lines)
+			const lines = formattedComment.split('\n');
+			const { join, hardline } = doc.builders;
+			return join(hardline, lines) as Doc;
 		};
+	};
 
 	/**
 	 * Handles TypeRef nodes with names array normalization.
@@ -322,7 +316,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	const hasVariableAssignments = (decls: unknown[]): boolean =>
 		decls.some((decl) => {
 			if (!isObject(decl)) return false;
-			const {assignment} = (decl as { assignment?: unknown });
+			const { assignment } = decl as { assignment?: unknown };
 			return (
 				isObject(assignment) &&
 				'value' in assignment &&
@@ -349,7 +343,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 		// Cache these values as they're used in both branches
 		// Normalize reserved words in modifiers (e.g., PUBLIC -> public, Static -> static)
-		const reservedWordNormalizingPrint = createReservedWordNormalizingPrint(print);
+		const reservedWordNormalizingPrint =
+			createReservedWordNormalizingPrint(print);
 		const modifierDocs = path.map(
 			reservedWordNormalizingPrint,
 			'modifiers' as never,
@@ -382,10 +377,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 			if (nameDocs.length > 1) {
 				const wrappedNames = nameDocs.map((nameDoc) => {
-					return ifBreak(indent([line, nameDoc]), [
-						' ',
-						nameDoc,
-					]);
+					return ifBreak(indent([line, nameDoc]), [' ', nameDoc]);
 				});
 				resultParts.push(joinDocs([', ', softline], wrappedNames), ';');
 				return group(resultParts);
@@ -407,7 +399,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// decls in VariableDecls are always object nodes in well-formed AST
 			const declNode = declPath.node;
 
-			const {assignment} = (declNode as { assignment?: unknown });
+			const { assignment } = declNode as { assignment?: unknown };
 			// In Apex, all declarations in a VariableDecls statement must have the same structure
 			// (all have assignments or none do). Since hasVariableAssignments already checked that
 			// at least one has an assignment, all should have assignments here.
@@ -477,7 +469,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
 			// typeDoc from printer is always an array for Map types with structure: ['Map', '<', [params...], '>']
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
-			
+
 			// Map type structure: ['Map', '<', [params...], '>']
 			// paramsIndex = 2 should be the params array
 			// Printer always produces well-formed Map types, so paramsIndex always exists and is an array
@@ -493,25 +485,25 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// VariableDecls always has at least one declaration (declDocs.length === 1)
 			// path.map always returns an array with defined elements
 			const declDoc = declDocs[0]!;
-				if (
-					Array.isArray(declDoc) &&
-					declDoc.length >= 5 &&
-					declDoc[2] === '=' &&
-					isComplexMapType(typeDoc)
-				) {
-					const nameDoc = declDoc[0]!;
-					const assignmentDoc = declDoc[4]!;
-					resultParts.push(' ', group([nameDoc, ' ', '=']));
-					resultParts.push(
-						ifBreak(indent([line, assignmentDoc]), [
-							' ',
-							assignmentDoc,
-						]),
-					);
-					resultParts.push(';');
-				} else {
-					resultParts.push(' ', [declDoc, ';']);
-				}
+			if (
+				Array.isArray(declDoc) &&
+				declDoc.length >= 5 &&
+				declDoc[2] === '=' &&
+				isComplexMapType(typeDoc)
+			) {
+				const nameDoc = declDoc[0]!;
+				const assignmentDoc = declDoc[4]!;
+				resultParts.push(' ', group([nameDoc, ' ', '=']));
+				resultParts.push(
+					ifBreak(indent([line, assignmentDoc]), [
+						' ',
+						assignmentDoc,
+					]),
+				);
+				resultParts.push(';');
+			} else {
+				resultParts.push(' ', [declDoc, ';']);
+			}
 		}
 
 		return group(resultParts);
@@ -531,20 +523,14 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc | null => {
 		const nodeClass = getNodeClassOptional(node);
-		if (
-			!nodeClass?.includes('Stmnt$ExpressionStmnt')
-		)
-			return null;
+		if (!nodeClass?.includes('Stmnt$ExpressionStmnt')) return null;
 
-		const {expr} = (node as { expr?: unknown });
+		const { expr } = node as { expr?: unknown };
 		// If node class includes ExpressionStmnt, expr is always an ApexNode in well-formed ASTs
 
 		const EXPR_ASSIGNMENT_CLASS = 'Expr$AssignmentExpr';
 		const exprNodeClass = getNodeClassOptional(expr as ApexNode);
-		if (
-			!exprNodeClass?.includes(EXPR_ASSIGNMENT_CLASS)
-		)
-			return null;
+		if (!exprNodeClass?.includes(EXPR_ASSIGNMENT_CLASS)) return null;
 
 		const leftPath = path.call(
 			print,
@@ -571,18 +557,21 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 	): Doc => {
-		const {originalText} = (options as { originalText?: string });
+		const { originalText } = options as { originalText?: string };
 		currentPrintState = {
 			options,
 			...(originalText !== undefined && { originalText }),
 		};
 		const { node } = path;
 		const nodeClass = getNodeClassOptional(node);
-		
+
 		// Create print functions with reserved word normalization
 		// Reserved words are normalized to lowercase (e.g., 'PUBLIC' -> 'public', 'Class' -> 'class')
-		const reservedWordNormalizingPrint = createReservedWordNormalizingPrint(print);
-		const typeNormalizingPrint = createTypeNormalizingPrint(reservedWordNormalizingPrint);
+		const reservedWordNormalizingPrint =
+			createReservedWordNormalizingPrint(print);
+		const typeNormalizingPrint = createTypeNormalizingPrint(
+			reservedWordNormalizingPrint,
+		);
 		const fallback = (): Doc =>
 			originalPrinter.print(path, options, typeNormalizingPrint);
 

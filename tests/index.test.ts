@@ -77,35 +77,45 @@ describe('index', () => {
 	});
 
 	describe('wrappedParsers', () => {
-		it.concurrent('should skip invalid parsers (missing parse method)', () => {
-			// Create mock parsers object with invalid entries to test continue statement (line 127)
-			const mockParsers = {
-				valid: {
-					parse: async () => ({}),
-				},
-				invalid1: undefined, // undefined entry
-				invalid2: {}, // missing parse method
-				invalid3: {
-					parse: 'not a function', // parse is not a function
-				},
-			} as unknown as Readonly<Plugin<ApexNode>['parsers']>;
-			
-			const wrapped = wrapParsers(mockParsers, {} as Plugin<ApexNode>);
-			
-			// Should only wrap valid parsers
-			expect(wrapped).toBeDefined();
-			expect(wrapped?.valid).toBeDefined();
-			expect(typeof (wrapped?.valid as { parse?: unknown }).parse).toBe('function');
-			// Invalid parsers should be skipped (line 127 continue statement)
-			expect(wrapped?.invalid1).toBeUndefined();
-			expect(wrapped?.invalid2).toBeUndefined();
-			expect(wrapped?.invalid3).toBeUndefined();
-		});
+		it.concurrent(
+			'should skip invalid parsers (missing parse method)',
+			() => {
+				// Create mock parsers object with invalid entries to test continue statement (line 127)
+				const mockParsers = {
+					valid: {
+						parse: async () => ({}),
+					},
+					invalid1: undefined, // undefined entry
+					invalid2: {}, // missing parse method
+					invalid3: {
+						parse: 'not a function', // parse is not a function
+					},
+				} as unknown as Readonly<Plugin<ApexNode>['parsers']>;
+
+				const wrapped = wrapParsers(
+					mockParsers,
+					{} as Plugin<ApexNode>,
+				);
+
+				// Should only wrap valid parsers
+				expect(wrapped).toBeDefined();
+				expect(wrapped?.valid).toBeDefined();
+				expect(
+					typeof (wrapped?.valid as { parse?: unknown }).parse,
+				).toBe('function');
+				// Invalid parsers should be skipped (line 127 continue statement)
+				expect(wrapped?.invalid1).toBeUndefined();
+				expect(wrapped?.invalid2).toBeUndefined();
+				expect(wrapped?.invalid3).toBeUndefined();
+			},
+		);
 
 		it.concurrent('should handle null/undefined parsers', () => {
 			// Test with null/undefined parsers
 			expect(wrapParsers(null, {} as Plugin<ApexNode>)).toBeNull();
-			expect(wrapParsers(undefined, {} as Plugin<ApexNode>)).toBeUndefined();
+			expect(
+				wrapParsers(undefined, {} as Plugin<ApexNode>),
+			).toBeUndefined();
 		});
 	});
 

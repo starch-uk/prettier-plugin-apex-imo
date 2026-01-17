@@ -159,4 +159,8 @@ export function createMockOriginalPrinter(
 }
 
 // Re-export PrettierMockSuite for convenience
-export { PrettierMockSuite, defaultPrettierMock, createPrettierMock } from './prettier-mock.js';
+export {
+	PrettierMockSuite,
+	defaultPrettierMock,
+	createPrettierMock,
+} from './prettier-mock.js';

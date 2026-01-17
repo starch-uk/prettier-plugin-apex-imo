@@ -318,11 +318,13 @@ describe('prettier-plugin-apex-imo integration', () => {
 				fixture: 'map-empty',
 			},
 			{
-				description: 'should format single variable with complex Map type',
+				description:
+					'should format single variable with complex Map type',
 				fixture: 'variable-single-map-complex',
 			},
 			{
-				description: 'should format single variable with nested Map type',
+				description:
+					'should format single variable with nested Map type',
 				fixture: 'variable-single-map-nested-type',
 			},
 		])(
@@ -638,8 +640,14 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should handle end-of-line comment after non-binary expression (comments.ts line 212)',
 			async () => {
-				const input = loadFixture('comment-end-of-line-after-literal', 'input');
-				const expected = loadFixture('comment-end-of-line-after-literal', 'output');
+				const input = loadFixture(
+					'comment-end-of-line-after-literal',
+					'input',
+				);
+				const expected = loadFixture(
+					'comment-end-of-line-after-literal',
+					'output',
+				);
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},
@@ -649,7 +657,10 @@ describe('prettier-plugin-apex-imo integration', () => {
 			'should handle standalone brace (apexdoc-code.ts line 146)',
 			async () => {
 				const input = loadFixture('apexdoc-standalone-brace', 'input');
-				const expected = loadFixture('apexdoc-standalone-brace', 'output');
+				const expected = loadFixture(
+					'apexdoc-standalone-brace',
+					'output',
+				);
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},
@@ -674,7 +685,10 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should handle code block that ends inline (apexdoc-code.ts lines 138-142)',
 			async () => {
-				const input = loadFixture('apexdoc-code-block-ends-inline', 'input');
+				const input = loadFixture(
+					'apexdoc-code-block-ends-inline',
+					'input',
+				);
 				const expected = loadFixture(
 					'apexdoc-code-block-ends-inline',
 					'output',
@@ -687,7 +701,10 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should handle text with newline before code block (comments.ts lines 882-887)',
 			async () => {
-				const input = loadFixture('apexdoc-code-with-newline-trailing', 'input');
+				const input = loadFixture(
+					'apexdoc-code-with-newline-trailing',
+					'input',
+				);
 				const expected = loadFixture(
 					'apexdoc-code-with-newline-trailing',
 					'output',
@@ -700,7 +717,10 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should handle text with trailing newline before code block (comments.ts lines 882-887)',
 			async () => {
-				const input = loadFixture('apexdoc-text-trailing-newline-code-block', 'input');
+				const input = loadFixture(
+					'apexdoc-text-trailing-newline-code-block',
+					'input',
+				);
 				const expected = loadFixture(
 					'apexdoc-text-trailing-newline-code-block',
 					'output',
@@ -713,8 +733,14 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should skip empty line before code block (comments.ts line 896)',
 			async () => {
-				const input = loadFixture('apexdoc-empty-line-before-code', 'input');
-				const expected = loadFixture('apexdoc-empty-line-before-code', 'output');
+				const input = loadFixture(
+					'apexdoc-empty-line-before-code',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-empty-line-before-code',
+					'output',
+				);
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},
@@ -723,8 +749,14 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should handle no remaining text after code block (apexdoc.ts line 929)',
 			async () => {
-				const input = loadFixture('apexdoc-no-remaining-text-after-code', 'input');
-				const expected = loadFixture('apexdoc-no-remaining-text-after-code', 'output');
+				const input = loadFixture(
+					'apexdoc-no-remaining-text-after-code',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-no-remaining-text-after-code',
+					'output',
+				);
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},
@@ -896,8 +928,14 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should handle standalone closing brace line (apexdoc-code.ts line 146)',
 			async () => {
-				const input = loadFixture('apexdoc-standalone-closing-brace', 'input');
-				const expected = loadFixture('apexdoc-standalone-closing-brace', 'output');
+				const input = loadFixture(
+					'apexdoc-standalone-closing-brace',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-standalone-closing-brace',
+					'output',
+				);
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},
@@ -909,7 +947,10 @@ describe('prettier-plugin-apex-imo integration', () => {
 			'should normalize annotations in non-ApexDoc block comments (comments.ts lines 1051-1065)',
 			async () => {
 				const input = loadFixture('block-comment-non-apexdoc', 'input');
-				const expected = loadFixture('block-comment-non-apexdoc', 'output');
+				const expected = loadFixture(
+					'block-comment-non-apexdoc',
+					'output',
+				);
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},
@@ -918,8 +959,14 @@ describe('prettier-plugin-apex-imo integration', () => {
 		it.concurrent(
 			'should handle empty block comment (comments.ts lines 828-834)',
 			async () => {
-				const input = loadFixture('block-comment-empty-content', 'input');
-				const expected = loadFixture('block-comment-empty-content', 'output');
+				const input = loadFixture(
+					'block-comment-empty-content',
+					'input',
+				);
+				const expected = loadFixture(
+					'block-comment-empty-content',
+					'output',
+				);
 				const result = await formatApex(input);
 				expect(result).toBe(expected);
 			},

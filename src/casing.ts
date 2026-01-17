@@ -75,14 +75,14 @@ const normalizeStandardObjectType = (typeName: string): string => {
 
 const normalizeTypeName = (typeName: string): string => {
 	if (!typeName) return typeName;
-	
+
 	// First, check if it's a primitive or collection type (must be normalized to PascalCase)
 	const lowerTypeName = typeName.toLowerCase();
 	const primitiveType = PRIMITIVE_AND_COLLECTION_TYPES[lowerTypeName];
 	if (primitiveType !== undefined) {
 		return primitiveType;
 	}
-	
+
 	// Then check if it's a standard object
 	const standardNormalized = normalizeStandardObjectType(typeName);
 	if (standardNormalized !== typeName) return standardNormalized;
@@ -164,7 +164,6 @@ const isTypeRelatedParentClass = (parentClass: string | undefined): boolean => {
 };
 
 const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
-	 
 	const { key, stack } = path;
 	if (key === 'types') return true;
 	if (!Array.isArray(stack)) return false;
@@ -179,7 +178,6 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	}
 	if (stack.length < STACK_PARENT_OFFSET) return false;
 
-	 
 	const parent = stack[stack.length - STACK_PARENT_OFFSET];
 	if (typeof parent !== 'object' || parent == null) return false;
 	const parentClass = getNodeClassOptional(parent);
@@ -293,10 +291,10 @@ function normalizeReservedWordIdentifier(
 	if (nodeValue.length === 0) return originalPrint(subPath);
 	const normalizedValue = normalizeReservedWord(nodeValue);
 	if (normalizedValue === nodeValue) return originalPrint(subPath);
-	
+
 	// Mutate the node to use normalized value for printing
 	(node as { value: string }).value = normalizedValue;
-	
+
 	// For identifiers that aren't in arrays, restore after printing
 	// For arrays, keep normalized value as Doc may be evaluated lazily
 	const isInArray = typeof subPath.key === 'number';
@@ -371,12 +369,12 @@ const createReservedWordNormalizingPrint =
 	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {
 		const { node } = subPath;
 		if (!node) return originalPrint(subPath);
-		
+
 		const isIdent = isIdentifier(node);
 		if (!isIdent) {
 			return originalPrint(subPath, ..._extraArgs);
 		}
-		
+
 		const valueField = (node as { value?: unknown }).value;
 		if (typeof valueField === 'string') {
 			return normalizeReservedWordIdentifier(
@@ -385,7 +383,7 @@ const createReservedWordNormalizingPrint =
 				subPath,
 			);
 		}
-		
+
 		return originalPrint(subPath, ..._extraArgs);
 	};
 

@@ -16,13 +16,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import { vi } from 'vitest';
-import type {
-	AstPath,
-	Doc,
-	ParserOptions,
-	Plugin,
-	Printer,
-} from 'prettier';
+import type { AstPath, Doc, ParserOptions, Plugin, Printer } from 'prettier';
 import type { ApexNode } from '../src/types.js';
 
 /**
@@ -176,7 +170,9 @@ export class PrettierMockSuite {
 	format = vi.fn(
 		async (
 			code: string,
-			options?: Readonly<ParserOptions & { parser?: string; plugins?: unknown[] }>,
+			options?: Readonly<
+				ParserOptions & { parser?: string; plugins?: unknown[] }
+			>,
 		): Promise<string> => {
 			// Default: return code as-is (identity formatter)
 			return code;
@@ -237,9 +233,7 @@ export class PrettierMockSuite {
 	 * });
 	 * ```
 	 */
-	createMockPlugin(
-		overrides?: Partial<Plugin<ApexNode>>,
-	): Plugin<ApexNode> {
+	createMockPlugin(overrides?: Partial<Plugin<ApexNode>>): Plugin<ApexNode> {
 		return {
 			languages: [],
 			parsers: {},
@@ -320,7 +314,9 @@ export const defaultPrettierMock = new PrettierMockSuite();
 export function createPrettierMock(options?: {
 	format?: (
 		code: string,
-		opts?: Readonly<ParserOptions & { parser?: string; plugins?: unknown[] }>,
+		opts?: Readonly<
+			ParserOptions & { parser?: string; plugins?: unknown[] }
+		>,
 	) => Promise<string>;
 }): typeof import('prettier') {
 	const suite = new PrettierMockSuite();

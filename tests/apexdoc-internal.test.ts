@@ -29,7 +29,10 @@ describe('apexdoc internal functions', () => {
 				const result2 = detectCodeBlockDocs([annotationDoc], '');
 				expect(result2).toEqual([annotationDoc]);
 
-				const result3 = detectCodeBlockDocs([codeDoc, annotationDoc], '');
+				const result3 = detectCodeBlockDocs(
+					[codeDoc, annotationDoc],
+					'',
+				);
 				expect(result3).toEqual([codeDoc, annotationDoc]);
 			},
 		);

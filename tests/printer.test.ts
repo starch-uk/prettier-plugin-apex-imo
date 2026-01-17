@@ -259,7 +259,8 @@ describe('utils', () => {
 	});
 
 	describe('isCollectionAssignment', () => {
-		const LIST_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewListLiteral';
+		const LIST_LITERAL_CLASS =
+			'apex.jorje.data.ast.NewObject$NewListLiteral';
 		const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 		const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
 		const NEW_EXPR_CLASS = 'apex.jorje.data.ast.Expr$NewExpr';
@@ -362,25 +363,31 @@ describe('utils', () => {
 			},
 		);
 
-		it.concurrent('should handle assignment with missing creator property', () => {
-			const assignment = {
-				value: {
-					'@class': 'apex.jorje.data.ast.Expr$NewExpr',
-					// Missing creator property
-				},
-			};
-			expect(isCollectionAssignment(assignment)).toBe(false);
-		});
+		it.concurrent(
+			'should handle assignment with missing creator property',
+			() => {
+				const assignment = {
+					value: {
+						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+						// Missing creator property
+					},
+				};
+				expect(isCollectionAssignment(assignment)).toBe(false);
+			},
+		);
 
-		it.concurrent('should handle assignment with non-object creator', () => {
-			const assignment = {
-				value: {
-					'@class': 'apex.jorje.data.ast.Expr$NewExpr',
-					creator: 'not an object',
-				},
-			};
-			expect(isCollectionAssignment(assignment)).toBe(false);
-		});
+		it.concurrent(
+			'should handle assignment with non-object creator',
+			() => {
+				const assignment = {
+					value: {
+						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+						creator: 'not an object',
+					},
+				};
+				expect(isCollectionAssignment(assignment)).toBe(false);
+			},
+		);
 
 		it.concurrent(
 			'should handle assignment with creator without @class property',

@@ -75,15 +75,23 @@ describe('utils', () => {
 	});
 
 	describe('isApexNodeLike', () => {
-		it.concurrent('should return true for objects with @class property', () => {
-			expect(isApexNodeLike({ '@class': 'test' })).toBe(true);
-			expect(isApexNodeLike({ '@class': 'Test', key: 'value' })).toBe(true);
-		});
+		it.concurrent(
+			'should return true for objects with @class property',
+			() => {
+				expect(isApexNodeLike({ '@class': 'test' })).toBe(true);
+				expect(isApexNodeLike({ '@class': 'Test', key: 'value' })).toBe(
+					true,
+				);
+			},
+		);
 
-		it.concurrent('should return false for objects without @class property', () => {
-			expect(isApexNodeLike({})).toBe(false);
-			expect(isApexNodeLike({ key: 'value' })).toBe(false);
-		});
+		it.concurrent(
+			'should return false for objects without @class property',
+			() => {
+				expect(isApexNodeLike({})).toBe(false);
+				expect(isApexNodeLike({ key: 'value' })).toBe(false);
+			},
+		);
 
 		it.concurrent('should return false for non-objects', () => {
 			expect(isApexNodeLike(null)).toBe(false);
@@ -106,15 +114,20 @@ describe('utils', () => {
 			const node: ApexNode = {
 				'@class': 'apex.jorje.data.ast.Identifier',
 			} as ApexNode;
-			expect(getNodeClassOptional(node)).toBe('apex.jorje.data.ast.Identifier');
+			expect(getNodeClassOptional(node)).toBe(
+				'apex.jorje.data.ast.Identifier',
+			);
 		});
 
-		it.concurrent('should return undefined when @class is not a string', () => {
-			const node = {
-				'@class': 123,
-			} as unknown as ApexNode;
-			expect(getNodeClassOptional(node)).toBeUndefined();
-		});
+		it.concurrent(
+			'should return undefined when @class is not a string',
+			() => {
+				const node = {
+					'@class': 123,
+				} as unknown as ApexNode;
+				expect(getNodeClassOptional(node)).toBeUndefined();
+			},
+		);
 
 		it.concurrent('should return undefined when @class is missing', () => {
 			const node = {} as ApexNode;
@@ -123,25 +136,34 @@ describe('utils', () => {
 	});
 
 	describe('createNodeClassGuard', () => {
-		it.concurrent('should return true when node class matches string', () => {
-			const guard = createNodeClassGuard<ApexNode>('test.Class');
-			const node = { '@class': 'test.Class' } as ApexNode;
-			expect(guard(node)).toBe(true);
-		});
+		it.concurrent(
+			'should return true when node class matches string',
+			() => {
+				const guard = createNodeClassGuard<ApexNode>('test.Class');
+				const node = { '@class': 'test.Class' } as ApexNode;
+				expect(guard(node)).toBe(true);
+			},
+		);
 
-		it.concurrent('should return false when node class does not match', () => {
-			const guard = createNodeClassGuard<ApexNode>('test.Class');
-			const node = { '@class': 'other.Class' } as ApexNode;
-			expect(guard(node)).toBe(false);
-		});
+		it.concurrent(
+			'should return false when node class does not match',
+			() => {
+				const guard = createNodeClassGuard<ApexNode>('test.Class');
+				const node = { '@class': 'other.Class' } as ApexNode;
+				expect(guard(node)).toBe(false);
+			},
+		);
 
-		it.concurrent('should return true when function check returns true', () => {
-			const guard = createNodeClassGuard<ApexNode>((cls) =>
-				cls?.includes('Test') ?? false,
-			);
-			const node = { '@class': 'test.TestClass' } as ApexNode;
-			expect(guard(node)).toBe(true);
-		});
+		it.concurrent(
+			'should return true when function check returns true',
+			() => {
+				const guard = createNodeClassGuard<ApexNode>(
+					(cls) => cls?.includes('Test') ?? false,
+				);
+				const node = { '@class': 'test.TestClass' } as ApexNode;
+				expect(guard(node)).toBe(true);
+			},
+		);
 
 		it.concurrent('should return false for null', () => {
 			const guard = createNodeClassGuard<ApexNode>('test.Class');
@@ -161,19 +183,27 @@ describe('utils', () => {
 		});
 
 		it.concurrent('should return true for private modifier', () => {
-			expect(startsWithAccessModifier('private Integer count')).toBe(true);
+			expect(startsWithAccessModifier('private Integer count')).toBe(
+				true,
+			);
 		});
 
 		it.concurrent('should return true for protected modifier', () => {
-			expect(startsWithAccessModifier('protected String name')).toBe(true);
+			expect(startsWithAccessModifier('protected String name')).toBe(
+				true,
+			);
 		});
 
 		it.concurrent('should return true for static modifier', () => {
-			expect(startsWithAccessModifier('static final Integer count')).toBe(true);
+			expect(startsWithAccessModifier('static final Integer count')).toBe(
+				true,
+			);
 		});
 
 		it.concurrent('should return true for global modifier', () => {
-			expect(startsWithAccessModifier('global Account account')).toBe(true);
+			expect(startsWithAccessModifier('global Account account')).toBe(
+				true,
+			);
 		});
 
 		it.concurrent('should return false for non-modifier words', () => {
@@ -200,7 +230,9 @@ describe('utils', () => {
 		it.concurrent('should throw error when printWidth is undefined', () => {
 			expect(() => {
 				calculateEffectiveWidth(undefined, 10);
-			}).toThrow('prettier-plugin-apex-imo: printWidth is required for calculateEffectiveWidth');
+			}).toThrow(
+				'prettier-plugin-apex-imo: printWidth is required for calculateEffectiveWidth',
+			);
 		});
 	});
 
@@ -221,10 +253,15 @@ describe('utils', () => {
 			},
 		);
 
-		it.concurrent('should return false when line does not end with }', () => {
-			const lines = ['  );', '  @Test'];
-			expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(false);
-		});
+		it.concurrent(
+			'should return false when line does not end with }',
+			() => {
+				const lines = ['  );', '  @Test'];
+				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(
+					false,
+				);
+			},
+		);
 
 		it.concurrent('should return false when next line is empty', () => {
 			const lines = ['  }', ''];
@@ -238,25 +275,40 @@ describe('utils', () => {
 			expect(preserveBlankLineAfterClosingBrace(lines, 10)).toBe(false);
 		});
 
-		it.concurrent('should return false when current line is undefined', () => {
-			const lines: string[] = [];
-			expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(false);
-		});
+		it.concurrent(
+			'should return false when current line is undefined',
+			() => {
+				const lines: string[] = [];
+				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(
+					false,
+				);
+			},
+		);
 
-		it.concurrent('should return false when current line is undefined (sparse array)', () => {
-			// Create sparse array where index 0 exists but index 1 is undefined
-			const lines: (string | undefined)[] = ['  }'];
-			lines[2] = '  @Test'; // Skip index 1
-			// Access with index 1 which is undefined
-			// This tests line 137: if (currentLine === undefined) return false;
-			expect(preserveBlankLineAfterClosingBrace(lines as readonly string[], 1)).toBe(false);
-		});
+		it.concurrent(
+			'should return false when current line is undefined (sparse array)',
+			() => {
+				// Create sparse array where index 0 exists but index 1 is undefined
+				const lines: (string | undefined)[] = ['  }'];
+				lines[2] = '  @Test'; // Skip index 1
+				// Access with index 1 which is undefined
+				// This tests line 137: if (currentLine === undefined) return false;
+				expect(
+					preserveBlankLineAfterClosingBrace(
+						lines as readonly string[],
+						1,
+					),
+				).toBe(false);
+			},
+		);
 
 		it.concurrent(
 			'should return false when next line starts with non-modifier word',
 			() => {
 				const lines = ['  }', '  String name;'];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(false);
+				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(
+					false,
+				);
 			},
 		);
 
@@ -283,15 +335,18 @@ describe('utils', () => {
 	});
 
 	describe('formatApexCodeWithFallback', () => {
-		it.concurrent('should format code with apex-anonymous parser', async () => {
-			const code = 'Integer x = 10;';
-			const result = await formatApexCodeWithFallback(code, {
-				parser: 'apex',
-				plugins: [],
-			});
-			expect(result).toBeTruthy();
-			expect(typeof result).toBe('string');
-		});
+		it.concurrent(
+			'should format code with apex-anonymous parser',
+			async () => {
+				const code = 'Integer x = 10;';
+				const result = await formatApexCodeWithFallback(code, {
+					parser: 'apex',
+					plugins: [],
+				});
+				expect(result).toBeTruthy();
+				expect(typeof result).toBe('string');
+			},
+		);
 
 		it.concurrent(
 			'should fallback to apex parser when apex-anonymous fails',
@@ -340,6 +395,5 @@ describe('utils', () => {
 				expect(result).toBe(code);
 			},
 		);
-
 	});
 });

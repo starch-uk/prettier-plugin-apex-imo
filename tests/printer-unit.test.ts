@@ -784,19 +784,29 @@ describe('printer', () => {
 	});
 
 	describe('getter functions', () => {
-		it.concurrent('getCurrentPrintOptions should be callable and return a value', () => {
-			// Test that the function can be called (line 134)
-			const result = getCurrentPrintOptions();
-			// Result may be undefined or an object depending on test state
-			expect(result === undefined || typeof result === 'object').toBe(true);
-		});
+		it.concurrent(
+			'getCurrentPrintOptions should be callable and return a value',
+			() => {
+				// Test that the function can be called (line 134)
+				const result = getCurrentPrintOptions();
+				// Result may be undefined or an object depending on test state
+				expect(result === undefined || typeof result === 'object').toBe(
+					true,
+				);
+			},
+		);
 
-		it.concurrent('getCurrentOriginalText should be callable and return a value', () => {
-			// Test that the function can be called (line 137)
-			const result = getCurrentOriginalText();
-			// Result may be undefined or a string depending on test state
-			expect(result === undefined || typeof result === 'string').toBe(true);
-		});
+		it.concurrent(
+			'getCurrentOriginalText should be callable and return a value',
+			() => {
+				// Test that the function can be called (line 137)
+				const result = getCurrentOriginalText();
+				// Result may be undefined or a string depending on test state
+				expect(result === undefined || typeof result === 'string').toBe(
+					true,
+				);
+			},
+		);
 	});
 
 	describe('handleVariableDecls edge cases', () => {
@@ -870,9 +880,11 @@ describe('printer', () => {
 							'@class': 'apex.jorje.data.ast.Variable',
 							assignment: {
 								value: {
-									'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+									'@class':
+										'apex.jorje.data.ast.Expr$NewExpr',
 									creator: {
-										'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+										'@class':
+											'apex.jorje.data.ast.NewObject$NewMapLiteral',
 									},
 								},
 							},
@@ -921,9 +933,11 @@ describe('printer', () => {
 							'@class': 'apex.jorje.data.ast.Variable',
 							assignment: {
 								value: {
-									'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+									'@class':
+										'apex.jorje.data.ast.Expr$NewExpr',
 									creator: {
-										'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral',
+										'@class':
+											'apex.jorje.data.ast.NewObject$NewMapLiteral',
 									},
 								},
 							},

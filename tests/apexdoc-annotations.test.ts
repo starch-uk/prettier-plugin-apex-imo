@@ -14,19 +14,26 @@ import type { ApexDocAnnotation, ApexDocComment } from '../src/comments.js';
 
 describe('apexdoc-annotations', () => {
 	describe('renderAnnotation', () => {
-		it.concurrent('should render annotation with followingText (line 356)', () => {
-			// Test line 356: followingText handling
-			const doc: ApexDocAnnotation = {
-				type: 'annotation',
-				name: 'param',
-				content: 'input The input parameter' as Doc,
-				followingText: 'Some text before annotation' as Doc,
-			};
-			const result = renderAnnotation(doc, '   * ');
-			expect(result).not.toBeNull();
-			expect(result?.lines).toContain('   * Some text before annotation');
-			expect(result?.lines.some((l) => l.includes('@param'))).toBe(true);
-		});
+		it.concurrent(
+			'should render annotation with followingText (line 356)',
+			() => {
+				// Test line 356: followingText handling
+				const doc: ApexDocAnnotation = {
+					type: 'annotation',
+					name: 'param',
+					content: 'input The input parameter' as Doc,
+					followingText: 'Some text before annotation' as Doc,
+				};
+				const result = renderAnnotation(doc, '   * ');
+				expect(result).not.toBeNull();
+				expect(result?.lines).toContain(
+					'   * Some text before annotation',
+				);
+				expect(result?.lines.some((l) => l.includes('@param'))).toBe(
+					true,
+				);
+			},
+		);
 
 		it.concurrent(
 			'should render annotation with multiline followingText (line 356)',
@@ -84,17 +91,22 @@ describe('apexdoc-annotations', () => {
 			expect(result?.lines[0]).toBe('   * @deprecated');
 		});
 
-		it.concurrent('should render annotation with non-empty content (line 360)', () => {
-			// Test line 360: ternary true branch when firstContent is not empty
-			const doc: ApexDocAnnotation = {
-				type: 'annotation',
-				name: 'param',
-				content: 'input The input parameter' as Doc,
-			};
-			const result = renderAnnotation(doc, '   * ');
-			expect(result).not.toBeNull();
-			expect(result?.lines[0]).toContain('@param input The input parameter');
-		});
+		it.concurrent(
+			'should render annotation with non-empty content (line 360)',
+			() => {
+				// Test line 360: ternary true branch when firstContent is not empty
+				const doc: ApexDocAnnotation = {
+					type: 'annotation',
+					name: 'param',
+					content: 'input The input parameter' as Doc,
+				};
+				const result = renderAnnotation(doc, '   * ');
+				expect(result).not.toBeNull();
+				expect(result?.lines[0]).toContain(
+					'@param input The input parameter',
+				);
+			},
+		);
 	});
 
 	describe('wrapAnnotations', () => {
@@ -251,13 +263,19 @@ describe('apexdoc-annotations', () => {
 				// Test lines 125-126: continuation lines in collectContinuationFromDocLines
 				const textDoc: ApexDocComment = {
 					type: 'text',
-					content: '   * @param input The input\n   * continuation line',
-					lines: ['   * @param input The input', '   * continuation line'],
+					content:
+						'   * @param input The input\n   * continuation line',
+					lines: [
+						'   * @param input The input',
+						'   * continuation line',
+					],
 				};
 				const docs: ApexDocComment[] = [textDoc];
 				const result = detectAnnotationsInDocs(docs);
 				expect(result.length).toBeGreaterThan(0);
-				const annotations = result.filter((d) => d.type === 'annotation');
+				const annotations = result.filter(
+					(d) => d.type === 'annotation',
+				);
 				expect(annotations.length).toBeGreaterThanOrEqual(1);
 				if (annotations[0]?.type === 'annotation') {
 					// Should include continuation line in content
@@ -280,12 +298,16 @@ describe('apexdoc-annotations', () => {
 				const docs: ApexDocComment[] = [textDoc];
 				const result = detectAnnotationsInDocs(docs);
 				expect(result.length).toBeGreaterThan(0);
-				const annotations = result.filter((d) => d.type === 'annotation');
+				const annotations = result.filter(
+					(d) => d.type === 'annotation',
+				);
 				expect(annotations.length).toBeGreaterThanOrEqual(1);
 				if (annotations[0]?.type === 'annotation') {
 					// Should have followingText when beforeText is non-empty
 					expect(annotations[0].followingText).toBeDefined();
-					const followingTextString = String(annotations[0].followingText);
+					const followingTextString = String(
+						annotations[0].followingText,
+					);
 					expect(followingTextString).toContain('Some text before');
 				}
 			},
@@ -326,7 +348,9 @@ describe('apexdoc-annotations', () => {
 				const result = detectAnnotationsInDocs(docs);
 				// processedLines contains empty lines, which get filtered out
 				// So trimmedLines.length === 0 and we don't push a new doc
-				const annotations = result.filter((d) => d.type === 'annotation');
+				const annotations = result.filter(
+					(d) => d.type === 'annotation',
+				);
 				expect(annotations.length).toBeGreaterThan(0);
 				// Should not have a text doc for the empty processedLines
 				const textDocs = result.filter((d) => d.type === 'text');
@@ -335,12 +359,14 @@ describe('apexdoc-annotations', () => {
 			},
 		);
 
-
 		it.concurrent('should handle paragraph docs with annotations', () => {
 			const paragraphDoc: ApexDocComment = {
 				type: 'paragraph',
 				content: '   * @param input The input\n   * @return The result',
-				lines: ['   * @param input The input', '   * @return The result'],
+				lines: [
+					'   * @param input The input',
+					'   * @return The result',
+				],
 			};
 			const docs: ApexDocComment[] = [paragraphDoc];
 			const result = detectAnnotationsInDocs(docs);
@@ -356,7 +382,8 @@ describe('apexdoc-annotations', () => {
 				// This happens when some lines have annotations and some don't
 				const textDoc: ApexDocComment = {
 					type: 'text',
-					content: '   * Some text\n   * @param input The input\n   * More text',
+					content:
+						'   * Some text\n   * @param input The input\n   * More text',
 					lines: [
 						'   * Some text',
 						'   * @param input The input',
@@ -366,7 +393,9 @@ describe('apexdoc-annotations', () => {
 				const docs: ApexDocComment[] = [textDoc];
 				const result = detectAnnotationsInDocs(docs);
 				// Should have annotation plus remaining text
-				const annotations = result.filter((d) => d.type === 'annotation');
+				const annotations = result.filter(
+					(d) => d.type === 'annotation',
+				);
 				expect(annotations.length).toBeGreaterThanOrEqual(1);
 				// Should have remaining text as a text doc
 				const textDocs = result.filter((d) => d.type === 'text');

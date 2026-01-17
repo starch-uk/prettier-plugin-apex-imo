@@ -654,7 +654,7 @@ const mergeIncompleteCodeBlock = (
 ): { mergedDoc: ApexDocContent | null; nextIndex: number } => {
 	let mergedContent = getContentString(doc);
 	let mergedLines = getContentLines(doc);
-	 
+
 	let j = startIndex + INDEX_ONE;
 
 	while (j < docs.length) {
@@ -670,7 +670,9 @@ const mergeIncompleteCodeBlock = (
 		// Check if the merged content now has a complete block
 		if (hasCompleteCodeBlock(mergedContent, codeTagIndex)) {
 			return {
-				mergedDoc: createMergedDoc(doc, mergedContent, [...mergedLines]),
+				mergedDoc: createMergedDoc(doc, mergedContent, [
+					...mergedLines,
+				]),
 				nextIndex: j,
 			};
 		}
@@ -759,7 +761,11 @@ const applyDocProcessingPipeline = (
 	// normalizedComment is always defined when called from normalizeSingleApexDocComment
 	// Default parameter avoids unreachable ?? '' branch
 	const commentText = normalizedComment;
-	let processedDocs = detectCodeBlockDocs(docs, commentText, isEmbedFormatted);
+	let processedDocs = detectCodeBlockDocs(
+		docs,
+		commentText,
+		isEmbedFormatted,
+	);
 
 	// Detect annotations in docs that contain ApexDoc content
 	// Code blocks are now handled as separate docs
@@ -777,7 +783,9 @@ const applyDocProcessingPipeline = (
  * @returns Array of non-empty lines after filtering.
  */
 const filterNonEmptyLines = (text: string): string[] => {
-	return text.split('\n').filter((line: string) => line.trim().length > EMPTY);
+	return text
+		.split('\n')
+		.filter((line: string) => line.trim().length > EMPTY);
 };
 
 /**

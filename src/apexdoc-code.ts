@@ -123,90 +123,252 @@ const countBracesAndCheckEnd = (
 };
 
 /**
+ * Determines if a line starts a code block.
+ * @param trimmedLine - The trimmed line to check.
+ * @param inCodeBlock - Current code block state.
+ * @returns True if this line starts a code block.
+ */
+const shouldStartCodeBlock = (
+	trimmedLine: string,
+	inCodeBlock: boolean,
+): boolean => {
+	return !inCodeBlock && trimmedLine.startsWith(CODE_TAG);
+};
+
+/**
+ * Processes a code content line and returns updated state and processed line.
+ * @param trimmedLine - The trimmed line being processed.
+ * @param commentLine - The original comment line.
+ * @param prefix - Prefix to add to processed line.
+ * @param codeBlockBraceCount - Current brace count.
+ * @returns Object with updated brace count, willEnd flag, and processed line.
+ */
+const processCodeContentLine = (
+	trimmedLine: string,
+	commentLine: string,
+	prefix: string,
+	codeBlockBraceCount: number,
+): {
+	codeBlockBraceCount: number;
+	willEnd: boolean;
+	processedLine: string;
+} => {
+	const braceResult = countBracesAndCheckEnd(
+		trimmedLine,
+		codeBlockBraceCount,
+	);
+	const processedLine = prefix + removeCommentPrefix(commentLine, true);
+	return {
+		codeBlockBraceCount: braceResult.braceCount,
+		willEnd: braceResult.willEnd,
+		processedLine,
+	};
+};
+
+/**
+ * Processes a regular (non-code content) line.
+ * @param trimmedLine - The trimmed line.
+ * @param commentLine - The original comment line.
+ * @param prefix - Prefix to add.
+ * @param index - Current line index.
+ * @param totalLines - Total number of lines.
+ * @returns Processed line string.
+ */
+const processRegularLine = (
+	trimmedLine: string,
+	commentLine: string,
+	prefix: string,
+	index: number,
+	totalLines: number,
+): string => {
+	return (
+		prefix +
+		(index < totalLines - 1 ? trimmedLine : commentLine.trimStart())
+	);
+};
+
+/**
+ * Computes the new code block state based on whether a code block should start.
+ * @param trimmedLine - The trimmed line to check.
+ * @param currentInCodeBlock - Current code block state.
+ * @param currentBraceCount - Current brace count.
+ * @returns Object with updated inCodeBlock and codeBlockBraceCount values.
+ */
+const computeNewCodeBlockState = (
+	trimmedLine: string,
+	currentInCodeBlock: boolean,
+	currentBraceCount: number,
+): {
+	newInCodeBlock: boolean;
+	newBraceCount: number;
+} => {
+	const startsCodeBlock = shouldStartCodeBlock(
+		trimmedLine,
+		currentInCodeBlock,
+	);
+	return {
+		newInCodeBlock: startsCodeBlock ? true : currentInCodeBlock,
+		newBraceCount: startsCodeBlock
+			? INITIAL_BRACE_COUNT
+			: currentBraceCount,
+	};
+};
+
+/**
+ * Processes a code content line and updates the accumulator.
+ * @param accumulator - Current state with result array and code block tracking.
+ * @param trimmedLine - The trimmed line being processed.
+ * @param commentLine - The original comment line.
+ * @param prefix - Prefix to add to processed line.
+ * @param newBraceCount - Current brace count for the code block.
+ * @returns Updated accumulator with processed code content line.
+ */
+const processLineAsCodeContent = (
+	accumulator: {
+		result: string[];
+		inCodeBlock: boolean;
+		codeBlockBraceCount: number;
+	},
+	trimmedLine: string,
+	commentLine: string,
+	prefix: string,
+	newBraceCount: number,
+): {
+	result: string[];
+	inCodeBlock: boolean;
+	codeBlockBraceCount: number;
+} => {
+	const contentResult = processCodeContentLine(
+		trimmedLine,
+		commentLine,
+		prefix,
+		newBraceCount,
+	);
+	return {
+		result: [...accumulator.result, contentResult.processedLine],
+		inCodeBlock: !contentResult.willEnd,
+		codeBlockBraceCount: contentResult.codeBlockBraceCount,
+	};
+};
+
+/**
+ * Processes a regular (non-code content) line and updates the accumulator.
+ * @param accumulator - Current state with result array and code block tracking.
+ * @param trimmedLine - The trimmed line.
+ * @param commentLine - The original comment line.
+ * @param prefix - Prefix to add.
+ * @param index - Current line index.
+ * @param totalLines - Total number of lines.
+ * @param newInCodeBlock - New code block state.
+ * @param newBraceCount - New brace count.
+ * @returns Updated accumulator with processed regular line.
+ */
+const processLineAsRegular = (
+	accumulator: {
+		result: string[];
+		inCodeBlock: boolean;
+		codeBlockBraceCount: number;
+	},
+	trimmedLine: string,
+	commentLine: string,
+	prefix: string,
+	index: number,
+	totalLines: number,
+	newInCodeBlock: boolean,
+	newBraceCount: number,
+): {
+	result: string[];
+	inCodeBlock: boolean;
+	codeBlockBraceCount: number;
+} => {
+	const regularLine = processRegularLine(
+		trimmedLine,
+		commentLine,
+		prefix,
+		index,
+		totalLines,
+	);
+	return {
+		result: [...accumulator.result, regularLine],
+		inCodeBlock: newInCodeBlock,
+		codeBlockBraceCount: newBraceCount,
+	};
+};
+
+/**
+ * Processes a single line and returns updated state and result.
+ * @param accumulator - Current state with result array and code block tracking.
+ * @param commentLine - The comment line to process.
+ * @param index - Current line index.
+ * @param totalLines - Total number of lines.
+ * @returns Updated accumulator with new state and processed line added.
+ */
+const processLine = (
+	accumulator: {
+		result: string[];
+		inCodeBlock: boolean;
+		codeBlockBraceCount: number;
+	},
+	commentLine: string,
+	index: number,
+	totalLines: number,
+): {
+	result: string[];
+	inCodeBlock: boolean;
+	codeBlockBraceCount: number;
+} => {
+	const prefix = index > EMPTY ? ' ' : '';
+	const trimmedLine = commentLine.trim();
+	const isCodeTagLine = trimmedLine.startsWith(CODE_TAG);
+
+	const { newInCodeBlock, newBraceCount } = computeNewCodeBlockState(
+		trimmedLine,
+		accumulator.inCodeBlock,
+		accumulator.codeBlockBraceCount,
+	);
+
+	const isCodeContent = newInCodeBlock && !isCodeTagLine;
+	if (isCodeContent) {
+		return processLineAsCodeContent(
+			accumulator,
+			trimmedLine,
+			commentLine,
+			prefix,
+			newBraceCount,
+		);
+	}
+
+	return processLineAsRegular(
+		accumulator,
+		trimmedLine,
+		commentLine,
+		prefix,
+		index,
+		totalLines,
+		newInCodeBlock,
+		newBraceCount,
+	);
+};
+
+/**
  * Processes comment lines to handle code block boundaries.
  * Tracks code blocks using brace counting and preserves structure.
+ * Uses reduce with immutable state pattern for better V8 AST-based coverage tracking.
  * @param lines - The comment lines to process.
  * @returns The processed lines with code block structure preserved.
  * @example
  * processCodeBlockLines([' * code block line', ' *   System.debug("test");", ' * }'])
  */
-const processCodeBlockLines = (
-	lines: readonly string[],
-): readonly string[] => {
+const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 	const initialState = {
+		result: [] as string[],
 		inCodeBlock: false,
 		codeBlockBraceCount: 0,
-		result: [] as string[],
 	};
 
 	const finalState = lines.reduce(
-		(
-			acc: {
-				inCodeBlock: boolean;
-				codeBlockBraceCount: number;
-				result: string[];
-			},
-			commentLine: string,
-			index: number,
-		) => {
-			const prefix = index > EMPTY ? ' ' : '';
-			const trimmedLine = commentLine.trim();
-			const isCodeTagLine = trimmedLine.startsWith(CODE_TAG);
-
-			// Update state if starting a code block
-			let nextState = acc.inCodeBlock
-				? acc
-				: isCodeTagLine
-					? {
-							inCodeBlock: true,
-							codeBlockBraceCount: INITIAL_BRACE_COUNT,
-							result: acc.result,
-						}
-					: acc;
-
-			// Process braces if in code block
-			const braceResult =
-				nextState.inCodeBlock && !isCodeTagLine
-					? countBracesAndCheckEnd(trimmedLine, nextState.codeBlockBraceCount)
-					: { braceCount: nextState.codeBlockBraceCount, willEnd: false };
-
-			nextState = {
-				inCodeBlock: nextState.inCodeBlock,
-				codeBlockBraceCount: braceResult.braceCount,
-				result: nextState.result,
-			};
-
-			// Process code content or regular line
-			const isCodeContent = nextState.inCodeBlock && !isCodeTagLine;
-			if (isCodeContent) {
-				const trimmed = removeCommentPrefix(commentLine, true);
-				const willEnd = braceResult.willEnd;
-				const updatedResult = [...nextState.result, prefix + trimmed];
-				// Inline ternary to help V8 AST-based coverage tracking
-				return willEnd
-					? {
-							inCodeBlock: false,
-							codeBlockBraceCount: nextState.codeBlockBraceCount,
-							result: updatedResult,
-						}
-					: {
-							inCodeBlock: nextState.inCodeBlock,
-							codeBlockBraceCount: nextState.codeBlockBraceCount,
-							result: updatedResult,
-						};
-			}
-
-			// Removed unreachable check for standalone '}' outside code blocks (line 146)
-			// A standalone '}' in ApexDoc comments would only exist within {@code} blocks
-			return {
-				...nextState,
-				result: [
-					...nextState.result,
-					prefix +
-						(index < lines.length - 1 ? trimmedLine : commentLine.trimStart()),
-				],
-			};
-		},
+		(acc, commentLine, index) =>
+			processLine(acc, commentLine, index, lines.length),
 		initialState,
 	);
 
@@ -507,4 +669,11 @@ export {
 	createDocCodeBlock,
 	renderCodeBlockInComment,
 	countBracesAndCheckEnd,
+	shouldStartCodeBlock,
+	processCodeContentLine,
+	processRegularLine,
+	processLine,
+	computeNewCodeBlockState,
+	processLineAsCodeContent,
+	processLineAsRegular,
 };

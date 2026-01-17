@@ -573,14 +573,18 @@ describe('comments', () => {
 				// This covers line 868: if (commentValue === '') return ''
 				// Create a comment node with empty value
 				const emptyCommentNode = {
-					'@class': 'apex.jorje.parser.impl.HiddenTokens$BlockComment',
+					'@class':
+						'apex.jorje.parser.impl.HiddenTokens$BlockComment',
 					value: '', // Empty comment value
 				};
 				const mockPath = {
 					...createMockPath(emptyCommentNode),
 					getNode: () => emptyCommentNode,
 				};
-				const options = { printWidth: 80, tabWidth: 2 } as ParserOptions;
+				const options = {
+					printWidth: 80,
+					tabWidth: 2,
+				} as ParserOptions;
 
 				// Call printComment directly - it should handle empty value
 				const result = printComment(

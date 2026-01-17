@@ -159,7 +159,7 @@ const printMap = ({
 	readonly originalPrint: () => Doc;
 	readonly printedTypes: readonly Doc[];
 }): Doc => {
-	const {node} = path;
+	const { node } = path;
 	const isEmptyPairs = !Array.isArray(node.pairs) || isEmpty(node.pairs);
 
 	if (isEmptyPairs) {
@@ -240,11 +240,11 @@ const printCollection = (
  */
 const isCollectionAssignment = (assignment: unknown): boolean => {
 	if (!isObject(assignment) || !('value' in assignment)) return false;
-	const {value} = (assignment as { value?: unknown });
+	const { value } = assignment as { value?: unknown };
 	if (!isApexNodeLike(value)) return false;
 	const valueClass = getNodeClassOptional(value as ApexNode);
 	if (valueClass !== 'apex.jorje.data.ast.Expr$NewExpr') return false;
-	const {creator} = (value as { creator?: unknown });
+	const { creator } = value as { creator?: unknown };
 	if (!isApexNodeLike(creator)) return false;
 	const creatorClass = getNodeClassOptional(creator as ApexNode);
 	return (

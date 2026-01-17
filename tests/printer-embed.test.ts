@@ -10,18 +10,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createWrappedPrinter } from '../src/printer.js';
 import type { ApexNode } from '../src/types.js';
-import {
-	createMockPath,
-	createMockOptions,
-} from './test-utils.js';
+import { createMockPath, createMockOptions } from './test-utils.js';
 import { setCurrentPluginInstance } from '../src/printer.js';
 
 // Mock processAllCodeBlocksInComment to control its return value
 const mockProcessAllCodeBlocksInComment = vi.fn();
 vi.mock('../src/apexdoc-code.js', async () => {
-	const actual = await vi.importActual<typeof import('../src/apexdoc-code.js')>(
-		'../src/apexdoc-code.js',
-	);
+	const actual = await vi.importActual<
+		typeof import('../src/apexdoc-code.js')
+	>('../src/apexdoc-code.js');
 	return {
 		...actual,
 		processAllCodeBlocksInComment: (
@@ -31,8 +28,7 @@ vi.mock('../src/apexdoc-code.js', async () => {
 });
 
 const nodeClassKey = '@class';
-const BLOCK_COMMENT_CLASS =
-	'apex.jorje.parser.impl.HiddenTokens$BlockComment';
+const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
 
 describe('printer embed function', () => {
 	beforeEach(() => {

@@ -58,16 +58,13 @@ describe('casing', () => {
 			},
 		);
 
-		it.concurrent(
-			'should return unchanged for non-reserved words',
-			() => {
-				expect(normalizeReservedWord('MyVariable')).toBe('MyVariable');
-				expect(normalizeReservedWord('myVariable')).toBe('myVariable');
-				expect(normalizeReservedWord('MYVARIABLE')).toBe('MYVARIABLE');
-				expect(normalizeReservedWord('Account')).toBe('Account');
-				expect(normalizeReservedWord('String')).toBe('String');
-			},
-		);
+		it.concurrent('should return unchanged for non-reserved words', () => {
+			expect(normalizeReservedWord('MyVariable')).toBe('MyVariable');
+			expect(normalizeReservedWord('myVariable')).toBe('myVariable');
+			expect(normalizeReservedWord('MYVARIABLE')).toBe('MYVARIABLE');
+			expect(normalizeReservedWord('Account')).toBe('Account');
+			expect(normalizeReservedWord('String')).toBe('String');
+		});
 
 		it.concurrent('should handle empty string', () => {
 			expect(normalizeReservedWord('')).toBe('');
@@ -126,14 +123,11 @@ describe('casing', () => {
 			expect(normalizeTypeName('sobject')).toBe('SObject');
 		});
 
-		it.concurrent(
-			'should normalize collection types to PascalCase',
-			() => {
-				expect(normalizeTypeName('list')).toBe('List');
-				expect(normalizeTypeName('set')).toBe('Set');
-				expect(normalizeTypeName('map')).toBe('Map');
-			},
-		);
+		it.concurrent('should normalize collection types to PascalCase', () => {
+			expect(normalizeTypeName('list')).toBe('List');
+			expect(normalizeTypeName('set')).toBe('Set');
+			expect(normalizeTypeName('map')).toBe('Map');
+		});
 
 		it.concurrent(
 			'should normalize primitives regardless of input case',
@@ -166,10 +160,17 @@ describe('casing', () => {
 			expect(normalizeTypeName('')).toBe('');
 		});
 
-		it.concurrent('should handle types that are not primitives or standard objects', () => {
-			expect(normalizeTypeName('MyCustomClass')).toBe('MyCustomClass');
-			expect(normalizeTypeName('SomeOtherType')).toBe('SomeOtherType');
-		});
+		it.concurrent(
+			'should handle types that are not primitives or standard objects',
+			() => {
+				expect(normalizeTypeName('MyCustomClass')).toBe(
+					'MyCustomClass',
+				);
+				expect(normalizeTypeName('SomeOtherType')).toBe(
+					'SomeOtherType',
+				);
+			},
+		);
 
 		it.concurrent(
 			'should handle types with only standard object normalization',
@@ -195,10 +196,13 @@ describe('casing', () => {
 			expect(normalizeTypeName('')).toBe('');
 		});
 
-		it.concurrent('should handle empty string in normalizeStandardObjectType', () => {
-			// Test the defensive empty string check in normalizeStandardObjectType
-			expect(normalizeStandardObjectType('')).toBe('');
-		});
+		it.concurrent(
+			'should handle empty string in normalizeStandardObjectType',
+			() => {
+				// Test the defensive empty string check in normalizeStandardObjectType
+				expect(normalizeStandardObjectType('')).toBe('');
+			},
+		);
 
 		it.concurrent(
 			'should return unchanged for types without normalization needs',
@@ -406,25 +410,32 @@ describe('casing', () => {
 				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
 				value: 'string',
 			} as ApexIdentifier;
-			const path = createMockPath(node, 'type', 'not an array' as unknown as readonly unknown[]);
+			const path = createMockPath(
+				node,
+				'type',
+				'not an array' as unknown as readonly unknown[],
+			);
 
 			expect(isInTypeContext(path)).toBe(false);
 		});
 
-		it.concurrent('should handle isTypeRelatedKey with non-string key', () => {
-			// Test that isTypeRelatedKey returns false for non-string keys
-			// This tests the internal function through isInTypeContext
-			const node = {
-				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				value: 'string',
-			} as ApexIdentifier;
-			// key is a number, not a string
-			const path = createMockPath(node, 0);
+		it.concurrent(
+			'should handle isTypeRelatedKey with non-string key',
+			() => {
+				// Test that isTypeRelatedKey returns false for non-string keys
+				// This tests the internal function through isInTypeContext
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: 'string',
+				} as ApexIdentifier;
+				// key is a number, not a string
+				const path = createMockPath(node, 0);
 
-			// isTypeRelatedKey is called internally, but with string keys it checks type-related keys
-			// With numeric keys, it should return false
-			expect(isInTypeContext(path)).toBeDefined();
-		});
+				// isTypeRelatedKey is called internally, but with string keys it checks type-related keys
+				// With numeric keys, it should return false
+				expect(isInTypeContext(path)).toBeDefined();
+			},
+		);
 	});
 
 	describe('createTypeNormalizingPrint', () => {
@@ -923,7 +934,10 @@ describe('casing', () => {
 			const mockPrint = createMockPrint();
 			const reservedWordNormalizingPrint =
 				createReservedWordNormalizingPrint(mockPrint);
-			const path = createMockPath(null as unknown as ApexNode, 'modifiers');
+			const path = createMockPath(
+				null as unknown as ApexNode,
+				'modifiers',
+			);
 
 			const result = reservedWordNormalizingPrint(path);
 

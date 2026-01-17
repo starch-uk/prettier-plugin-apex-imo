@@ -14,7 +14,8 @@ vi.mock('prettier', async () => {
 	const actual = await vi.importActual<typeof import('prettier')>('prettier');
 	return {
 		...actual,
-		format: (...args: Parameters<typeof actual.format>) => mockFormat(...args),
+		format: (...args: Parameters<typeof actual.format>) =>
+			mockFormat(...args),
 	};
 });
 

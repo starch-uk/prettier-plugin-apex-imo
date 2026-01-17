@@ -129,17 +129,14 @@ describe('comments internal functions', () => {
 	});
 
 	describe('createDocContent', () => {
-		it.concurrent(
-			'should handle empty lines array (line 552)',
-			() => {
-				// Test createDocContent with empty lines array to cover contentToDoc line 552
-				// This path is defensive and unlikely in practice but tested for completeness
-				const result = createDocContent('text', '', []);
-				expect(result.type).toBe('text');
-				expect(result.content).toBe('');
-				// contentToDoc with empty array returns '' as Doc (line 552)
-			},
-		);
+		it.concurrent('should handle empty lines array (line 552)', () => {
+			// Test createDocContent with empty lines array to cover contentToDoc line 552
+			// This path is defensive and unlikely in practice but tested for completeness
+			const result = createDocContent('text', '', []);
+			expect(result.type).toBe('text');
+			expect(result.content).toBe('');
+			// contentToDoc with empty array returns '' as Doc (line 552)
+		});
 	});
 
 	describe('normalizeBlockComment', () => {
@@ -157,5 +154,4 @@ describe('comments internal functions', () => {
 			},
 		);
 	});
-
 });
