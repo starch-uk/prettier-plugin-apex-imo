@@ -1,31 +1,20 @@
 /**
  * @file Tests for formatApexCodeWithFallback with mocked prettier.format.
  *
- * This file uses vi.mock to mock prettier.format, allowing us to test
+ * Uses createPrettierMock to mock prettier.format, allowing us to test
  * the fallback parser paths that are difficult to trigger with real parsers.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ParserOptions } from 'prettier';
 
-// Mock prettier module for this test file - must be hoisted
-const mockFormat = vi.fn();
+const { mockFormat } = vi.hoisted(() => ({ mockFormat: vi.fn() }));
+
 vi.mock('prettier', async () => {
-	// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
-	const actual = await vi.importActual<typeof import('prettier')>('prettier');
-	return {
-		...actual,
-		// eslint-disable-next-line @typescript-eslint/require-await -- Mock function signature
-		format: async (
-			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Mock function parameters
-			...args: Parameters<typeof actual.format>
-		): Promise<ReturnType<typeof actual.format>> =>
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Mock function return value
-			mockFormat(...args),
-	};
+	const { createPrettierMock } = await import('./prettier-mock.js');
+	return createPrettierMock({ format: mockFormat });
 });
 
-// Import after mock is set up
 import { formatApexCodeWithFallback } from '../src/utils.js';
 
 describe('formatApexCodeWithFallback with mocked prettier.format', () => {

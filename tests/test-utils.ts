@@ -158,9 +158,10 @@ export function createMockOriginalPrinter(
 	};
 }
 
-// Re-export PrettierMockSuite for convenience
+// Re-export Prettier and prettier-plugin-apex mocks for convenience
 export {
 	PrettierMockSuite,
-	defaultPrettierMock,
 	createPrettierMock,
+	createMockPrettierPluginApex,
+	defaultPrettierMock,
 } from './prettier-mock.js';

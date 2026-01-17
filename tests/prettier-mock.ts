@@ -431,3 +431,53 @@ export function createPrettierMock(
 	}
 	return suite.getPrettierMock();
 }
+
+/**
+ * Shape of the default export of prettier-plugin-apex.
+ */
+interface PrettierPluginApexDefault {
+	defaultOptions: object;
+	languages: unknown[];
+	options: object;
+	parsers: object;
+	printers: unknown;
+}
+
+/**
+ * Shape of the prettier-plugin-apex module (default and named exports).
+ */
+interface PrettierPluginApexModule {
+	default: PrettierPluginApexDefault;
+	defaultOptions: object;
+	languages: unknown[];
+	options: object;
+	parsers: object;
+	printers: unknown;
+}
+
+/**
+ * Creates a mock for the prettier-plugin-apex module for use with vi.doMock or vi.mock.
+ * Matches the shape consumed by src/index (default and named exports).
+ * @param overrides - Optional overrides for defaultOptions, languages, options, parsers, printers.
+ * @returns Mock module object.
+ * @example
+ * ```typescript
+ * vi.doMock('prettier-plugin-apex', () => createMockPrettierPluginApex({ printers: undefined }));
+ * vi.resetModules();
+ * await import('../src/index.js'); // throws when printers is missing
+ * ```
+ */
+// eslint-disable-next-line import/group-exports -- Exports consolidated with PrettierMockSuite
+export function createMockPrettierPluginApex(
+	overrides?: Readonly<Partial<PrettierPluginApexDefault>>,
+): PrettierPluginApexModule {
+	const base = {
+		defaultOptions: {},
+		languages: [],
+		options: {},
+		parsers: {},
+		printers: undefined as unknown,
+	};
+	const merged = { ...base, ...overrides };
+	return { default: merged, ...merged };
+}

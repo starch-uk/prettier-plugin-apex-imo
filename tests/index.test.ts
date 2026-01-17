@@ -15,6 +15,7 @@ import plugin, {
 	isApexParser,
 	wrapParsers,
 } from '../src/index.js';
+import { createMockPrettierPluginApex } from './prettier-mock.js';
 
 describe('index', () => {
 	describe('plugin structure', () => {
@@ -47,26 +48,12 @@ describe('index', () => {
 
 	describe('error handling', () => {
 		it('should throw error when prettier-plugin-apex printer is missing', async () => {
-			// Mock prettier-plugin-apex at runtime (doMock works after imports)
-			vi.doMock('prettier-plugin-apex', () => ({
-				default: {
-					defaultOptions: {},
-					languages: [],
-					options: {},
-					parsers: {},
-					printers: undefined,
-				},
-				defaultOptions: {},
-				languages: [],
-				options: {},
-				parsers: {},
-				printers: undefined,
-			}));
+			vi.doMock('prettier-plugin-apex', () =>
+				createMockPrettierPluginApex({ printers: undefined }),
+			);
 
-			// Reset modules to ensure fresh import
 			vi.resetModules();
 
-			// Try to import the module - it should throw an error at module load time
 			await expect(async () => {
 				await import('../src/index.js');
 			}).rejects.toThrow(
