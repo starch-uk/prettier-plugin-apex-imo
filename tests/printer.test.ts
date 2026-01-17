@@ -259,10 +259,13 @@ describe('utils', () => {
 	});
 
 	describe('isCollectionAssignment', () => {
-		const LIST_LITERAL_CLASS =
+		// Use different names to avoid shadowing imported constants
+		const LOCAL_LIST_LITERAL_CLASS =
 			'apex.jorje.data.ast.NewObject$NewListLiteral';
-		const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
-		const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
+		const LOCAL_SET_LITERAL_CLASS =
+			'apex.jorje.data.ast.NewObject$NewSetLiteral';
+		const LOCAL_MAP_LITERAL_CLASS =
+			'apex.jorje.data.ast.NewObject$NewMapLiteral';
 		const NEW_EXPR_CLASS = 'apex.jorje.data.ast.Expr$NewExpr';
 
 		it.concurrent.each([
@@ -271,7 +274,7 @@ describe('utils', () => {
 					value: {
 						'@class': NEW_EXPR_CLASS,
 						creator: {
-							'@class': LIST_LITERAL_CLASS,
+							'@class': LOCAL_LIST_LITERAL_CLASS,
 						},
 					},
 				},
@@ -283,7 +286,7 @@ describe('utils', () => {
 					value: {
 						'@class': NEW_EXPR_CLASS,
 						creator: {
-							'@class': SET_LITERAL_CLASS,
+							'@class': LOCAL_SET_LITERAL_CLASS,
 						},
 					},
 				},
@@ -295,7 +298,7 @@ describe('utils', () => {
 					value: {
 						'@class': NEW_EXPR_CLASS,
 						creator: {
-							'@class': MAP_LITERAL_CLASS,
+							'@class': LOCAL_MAP_LITERAL_CLASS,
 						},
 					},
 				},

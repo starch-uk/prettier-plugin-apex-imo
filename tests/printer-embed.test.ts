@@ -1,7 +1,7 @@
 /**
  * @file Tests for embed function in printer module.
  *
- * Tests the embed function that processes {@code} blocks in comments,
+ * Tests the embed function that processes code blocks in comments,
  * specifically testing edge cases like when processAllCodeBlocksInComment
  * returns undefined.
  */
