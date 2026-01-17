@@ -46,7 +46,7 @@ const isNestedInCollection = (
 ): boolean => {
 	const { stack } = path;
 	if (!Array.isArray(stack) || stack.length === ZERO_LENGTH) return false;
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- parent parameter needs type checking
+
 	return stack.some((parent: unknown) => {
 		if (!isObject(parent) || !('@class' in parent)) {
 			return false;
@@ -68,7 +68,7 @@ const isNestedInCollection = (
  * @param isNested - Whether this is a nested collection type.
  * @returns The created type document.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for type document creation
+
 const createTypeDoc = (
 	typeName: string,
 	printedTypes: readonly Doc[],

@@ -135,7 +135,6 @@ const hasFromExprInStack = (stack: readonly unknown[]): boolean => {
 	for (const item of stack) {
 		if (typeof item === 'object' && item !== null && '@class' in item) {
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- item is confirmed to have @class
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- item is confirmed to have @class
 			const nodeClass = getNodeClassOptional(item as ApexNode);
 			const isFromExpr =
 				nodeClass === FROM_EXPR_CLASS ||
@@ -190,9 +189,10 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	if (stack.length < STACK_PARENT_OFFSET) return false;
 
 	const parent = stack[stack.length - STACK_PARENT_OFFSET];
+	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Runtime defensive check for type safety
 	if (typeof parent !== 'object' || parent === null) return false;
 	const parentClass = getNodeClassOptional(parent);
-	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- 'types' in parent check is necessary for type narrowing
+
 	const hasTypesArray =
 		'types' in parent &&
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parent is confirmed to be object with types property
@@ -240,7 +240,6 @@ function shouldNormalizeType(
 		parentKey === 'types' ||
 		key === 'names' ||
 		(typeof key === 'string' &&
-			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/no-unnecessary-type-conversion -- key.toLowerCase() result needs comparison
 			(key.toLowerCase() === 'type' ||
 				key.toLowerCase() === 'typeref' ||
 				key === 'types')) ||
@@ -346,20 +345,20 @@ function normalizeNamesArray(
 		) {
 			continue;
 		}
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion -- nameNode is confirmed to have value property
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- nameNode is confirmed to have value property
 		const nodeValueRaw = (nameNode as { value?: unknown }).value;
 		if (typeof nodeValueRaw !== 'string') continue;
 		const nodeValue = nodeValueRaw;
 		if (nodeValue === '') continue;
 		const normalizedValue = normalizeTypeName(nodeValue);
 		if (normalizedValue !== nodeValue) {
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion -- nameNode is confirmed to have value property
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- nameNode is confirmed to have value property
 			(nameNode as { value: string }).value = normalizedValue;
 		}
 	}
 	// Don't restore values - the Doc may be evaluated lazily and needs the normalized values
 	// The AST is already being mutated, so we keep the normalized values
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/max-params -- External printer API uses any types; PrintFunction has parameters
+
 	return originalPrint(subPath);
 }
 
@@ -373,7 +372,7 @@ function normalizeNamesArray(
  * const reservedWordNormalizingPrint = createReservedWordNormalizingPrint(originalPrint);
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Returned arrow function has 2 parameters (subPath and ...extraArgs), within limit of 3
+
 const createReservedWordNormalizingPrint =
 	(originalPrint: PrintFunction) =>
 	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {
@@ -386,7 +385,6 @@ const createReservedWordNormalizingPrint =
 			return originalPrint(subPath, ..._extraArgs);
 		}
 
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- node is confirmed to be Identifier with value
 		const valueField = (node as { value?: unknown }).value;
 		if (typeof valueField === 'string') {
 			return normalizeReservedWordIdentifier(
@@ -397,7 +395,6 @@ const createReservedWordNormalizingPrint =
 		}
 
 		return originalPrint(subPath, ..._extraArgs);
-		/* eslint-enable @typescript-eslint/max-params */
 	};
 
 /**
@@ -408,7 +405,6 @@ interface TypeNormalizationConfig {
 	readonly parentKey?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/max-params -- Returned arrow function has 2 parameters (subPath and ...extraArgs), within limit of 3
 const createTypeNormalizingPrint =
 	(originalPrint: PrintFunction, config: TypeNormalizationConfig = {}) =>
 	(subPath: Readonly<AstPath<ApexNode>>, ..._extraArgs: unknown[]): Doc => {

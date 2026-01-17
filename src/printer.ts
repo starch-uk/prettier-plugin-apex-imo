@@ -273,9 +273,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// Process all code blocks in the comment
 			// capturedCommentText is guaranteed to be truthy because hasCodeTag check above ensures
 			// commentText?.includes('{@code') is truthy, which requires commentText to exist
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- capturedCommentText is guaranteed to be truthy per hasCodeTag check
 			const formattedComment = await processAllCodeBlocksInComment({
 				commentPrefixLength,
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- capturedCommentText is guaranteed to be truthy per hasCodeTag check
 				commentText: capturedCommentText!,
 				options,
 				plugins: [...plugins] as (
@@ -306,7 +306,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	 * @param print - The print function.
 	 * @returns The formatted Doc or null if not applicable.
 	 */
-	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 
 	/**
 	 * Handles TypeRef nodes with names array normalization.
@@ -316,12 +315,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	 * @param print - The print function.
 	 * @returns The formatted Doc or null if not applicable.
 	 */
-	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	const handleTypeRef = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	): Doc | null => {
 		if (!isTypeRef(node)) return null;
 		const namesField = (node as { names?: unknown }).names;
@@ -334,7 +333,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			forceTypeContext: true,
 			parentKey: NAMES_PROPERTY,
 		});
-		// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function requires 4 parameters for Prettier API
+
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- External printer API uses any types
 		return originalPrinter.print(
 			path,
@@ -354,12 +353,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	 * @param typeNormalizingPrint - The type normalizing print function.
 	 * @returns The formatted Doc or null if not applicable.
 	 */
-	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	const handleIdentifier = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
 		options: Readonly<ParserOptions>,
 		typeNormalizingPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	): Doc | null => {
 		if (!isIdentifier(node) || !isInTypeContext(path)) return null;
 		const normalizedValue = normalizeTypeName(node.value);
@@ -400,12 +399,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	 * @param print - The print function.
 	 * @returns The formatted Doc or null if not applicable.
 	 */
-	// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	const handleVariableDecls = (
 		path: Readonly<AstPath<ApexNode>>,
 		node: ApexNode,
 		options: Readonly<ParserOptions>,
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	): Doc | null => {
 		const { decls } = node as { decls?: unknown[] };
 		if (!Array.isArray(decls)) return null;
@@ -543,7 +542,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// typeDoc from printer is always an array for Map types with structure: ['Map', '<', [params...], '>']
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
 			// Array check removed: isMapTypeDoc already ensures typeDocToCheck is an array
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- isMapTypeDoc ensures typeDocToCheck is an array
+
 			const typeDocArray = typeDocToCheck as unknown[];
 
 			// Map type structure: ['Map', '<', [params...], '>']

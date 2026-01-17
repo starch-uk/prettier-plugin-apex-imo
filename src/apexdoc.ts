@@ -160,7 +160,7 @@ type ReadonlyCodeBlock = Readonly<CodeBlock>;
  * @example
  * normalizeSingleApexDocComment('  * @param x The parameter', 2, { printWidth: 80, tabWidth: 2, useTabs: false })
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for ApexDoc comment normalization
+
 const normalizeSingleApexDocComment = (
 	commentValue: Readonly<string>,
 	commentIndent: number,
@@ -408,7 +408,7 @@ const renderCodeBlock = (
  * @param options - Options including tabWidth and useTabs.
  * @returns The rendered content doc.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for text/paragraph rendering
+
 const renderTextOrParagraphDoc = (
 	doc: ApexDocContent,
 	commentPrefix: string,
@@ -459,7 +459,7 @@ const renderTextOrParagraphDoc = (
  * @param cachedPrefixAndWidth - Optional cached prefix and width calculations.
  * @returns The formatted ApexDoc comment string.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for ApexDoc string conversion
+
 const docsToApexDocString = (
 	docs: readonly ApexDocComment[],
 	commentIndent: number,
@@ -541,13 +541,16 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
 	while (
 		cleaned.length > ZERO_LENGTH &&
 		// Array indexing check removed: cleaned array has no holes (created from [...lines])
-		// Type assertion safe: array element always exists when length > 0
-		// eslint-disable-next-line jsdoc/convert-to-jsdoc-comments -- inline comments in code logic, not JSDoc
+		// eslint-disable-next-line jsdoc/convert-to-jsdoc-comments -- inline comment in code logic, not JSDoc
+		// Type assertion safe: array element always exists when length > 0.
 		((): boolean => {
 			const lastLine = cleaned[cleaned.length - INDEX_OFFSET];
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unnecessary-condition -- lastLine always exists when length > 0, but check needed for type narrowing
+			// The check lastLine !== undefined is required for type narrowing, and non-null assertion is safe
+
 			return (
+				// eslint-disable-next-line @typescript-eslint/prefer-optional-chain -- check needed for type narrowing before using non-null assertion
 				lastLine !== undefined &&
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion -- non-null assertion is safe after undefined check
 				lastLine!.trim().length === EMPTY_TRIM_LENGTH
 			);
 		})()
@@ -565,7 +568,7 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
  * @param options - Options including tabWidth and useTabs.
  * @returns Array of wrapped lines (without comment prefix).
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for text wrapping
+
 const wrapTextContent = (
 	content: string,
 	_originalLines: readonly string[],
@@ -592,7 +595,7 @@ const wrapTextContent = (
  * @param _options - Options including tabWidth and useTabs (unused but kept for API compatibility).
  * @returns Object with tokens and effective page width.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for ApexDoc parsing
+
 const parseApexDocs = (
 	normalizedComment: Readonly<string>,
 	commentIndent: number,
@@ -601,7 +604,6 @@ const parseApexDocs = (
 		readonly tabWidth: number;
 		readonly useTabs?: boolean | null | undefined;
 	}>,
-	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): {
 	readonly docs: readonly ApexDocComment[];
 	readonly effectiveWidth: number;
@@ -685,7 +687,7 @@ const createMergedDoc = (
  * @param startIndex - The starting index in the docs array.
  * @returns Object with merged doc and next index.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for code block merging
+
 const mergeIncompleteCodeBlock = (
 	doc: ApexDocContent,
 	codeTagIndex: number,
@@ -896,7 +898,7 @@ const addTextDocIfNotEmpty = (
  * @param doc - The Doc content doc.
  * @param newDocs - Array to add new Doc docs to.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for text processing
+
 const processRemainingText = (
 	content: string,
 	currentPos: number,

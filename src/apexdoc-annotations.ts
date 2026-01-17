@@ -175,7 +175,7 @@ const detectAnnotationsInDocs = (
 				const line = docLines[lineIndex];
 				// docLines comes from split('\n') or linesString, both return strings, never undefined
 				// Array indexing check removed: line is never undefined
-				// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- line is typed as possibly undefined but never is in practice
+
 				if (line === undefined || line === '') continue;
 				// Annotation pattern: @ followed by identifier, possibly with content
 				// After detectCodeBlockDocs, lines have their " * " prefix stripped, so we need to match lines with or without prefix
@@ -213,7 +213,7 @@ const detectAnnotationsInDocs = (
 							normalizedComment !== ''
 						) {
 							// line is never undefined per array iteration guarantee
-							// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- line is never undefined per array iteration guarantee
+
 							annotationContent = collectContinuationFromComment(
 								annotationName,
 								content,

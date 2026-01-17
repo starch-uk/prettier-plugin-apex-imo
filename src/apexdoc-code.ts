@@ -150,7 +150,7 @@ const shouldStartCodeBlock = (
  * @param codeBlockBraceCount - Current brace count before processing this line.
  * @returns Object with updated brace count, willEnd flag indicating if block closes, and processed line.
  */
-/* eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for code content processing */
+
 const processCodeContentLine = (
 	trimmedLine: string,
 	commentLine: string,
@@ -184,7 +184,7 @@ const processCodeContentLine = (
  * @param totalLines - Total number of lines being processed.
  * @returns Processed line string with prefix added.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for regular line processing
+
 const processRegularLine = (
 	trimmedLine: string,
 	commentLine: string,
@@ -242,7 +242,7 @@ const computeNewCodeBlockState = (
  * @param newBraceCount - Current brace count for the code block.
  * @returns Updated accumulator with processed code content line added and state updated.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 5 parameters for accumulator-based processing
+
 const processLineAsCodeContent = (
 	accumulator: {
 		result: string[];
@@ -288,7 +288,7 @@ const processLineAsCodeContent = (
  * @param newBraceCount - New brace count after processing.
  * @returns Updated accumulator with processed regular line added to result array and code block state updated.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 8 parameters for accumulator-based processing
+
 const processLineAsRegular = (
 	accumulator: {
 		result: string[];
@@ -334,7 +334,7 @@ const processLineAsRegular = (
  * @param totalLines - Total number of lines being processed.
  * @returns Updated accumulator with new state and processed line added.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for line processing
+
 const processLine = (
 	accumulator: {
 		result: string[];
@@ -535,7 +535,7 @@ function processCodeBlock(
  * @param formattedCode - Optional formatted code string (if code was already formatted by embed function).
  * @returns The ApexDocCodeBlock object.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for code block creation
+
 const createDocCodeBlock = (
 	startPos: number,
 	endPos: number,

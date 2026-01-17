@@ -587,7 +587,7 @@ const contentToDoc = (_content: string, lines: readonly string[]): Doc => {
 	const ZERO_LENGTH = 0;
 	const SINGLE_LINE = 1;
 	const ZERO_INDEX = 0;
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- lines are strings which are valid Docs
+
 	if (lines.length === ZERO_LENGTH) {
 		return '' as Doc;
 	}
@@ -637,6 +637,7 @@ const getContentString = (doc: ApexDocContent): string =>
 const getContentLines = (
 	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
 	doc: Readonly<ApexDocContent>,
+	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
 ): readonly string[] => doc.lines.map((lineItem) => docToString(lineItem));
 
 /**
@@ -647,7 +648,7 @@ const getContentLines = (
  * @param isContinuation - Optional flag indicating if this is a continuation.
  * @returns The created ApexDocContent object.
  */
-// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for doc content creation
+
 const createDocContent = (
 	type: 'paragraph' | 'text',
 	content: Readonly<string>,
@@ -813,8 +814,7 @@ const parseCommentToDocs = (
  * @param options - Options including tabWidth and useTabs.
  * @returns The formatted comment string.
  */
-// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- docs parameter needs array iteration
-// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- docs parameter needs array iteration
+
 const tokensToCommentString = (
 	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- docs parameter needs array iteration
 	docs: readonly ApexDocComment[],
