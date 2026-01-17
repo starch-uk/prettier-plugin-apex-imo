@@ -572,5 +572,66 @@ describe('apexdoc-code', () => {
 				expect(result[1]).toContain('}');
 			},
 		);
+
+		it.concurrent(
+			'should handle code block content line with willEnd=false (apexdoc-code.ts lines 183-192)',
+			() => {
+				// Test when inCodeBlock=true, !startsWith(CODE_TAG), willEnd=false
+				// This covers the ternary's false branch: willEnd ? {...} : nextState
+				// Lines should be: {@code, content line (willEnd=false), closing }
+				const lines = [
+					' * {@code', // Starts code block, sets inCodeBlock=true, codeBlockBraceCount=1
+					' *   Integer x = 10;', // In code block, processes braces, willEnd=false (braceCount still 1)
+					' * }', // This line will set willEnd=true
+				];
+				const result = processCodeBlockLines(lines);
+				expect(result).toHaveLength(3);
+				expect(result[0]).toContain('{@code');
+				// Second line: isCodeContent=true, willEnd=false, should use nextState (not the ternary's true branch)
+				// This exercises lines 183-192, specifically the false branch of the ternary
+				expect(result[1]).toContain('Integer x = 10;');
+				expect(result[1]).not.toContain('}');
+				expect(result[2]).toContain('}');
+			},
+		);
+
+		it.concurrent(
+			'should handle code block content line with willEnd=true (apexdoc-code.ts lines 183-192)',
+			() => {
+				// Test when inCodeBlock=true, !startsWith(CODE_TAG), willEnd=true
+				// This covers the ternary's true branch: willEnd ? {...} : nextState
+				// Single line code block that ends immediately
+				const lines = [
+					' * {@code Integer x = 10; }', // Single line: starts and ends code block, willEnd=true
+				];
+				const result = processCodeBlockLines(lines);
+				expect(result).toHaveLength(1);
+				expect(result[0]).toContain('{@code');
+				// This line: isCodeTagLine=true initially, then when processing content, willEnd=true
+				// Actually, wait - this is a single line with {@code and }, so it starts the block
+				// But the trimmed line starts with CODE_TAG, so isCodeContent will be false
+				// Let me use a different test case - a multi-line where the closing brace is on the content line
+				const lines2 = [
+					' * {@code',
+					' *   Integer x = 10; }', // Content line that ends the block (willEnd=true)
+				];
+				const result2 = processCodeBlockLines(lines2);
+				expect(result2).toHaveLength(2);
+				expect(result2[0]).toContain('{@code');
+				// Second line: isCodeContent=true, willEnd=true, should use ternary's true branch
+				// This exercises lines 183-192, specifically the true branch of the ternary (willEnd ? {...})
+				expect(result2[1]).toContain('Integer x = 10;');
+				expect(result2[1]).toContain('}');
+				// Verify that the next line (if any) would not be in code block
+				const lines3 = [
+					' * {@code',
+					' *   Integer x = 10; }', // Ends the block
+					' * More text', // Should not be processed as code content
+				];
+				const result3 = processCodeBlockLines(lines3);
+				expect(result3).toHaveLength(3);
+				expect(result3[2]).toContain('More text');
+			},
+		);
 	});
 });
