@@ -161,4 +161,31 @@ describe('printer embed function', () => {
 		expect(docResult).toBeUndefined();
 		expect(mockProcessAllCodeBlocksInComment).toHaveBeenCalled();
 	});
+
+	it('should handle comment node with undefined value', () => {
+		// Test branch coverage: commentText?.includes() when commentText is undefined
+		// This tests the optional chaining branch on line 231 in printer.ts
+		setCurrentPluginInstance({ default: {} });
+
+		const mockOriginalPrinter = {
+			print: vi.fn(() => 'original output'),
+		};
+
+		const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+		// Create a comment node with undefined value
+		const mockNode = {
+			[nodeClassKey]: BLOCK_COMMENT_CLASS,
+			value: undefined,
+		} as ApexNode;
+
+		const mockPath = createMockPath(mockNode);
+
+		// Call embed function - it should return null because hasCodeTag will be false
+		// when value is undefined (commentText?.includes('{@code') ?? false = false)
+		const embedResult = wrapped.embed?.(mockPath, createMockOptions());
+
+		// Since hasCodeTag is false, embed should return null
+		expect(embedResult).toBeNull();
+	});
 });

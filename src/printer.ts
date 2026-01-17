@@ -233,6 +233,11 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			return null;
 		}
 
+		// Capture commentText for use in async function
+		// This is logically guaranteed to be truthy if hasCodeTag is true,
+		// but TypeScript requires the defensive check
+		const capturedCommentText = commentText;
+
 		/**
 		 * Return async function that processes code blocks using prettier.format.
 		 * @param _textToDoc - Text to doc converter function (unused but required by Prettier API).
@@ -266,13 +271,12 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			const commentPrefixLength = tabWidthValue + COMMENT_PREFIX_SPACES;
 
 			// Process all code blocks in the comment
-			// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- commentText is checked for hasCodeTag above
-			if (!commentText) {
-				return undefined;
-			}
+			// capturedCommentText is guaranteed to be truthy because hasCodeTag check above ensures
+			// commentText?.includes('{@code') is truthy, which requires commentText to exist
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- capturedCommentText is guaranteed to be truthy per hasCodeTag check
 			const formattedComment = await processAllCodeBlocksInComment({
 				commentPrefixLength,
-				commentText,
+				commentText: capturedCommentText!,
 				options,
 				plugins: [...plugins] as (
 					| prettier.Plugin<unknown>
