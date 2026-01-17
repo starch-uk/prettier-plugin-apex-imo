@@ -192,7 +192,8 @@ const isInTypeContext = (path: Readonly<AstPath<ApexNode>>): boolean => {
 	const parent = stack[stack.length - STACK_PARENT_OFFSET];
 	if (typeof parent !== 'object' || parent === null) return false;
 	const parentClass = getNodeClassOptional(parent);
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-condition -- parent is confirmed to be object with @class, types property exists
+	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- 'types' in parent check is necessary for type narrowing
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parent is confirmed to be object with types property
 	const hasTypesArray =
 		'types' in parent &&
 		Array.isArray((parent as { types?: unknown }).types);

@@ -654,21 +654,24 @@ describe('apexdoc-code', () => {
 			expect(result[0]).toContain('Integer x = 10;');
 		});
 
-		it.concurrent('should render single-line code block without semicolon (line 504)', () => {
-			// Test line 504: separator when code doesn't end with ';'
-			const codeBlock = '{@code Integer x = 10 }';
-			const options = {} as ParserOptions;
-			const getFormattedCodeBlock = vi.fn(() => undefined);
-			const result = processCodeBlock(
-				codeBlock,
-				options,
-				getFormattedCodeBlock,
-				null,
-				options,
-			);
-			// Should not have separator when code doesn't end with ';'
-			expect(result[0]).toBe('{@code Integer x = 10 }');
-		});
+		it.concurrent(
+			'should render single-line code block without semicolon (line 504)',
+			() => {
+				// Test line 504: separator when code doesn't end with ';'
+				const codeBlock = '{@code Integer x = 10 }';
+				const options = {} as ParserOptions;
+				const getFormattedCodeBlock = vi.fn(() => undefined);
+				const result = processCodeBlock(
+					codeBlock,
+					options,
+					getFormattedCodeBlock,
+					null,
+					options,
+				);
+				// Should not have separator when code doesn't end with ';'
+				expect(result[0]).toBe('{@code Integer x = 10 }');
+			},
+		);
 
 		it.concurrent('should render multiline code block', () => {
 			const code = 'Integer x = 10;\nString y = "test";';
@@ -777,8 +780,7 @@ describe('apexdoc-code', () => {
 				// This covers: (needsLeadingNewline ? '\n' : '') when isEmptyBlock is true
 				// Need blank line without ' * ' prefix before code block to make beforeCode end with '\n'
 				// Format: /**\n * text\n\n{@code } - blank line has no ' * ' prefix
-				const commentText =
-					'/**\n * Some text before\n\n{@code }\n */';
+				const commentText = '/**\n * Some text before\n\n{@code }\n */';
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,

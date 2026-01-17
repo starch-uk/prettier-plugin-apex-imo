@@ -141,7 +141,8 @@ const handleDanglingComment = (comment: unknown): boolean => {
 	};
 	const ZERO_LENGTH = 0;
 	const NOT_FOUND_LENGTH = -1;
-	const stmntsLength = enclosingNodeWithMembers.stmnts?.length ?? NOT_FOUND_LENGTH;
+	const stmntsLength =
+		enclosingNodeWithMembers.stmnts?.length ?? NOT_FOUND_LENGTH;
 	const membersLength =
 		enclosingNodeWithMembers.members?.length ?? NOT_FOUND_LENGTH;
 	const isEmptyCheck =
@@ -459,6 +460,8 @@ const normalizeBlockComment = (
 	// Array indexing check removed: lines array has no holes
 	for (let i = ARRAY_START_INDEX; i < lines.length; i++) {
 		const line = lines[i];
+		// Type assertion safe: line is never undefined per array iteration guarantee
+		if (line === undefined) continue;
 		normalizedLines.push(
 			normalizeCommentLine(
 				line,
@@ -526,21 +529,27 @@ const removeCommentPrefix = (line: string, preserveIndent = false): string => {
 		if (match) {
 			// match[4] is capturing group (.*) which always matches (even if empty string)
 			// so rest will always be a string, never undefined
-			// Non-null assertion safe: MATCH_GROUP_INDEX element always exists per regex pattern
+			// Type assertion safe: MATCH_GROUP_INDEX element always exists per regex pattern
 			const MATCH_GROUP_INDEX = 4;
-			const rest = match[MATCH_GROUP_INDEX]!;
+			const rest = match[MATCH_GROUP_INDEX];
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- rest always exists per regex pattern (capturing group always matches)
+			if (rest === undefined) {
+				// rest should never be undefined per regex pattern, but TypeScript doesn't know this
+				return line;
+			}
+			const restValue = rest;
 			// Remove leading whitespace and all asterisks, preserve the rest (which may have indentation spaces)
 			// If rest starts with exactly one space, that's the space after the asterisk(s) - remove it
 			// But preserve any additional spaces (indentation) - they're part of the content
 			// Check if rest starts with a single space followed by non-space (normal case)
 			// or multiple spaces (indentation case) - using character scanning instead of regex
-			const trimmed = rest.trimStart();
+			const trimmed = restValue.trimStart();
 			const ZERO_LENGTH = 0;
 			const SINGLE_SPACE_LENGTH = 1;
-			if (trimmed.length < rest.length) {
-				const spaces = rest.slice(
+			if (trimmed.length < restValue.length) {
+				const spaces = restValue.slice(
 					ZERO_LENGTH,
-					rest.length - trimmed.length,
+					restValue.length - trimmed.length,
 				);
 				const content = trimmed;
 				// If exactly one space, remove it (it's the separator after asterisk)
@@ -629,9 +638,10 @@ const getContentString = (doc: ApexDocContent): string =>
  * @returns Array of string lines extracted from the content.
  */
 // eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
-// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
-const getContentLines = (doc: ApexDocContent): readonly string[] =>
-	doc.lines.map((lineItem) => docToString(lineItem));
+const getContentLines = (
+	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- doc parameter needs mutable access for lines mapping
+	doc: ApexDocContent,
+): readonly string[] => doc.lines.map((lineItem) => docToString(lineItem));
 
 /**
  * Creates an ApexDocContent from string content and lines.
@@ -704,6 +714,8 @@ const parseCommentToDocs = (
 	// Array indexing check removed: contentLines array has no holes
 	for (let i = ARRAY_START_INDEX; i < contentLines.length; i++) {
 		const line = contentLines[i];
+		// Type assertion safe: line is never undefined per array iteration guarantee
+		if (line === undefined) continue;
 
 		// Remove comment prefix (*) to check if line is empty
 		const trimmedLine = removeCommentPrefix(line);
@@ -764,8 +776,12 @@ const parseCommentToDocs = (
 				nextTrimmed.charAt(FIRST_CHAR_INDEX) <= CAPITAL_Z;
 
 			// Add current line to paragraph
-			currentParagraph.push(trimmedLine);
-			currentParagraphLines.push(line);
+			// line is never undefined per array iteration guarantee
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- line is typed as possibly undefined but never is in practice
+			if (line !== undefined) {
+				currentParagraph.push(trimmedLine);
+				currentParagraphLines.push(line);
+			}
 
 			// If this is a sentence boundary or we're at an annotation line, finish current paragraph
 			if (
@@ -829,7 +845,11 @@ const tokensToCommentString = (
 		// before reaching tokensToCommentString, so doc.type is always 'text' or 'paragraph'
 		// Annotation docs are handled separately, so we can directly process content docs
 		// Type check removed: doc.type is always 'text' or 'paragraph' per above comment
-
+		// Skip code blocks and annotations - they're handled separately
+		if (doc.type === 'code' || doc.type === 'annotation') {
+			continue;
+		}
+		// Type guard: doc is now ApexDocContent (text or paragraph)
 		// Extract string lines from Doc
 		const docLines = getContentLines(doc);
 

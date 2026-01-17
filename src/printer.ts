@@ -83,6 +83,9 @@ const makeTypeDocBreakable = (
 	// Type nodes from Prettier printers always return arrays (never object Docs)
 	// If typeDoc is not a string, it must be an array
 	// Prettier printers always return dense arrays (no undefined holes)
+	if (!Array.isArray(typeDoc)) {
+		return typeDoc;
+	}
 	const result: Doc[] = [];
 	const ZERO_INDEX = 0;
 	const SINGLE_OFFSET = 1;
@@ -98,7 +101,10 @@ const makeTypeDocBreakable = (
 			result.push(processTypeParams(nextItem as unknown[]));
 			i++;
 		} else {
-			result.push(item);
+			// Type assertion safe: item is never undefined per array iteration guarantee
+			if (item !== undefined) {
+				result.push(item);
+			}
 		}
 	}
 	return result;
@@ -226,7 +232,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const hasCodeTag =
 			commentText !== undefined &&
 			commentText !== null &&
-			Boolean(commentText.includes('{@code'));
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- commentText check is necessary for null/undefined
+			commentText.includes('{@code');
 		if (!hasCodeTag) {
 			return null;
 		}
@@ -449,6 +456,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			// path.map always returns dense arrays (no undefined holes)
 			const FIRST_NAME_INDEX = 0;
 			const firstNameDoc = nameDocs[FIRST_NAME_INDEX];
+			// Type assertion safe: firstNameDoc is never undefined per array iteration guarantee
+			if (firstNameDoc === undefined) {
+				return originalPrinter.print(path, options, print);
+			}
 			const wrappedName = ifBreak(indent([line, firstNameDoc]), [
 				' ',
 				firstNameDoc,
@@ -532,13 +543,15 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		const isComplexMapType = (typeDocToCheck: Doc): boolean => {
 			// typeDoc from printer is always an array for Map types with structure: ['Map', '<', [params...], '>']
 			if (!isMapTypeDoc(typeDocToCheck)) return false;
-			// Array check removed as unreachable - typeDoc is always array when isMapTypeDoc returns true
+			// Array check: typeDoc must be array to index it
+			if (!Array.isArray(typeDocToCheck)) return false;
 
 			// Map type structure: ['Map', '<', [params...], '>']
 			// paramsIndex = 2 should be the params array
 			// Printer always produces well-formed Map types, so paramsIndex always exists and is an array
 			const PARAMS_INDEX = 2;
 			const paramsElement = typeDocToCheck[PARAMS_INDEX] as unknown[];
+			if (!Array.isArray(paramsElement)) return false;
 			const params = paramsElement;
 			return params.some((param: unknown) => hasNestedMap(param));
 		};

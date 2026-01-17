@@ -882,15 +882,18 @@ describe('printer', () => {
 								'@class': 'apex.jorje.data.ast.TypeRef',
 								names: [
 									{
-										'@class': 'apex.jorje.data.ast.Identifier',
+										'@class':
+											'apex.jorje.data.ast.Identifier',
 										value: 'Map',
 									},
 									{
-										'@class': 'apex.jorje.data.ast.Identifier',
+										'@class':
+											'apex.jorje.data.ast.Identifier',
 										value: 'String',
 									},
 									{
-										'@class': 'apex.jorje.data.ast.Identifier',
+										'@class':
+											'apex.jorje.data.ast.Identifier',
 										value: 'Map',
 									},
 								],
@@ -921,7 +924,12 @@ describe('printer', () => {
 					const { key } = path as { key?: number | string };
 					if (key === 'type') {
 						// Return complex Map type structure: Map<String, Map>
-						return ['Map', '<', ['String', ', ', 'Map'], '>'] as unknown as Doc;
+						return [
+							'Map',
+							'<',
+							['String', ', ', 'Map'],
+							'>',
+						] as unknown as Doc;
 					}
 					// For name or assignment paths, return undefined to simulate sparse array
 					if (key === 'name') {
@@ -947,9 +955,13 @@ describe('printer', () => {
 							// We need to mock declPath.call to use mockPrint
 							const declPath = {
 								...mockPath,
-								node: (mockNode as { decls: unknown[] }).decls[0],
+								node: (mockNode as { decls: unknown[] })
+									.decls[0],
 								call: vi.fn(
-									(_print: unknown, ...pathKeys: unknown[]) => {
+									(
+										_print: unknown,
+										...pathKeys: unknown[]
+									) => {
 										const pathKey = pathKeys[0] as string;
 										if (pathKey === 'name') {
 											// Return undefined to simulate undefined nameDoc

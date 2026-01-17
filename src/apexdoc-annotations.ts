@@ -122,10 +122,11 @@ const collectContinuationFromDocLines = (
 	let continuationIndex = startIndex;
 	while (continuationIndex < docLines.length) {
 		const continuationLine = docLines[continuationIndex];
-		// Removed unreachable undefined check: docLines comes from split('\n') or linesString
-		// both of which always return strings, never undefined
+		// docLines comes from split('\n') or linesString, both return strings, never undefined
 		// Array indexing check removed: docLines array has no holes
 		// Use removeCommentPrefix instead of regex to remove comment prefix
+		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- continuationLine is typed as possibly undefined but never is in practice
+		if (continuationLine === undefined) continue;
 		const trimmedLine = removeCommentPrefix(continuationLine).trim();
 		if (
 			trimmedLine.length === EMPTY ||
@@ -173,10 +174,10 @@ const detectAnnotationsInDocs = (
 
 			for (let lineIndex = 0; lineIndex < docLines.length; lineIndex++) {
 				const line = docLines[lineIndex];
-				// Removed unreachable undefined check: docLines comes from split('\n') or linesString
-				// both of which always return strings, never undefined
+				// docLines comes from split('\n') or linesString, both return strings, never undefined
 				// Array indexing check removed: line is never undefined
-				if (line === '') continue;
+				// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- line is typed as possibly undefined but never is in practice
+				if (line === undefined || line === '') continue;
 				// Annotation pattern: @ followed by identifier, possibly with content
 				// After detectCodeBlockDocs, lines have their " * " prefix stripped, so we need to match lines with or without prefix
 				// Pattern matches: (optional prefix) @ (name) (content)
@@ -192,15 +193,21 @@ const detectAnnotationsInDocs = (
 						// - INDEX_ONE (annotation name) always matches if regex matches
 						// - INDEX_TWO (content) always matches (can be empty) if regex matches
 						// - match.index is always defined for matchAll results
-						// Non-null assertions safe: regex pattern guarantees both capture groups exist
-						const annotationName = match[INDEX_ONE]!;
-						const contentMatch = match[INDEX_TWO]!;
+						// Type assertions safe: regex pattern guarantees both capture groups exist
+						const annotationName = match[INDEX_ONE];
+						const contentMatch = match[INDEX_TWO];
+						if (
+							annotationName === undefined ||
+							contentMatch === undefined
+						)
+							continue;
 						const content = contentMatch.trim();
 						const lowerName = annotationName.toLowerCase();
 						const matchIndex = match.index;
 						// match.index is always defined for matchAll results
-						// Non-null assertion safe: match.index is always defined per above comment
-						const beforeText = extractBeforeText(line, matchIndex!);
+						// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- match.index is typed as optional but always defined for matchAll
+						if (matchIndex === undefined) continue;
+						const beforeText = extractBeforeText(line, matchIndex);
 
 						// Collect continuation lines for this annotation
 						let annotationContent = content;
@@ -209,6 +216,9 @@ const detectAnnotationsInDocs = (
 							normalizedComment !== undefined &&
 							normalizedComment !== ''
 						) {
+							// line is never undefined per array iteration guarantee
+							// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- line is typed as possibly undefined but never is in practice
+							if (line === undefined) continue;
 							annotationContent = collectContinuationFromComment(
 								annotationName,
 								content,
@@ -248,7 +258,11 @@ const detectAnnotationsInDocs = (
 						} satisfies ApexDocAnnotation);
 					}
 				} else {
-					processedLines.push(line);
+					// line is never undefined per array iteration guarantee
+					// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- line is typed as possibly undefined but never is in practice
+					if (line !== undefined) {
+						processedLines.push(line);
+					}
 				}
 			}
 
@@ -384,8 +398,12 @@ const renderAnnotation = (
 
 	// First line includes the @annotation name
 	// contentLines always has at least one element (line 332-334)
-	// Non-null assertion safe: ARRAY_START_INDEX element always exists
-	const firstContent = contentLines[ARRAY_START_INDEX]!;
+	// Type assertion safe: ARRAY_START_INDEX element always exists
+	const ARRAY_START_INDEX = 0;
+	const firstContent = contentLines[ARRAY_START_INDEX];
+	if (firstContent === undefined) {
+		return null;
+	}
 	const firstLine = isNotEmpty(firstContent)
 		? `${commentPrefix}@${annotationName} ${firstContent}`
 		: `${commentPrefix}@${annotationName}`;

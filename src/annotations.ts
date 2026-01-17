@@ -143,8 +143,11 @@ const printAnnotation = (
 	// 1. We already checked parametersLength === EMPTY above
 	// 2. formatAnnotationParam always returns a Doc (never undefined)
 	// 3. So formattedParams.length === parametersLength > 0
-	// Non-null assertion safe: singleParam is always defined per above checks
-	const singleParam = formattedParams[FIRST_PARAM_INDEX]!;
+	// Type assertion safe: singleParam is always defined per above checks
+	const singleParam = formattedParams[FIRST_PARAM_INDEX];
+	if (singleParam === undefined) {
+		return ['@', normalizedName, '()', hardline];
+	}
 	return group([
 		'@',
 		normalizedName,

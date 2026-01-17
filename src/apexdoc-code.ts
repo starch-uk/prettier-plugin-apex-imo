@@ -461,8 +461,8 @@ const extractCodeFromEmbedResult = (embedResult: string): string[] => {
 	// split('\n') always returns string[] (no undefined holes)
 	// So processedLines elements are always strings, never undefined
 	// line?.startsWith(...) ?? false is defensive but line is never undefined
-	const codeStart = processedLines.findIndex(
-		(line: string) => line.startsWith('{@code'),
+	const codeStart = processedLines.findIndex((line: string) =>
+		line.startsWith('{@code'),
 	);
 	const codeEnd = processedLines.findIndex(
 		(line: string | undefined, i: number) => i > codeStart && line === '}',
@@ -664,6 +664,8 @@ const processAllCodeBlocksInComment = async ({
 		// split('\n') always returns array without holes (no undefined elements)
 		for (let i = 0; i < formattedLines.length; i++) {
 			const formattedLine = formattedLines[i];
+			// Type assertion safe: formattedLine is never undefined per array iteration guarantee
+			if (formattedLine === undefined) continue;
 			resultLines.push(formattedLine);
 			// Insert blank line after } when followed by annotations or access modifiers
 			if (

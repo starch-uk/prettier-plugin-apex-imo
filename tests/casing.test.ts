@@ -741,7 +741,9 @@ describe('casing', () => {
 					names: [nameNode1, nameNode2],
 					// value is not a string, so it falls through to normalizeNamesArray check
 					value: undefined,
-				} as unknown as ApexNode & { names?: readonly ApexIdentifier[] };
+				} as unknown as ApexNode & {
+					names?: readonly ApexIdentifier[];
+				};
 				const path = createMockPath(node, 'names');
 
 				typeNormalizingPrint(path);
