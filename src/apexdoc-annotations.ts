@@ -75,11 +75,8 @@ const collectContinuationFromComment = (
 
 	let continuationContent = continuationMatch[INDEX_ONE];
 	continuationContent = continuationContent.replace(/\s*\*\s*$/, '').trim();
-	if (continuationContent.includes('{')) {
-		continuationContent = continuationContent
-			.substring(0, continuationContent.indexOf('{'))
-			.trim();
-	}
+	// Removed unreachable brace check: regex pattern [^@{]*? on line 70 explicitly excludes '{'
+	// from the continuation match, so continuationContent can never contain '{'
 	const continuationLines = continuationContent
 		.split('\n')
 		.map((line) => removeCommentPrefix(line))
@@ -112,9 +109,10 @@ const collectContinuationFromDocLines = (
 	let continuationIndex = startIndex;
 	while (continuationIndex < docLines.length) {
 		const continuationLine = docLines[continuationIndex];
-		if (continuationLine === undefined) break;
+		// Removed unreachable undefined check: docLines comes from split('\n') or linesString
+		// both of which always return strings, never undefined
 		// Use removeCommentPrefix instead of regex to remove comment prefix
-		const trimmedLine = removeCommentPrefix(continuationLine).trim();
+		const trimmedLine = removeCommentPrefix(continuationLine!).trim();
 		if (
 			trimmedLine.length === EMPTY ||
 			trimmedLine.startsWith('@') ||
@@ -161,7 +159,8 @@ const detectAnnotationsInDocs = (
 
 			for (let lineIndex = 0; lineIndex < docLines.length; lineIndex++) {
 				const line = docLines[lineIndex];
-				if (line === undefined) continue;
+				// Removed unreachable undefined check: docLines comes from split('\n') or linesString
+				// both of which always return strings, never undefined
 				// Annotation pattern: @ followed by identifier, possibly with content
 				// After detectCodeBlockDocs, lines have their " * " prefix stripped, so we need to match lines with or without prefix
 				// Pattern matches: (optional prefix) @ (name) (content)
@@ -173,20 +172,16 @@ const detectAnnotationsInDocs = (
 					hasAnnotations = true;
 					// Process each annotation match
 					for (const match of matches) {
-						const annotationName =
-							match[INDEX_ONE] !== undefined
-								? match[INDEX_ONE]
-								: '';
-						const content =
-							match[INDEX_TWO] !== undefined
-								? match[INDEX_TWO].trim()
-								: '';
+						// Removed unreachable undefined checks: regex pattern has two required capture groups
+						// - INDEX_ONE (annotation name) always matches if regex matches
+						// - INDEX_TWO (content) always matches (can be empty) if regex matches
+						// - match.index is always defined for matchAll results
+						const annotationName = match[INDEX_ONE]!;
+						const content = match[INDEX_TWO]!.trim();
 						const lowerName = annotationName.toLowerCase();
 						const beforeText = extractBeforeText(
 							line,
-							match.index !== undefined
-								? match.index
-								: ARRAY_START_INDEX,
+							match.index!,
 						);
 
 						// Collect continuation lines for this annotation
@@ -358,7 +353,8 @@ const renderAnnotation = (
 	}
 
 	// First line includes the @annotation name
-	const firstContent = contentLines[ARRAY_START_INDEX] ?? '';
+	// Removed unreachable nullish coalescing: contentLines always has at least one element (line 332-334)
+	const firstContent = contentLines[ARRAY_START_INDEX]!;
 	const firstLine = isNotEmpty(firstContent)
 		? `${commentPrefix}@${annotationName} ${firstContent}`
 		: `${commentPrefix}@${annotationName}`;
@@ -367,7 +363,7 @@ const renderAnnotation = (
 	// Subsequent lines are continuation of the annotation content
 	for (let i = INDEX_ONE; i < contentLines.length; i++) {
 		const lineContent = contentLines[i];
-		if (lineContent === undefined) continue;
+		// Removed unreachable undefined check: contentLines comes from split('\n') which always returns strings
 		if (isNotEmpty(lineContent)) {
 			lines.push(`${commentPrefix}${lineContent}`);
 		} else {
@@ -376,13 +372,13 @@ const renderAnnotation = (
 	}
 
 	const cleanedLines = removeTrailingEmptyLines(lines);
-	return cleanedLines.length > EMPTY
-		? {
-				content: cleanedLines.join('\n'),
-				lines: cleanedLines,
-				type: 'text',
-			}
-		: null;
+	// Removed unreachable null branch: we always push firstLine with @annotation name on line 362,
+	// so cleanedLines.length will always be >= 1 (removeTrailingEmptyLines only removes trailing empty lines)
+	return {
+		content: cleanedLines.join('\n'),
+		lines: cleanedLines,
+		type: 'text',
+	};
 };
 
 /**

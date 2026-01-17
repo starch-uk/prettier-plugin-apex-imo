@@ -83,6 +83,18 @@ describe('apexdoc-annotations', () => {
 			expect(result).not.toBeNull();
 			expect(result?.lines[0]).toBe('   * @deprecated');
 		});
+
+		it.concurrent('should render annotation with non-empty content (line 360)', () => {
+			// Test line 360: ternary true branch when firstContent is not empty
+			const doc: ApexDocAnnotation = {
+				type: 'annotation',
+				name: 'param',
+				content: 'input The input parameter' as Doc,
+			};
+			const result = renderAnnotation(doc, '   * ');
+			expect(result).not.toBeNull();
+			expect(result?.lines[0]).toContain('@param input The input parameter');
+		});
 	});
 
 	describe('wrapAnnotations', () => {
@@ -154,6 +166,53 @@ describe('apexdoc-annotations', () => {
 			expect(result[0]?.type).toBe('annotation');
 		});
 
+		it.concurrent(
+			'should handle useTabs null/undefined (lines 462-465)',
+			() => {
+				// Test lines 462-465: useTabsOption ternary with null/undefined
+				const doc: ApexDocAnnotation = {
+					type: 'annotation',
+					name: 'param',
+					content: 'input The input parameter' as Doc,
+				};
+				const docs: ApexDocComment[] = [doc];
+				// Test with useTabs: null
+				const result1 = wrapAnnotations(docs, 80, 0, 5, {
+					tabWidth: 2,
+					useTabs: null,
+				});
+				expect(result1).toHaveLength(1);
+				// Test with useTabs: undefined
+				const result2 = wrapAnnotations(docs, 80, 0, 5, {
+					tabWidth: 2,
+					useTabs: undefined,
+				});
+				expect(result2).toHaveLength(1);
+			},
+		);
+
+		it.concurrent(
+			'should handle first word too long for first line (line 490)',
+			() => {
+				// Test line 490: allLines ternary when firstLineContent is empty
+				// This happens when first word doesn't fit on first line (firstLineWords.length === 0)
+				const doc: ApexDocAnnotation = {
+					type: 'annotation',
+					name: 'param',
+					content:
+						'SuperLongWordThatDoesNotFitOnFirstLine more content here' as Doc,
+				};
+				const docs: ApexDocComment[] = [doc];
+				// Set very small width so first word doesn't fit
+				const result = wrapAnnotations(docs, 10, 0, 5, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+				expect(result).toHaveLength(1);
+				expect(result[0]?.type).toBe('annotation');
+			},
+		);
+
 		it.concurrent('should pass through non-annotation docs', () => {
 			const textDoc: ApexDocComment = {
 				type: 'text',
@@ -205,6 +264,74 @@ describe('apexdoc-annotations', () => {
 					const contentString = String(annotations[0].content);
 					expect(contentString).toContain('continuation line');
 				}
+			},
+		);
+
+		it.concurrent(
+			'should handle annotation with beforeText (lines 213-220)',
+			() => {
+				// Test lines 213-220: followingText when beforeText is non-empty
+				// This covers the ternary true branch and spread operator
+				const textDoc: ApexDocComment = {
+					type: 'text',
+					content: '   * Some text before @param input The input',
+					lines: ['   * Some text before @param input The input'],
+				};
+				const docs: ApexDocComment[] = [textDoc];
+				const result = detectAnnotationsInDocs(docs);
+				expect(result.length).toBeGreaterThan(0);
+				const annotations = result.filter((d) => d.type === 'annotation');
+				expect(annotations.length).toBeGreaterThanOrEqual(1);
+				if (annotations[0]?.type === 'annotation') {
+					// Should have followingText when beforeText is non-empty
+					expect(annotations[0].followingText).toBeDefined();
+					const followingTextString = String(annotations[0].followingText);
+					expect(followingTextString).toContain('Some text before');
+				}
+			},
+		);
+
+		it.concurrent(
+			'should handle doc when docLinesToCheck is empty (line 240)',
+			() => {
+				// Test line 240: when docLinesToCheck.length === 0
+				// This happens when all lines are empty, start with @, or start with {@code}
+				// When docLinesToCheck.length === 0, we skip the check and push the doc
+				const textDoc: ApexDocComment = {
+					type: 'text',
+					content: '   * \n   * ',
+					lines: ['   * ', '   * '],
+				};
+				const docs: ApexDocComment[] = [textDoc];
+				const result = detectAnnotationsInDocs(docs);
+				// When docLinesToCheck.length === 0, we skip the consumed check and push doc
+				expect(result.length).toBe(1);
+				expect(result[0]).toEqual(textDoc);
+			},
+		);
+
+		it.concurrent(
+			'should skip doc when all processed lines filtered out (line 256)',
+			() => {
+				// Test line 256: when trimmedLines.length === 0 after filtering
+				// This happens when hasAnnotations === true, processedLines.length > 0,
+				// but all processedLines are empty or consumed after filtering
+				// Create a doc with annotations and empty lines in processedLines
+				const textDoc: ApexDocComment = {
+					type: 'text',
+					content: '   * \n   * @param input The input\n   * ',
+					lines: ['   * ', '   * @param input The input', '   * '],
+				};
+				const docs: ApexDocComment[] = [textDoc];
+				const result = detectAnnotationsInDocs(docs);
+				// processedLines contains empty lines, which get filtered out
+				// So trimmedLines.length === 0 and we don't push a new doc
+				const annotations = result.filter((d) => d.type === 'annotation');
+				expect(annotations.length).toBeGreaterThan(0);
+				// Should not have a text doc for the empty processedLines
+				const textDocs = result.filter((d) => d.type === 'text');
+				// The empty lines in processedLines are filtered out, so no text doc should be created
+				expect(textDocs.length).toBe(0);
 			},
 		);
 
@@ -275,6 +402,27 @@ describe('apexdoc-annotations', () => {
 				expect(result[0].name).toBe('param');
 			}
 		});
+
+		it.concurrent(
+			'should skip normalization for annotations not in set (line 292)',
+			() => {
+				// Test line 292: annotation NOT in APEXDOC_ANNOTATIONS_SET
+				// This covers the false branch of the if statement
+				const doc: ApexDocAnnotation = {
+					type: 'annotation',
+					name: 'customannotation',
+					content: 'some content' as Doc,
+				};
+				const docs: ApexDocComment[] = [doc];
+				const result = normalizeAnnotations(docs);
+				expect(result).toHaveLength(1);
+				expect(result[0]?.type).toBe('annotation');
+				if (result[0]?.type === 'annotation') {
+					// Should not normalize (lowercase) if not in set
+					expect(result[0].name).toBe('customannotation');
+				}
+			},
+		);
 
 		it.concurrent('should pass through non-annotation docs', () => {
 			const textDoc: ApexDocComment = {
