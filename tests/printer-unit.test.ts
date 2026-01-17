@@ -26,9 +26,11 @@ describe('printer', () => {
 				print: vi.fn(() => 'original output'),
 			};
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 			expect(wrapped).toBeDefined();
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- wrapped.print is a function property
 			expect(typeof wrapped.print).toBe('function');
 		});
 
@@ -37,12 +39,14 @@ describe('printer', () => {
 				print: vi.fn(() => 'original output'),
 			};
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 			const mockPath = createMockPath({
 				[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
 			} as ApexNode);
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
 				mockPath,
 				createMockOptions(),
@@ -128,6 +132,7 @@ describe('printer', () => {
 				const mockOriginalPrinter = {
 					print: vi.fn(() => 'original output'),
 				};
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 				const mockPath = createMockPath({
@@ -136,13 +141,16 @@ describe('printer', () => {
 				} as ApexNode);
 
 				// Mock the path.map to return empty arrays
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock function type assertion
 				(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce(
 					[],
 				);
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock function type assertion
 				(mockPath.map as ReturnType<typeof vi.fn>).mockReturnValueOnce(
 					[],
 				);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -188,6 +196,7 @@ describe('printer', () => {
 			},
 		])(
 			'$description',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			({
 				nodeClass,
 				nodeData,
@@ -199,6 +208,7 @@ describe('printer', () => {
 				const mockOriginalPrinter = {
 					print: vi.fn(() => 'original output'),
 				};
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 				const mockPath = createMockPath({
@@ -206,6 +216,7 @@ describe('printer', () => {
 					[nodeClassKey]: nodeClass,
 				} as ApexNode);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -220,6 +231,7 @@ describe('printer', () => {
 
 		it('should pass through set nodes with single entry to original printer', () => {
 			const mockOriginalPrinter = createMockOriginalPrinter();
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 			const mockPath = createMockPath({
@@ -227,6 +239,7 @@ describe('printer', () => {
 				values: [{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' }],
 			} as ApexNode);
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
 				mockPath,
 				createMockOptions(),
@@ -259,6 +272,7 @@ describe('printer', () => {
 			},
 		])(
 			'$description',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			({
 				nodeClass,
 				nodeData,
@@ -270,6 +284,7 @@ describe('printer', () => {
 				const mockOriginalPrinter = {
 					print: vi.fn(() => 'original output'),
 				};
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 				const mockPath = createMockPath({
@@ -277,6 +292,7 @@ describe('printer', () => {
 					[nodeClassKey]: nodeClass,
 				} as ApexNode);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -307,8 +323,10 @@ describe('printer', () => {
 
 			const mockPath = createMockPath(mockNode);
 			const mockOriginalPrinter = createMockOriginalPrinter();
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrappedPrinter = createWrappedPrinter(mockOriginalPrinter);
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrappedPrinter.print(
 				mockPath,
 				createMockOptions(),
@@ -356,9 +374,11 @@ describe('printer', () => {
 
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = createMockOriginalPrinter();
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrappedPrinter =
 					createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrappedPrinter.print(
 					mockPath,
 					createMockOptions(),
@@ -400,9 +420,11 @@ describe('printer', () => {
 
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = createMockOriginalPrinter();
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrappedPrinter =
 					createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrappedPrinter.print(
 					mockPath,
 					createMockOptions(),
@@ -458,9 +480,11 @@ describe('printer', () => {
 
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = createMockOriginalPrinter();
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrappedPrinter =
 					createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrappedPrinter.print(
 					mockPath,
 					createMockOptions(),
@@ -493,9 +517,11 @@ describe('printer', () => {
 
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = createMockOriginalPrinter();
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrappedPrinter =
 					createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrappedPrinter.print(
 					mockPath,
 					createMockOptions(),
@@ -519,6 +545,7 @@ describe('printer', () => {
 				};
 
 				// Create path with 'type' key to indicate type context
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
 				const mockPath = {
 					call: vi.fn(() => ''),
 					key: 'type',
@@ -530,15 +557,17 @@ describe('printer', () => {
 				const mockOriginalPrinter = {
 					print: vi.fn((path, _options, _print) => {
 						// Verify the node value was normalized
-						// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- path.node is checked
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unsafe-member-access -- path.node is checked
 						const normalizedNode = path.node as { value?: string };
 						expect(normalizedNode.value).toBe('Account');
 						return 'normalized output';
 					}),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -559,6 +588,7 @@ describe('printer', () => {
 					value: 'Account', // Already normalized
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
 				const mockPath = {
 					call: vi.fn(() => ''),
 					key: 'type',
@@ -571,8 +601,10 @@ describe('printer', () => {
 					print: vi.fn(() => 'original output'),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -592,6 +624,7 @@ describe('printer', () => {
 					value: 'contact', // lowercase - should normalize to 'Contact'
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
 				const mockPath = {
 					call: vi.fn(() => ''),
 					key: 'types',
@@ -602,15 +635,17 @@ describe('printer', () => {
 
 				const mockOriginalPrinter = {
 					print: vi.fn((path, _options, _print) => {
-						// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- path.node is checked
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unsafe-member-access -- path.node is checked
 						const normalizedNode = path.node as { value?: string };
 						expect(normalizedNode.value).toBe('Contact');
 						return 'normalized output';
 					}),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -639,9 +674,12 @@ describe('printer', () => {
 			const mockOriginalPrinter = {
 				print: vi.fn((path, _options, print) => {
 					// Verify that namesNormalizingPrint is used for 'names' key
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertions for test
 					const testNamesPath = {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock function type assertions for test
 						call: (mockPath.call as () => string).bind(mockPath),
 						key: 'names',
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock function type assertions for test
 						map: (mockPath.map as () => unknown[]).bind(mockPath),
 						node: mockPath.node,
 						stack: mockPath.stack,
@@ -653,8 +691,10 @@ describe('printer', () => {
 				}),
 			};
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
 				mockPath,
 				createMockOptions(),
@@ -678,8 +718,10 @@ describe('printer', () => {
 					print: vi.fn(() => 'original output'),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -703,8 +745,10 @@ describe('printer', () => {
 					print: vi.fn(() => 'original output'),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -729,8 +773,10 @@ describe('printer', () => {
 					print: vi.fn(() => 'original output'),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -756,19 +802,24 @@ describe('printer', () => {
 				const mockPath = createMockPath(mockNode);
 				// Mock print to return an object Doc for 'type' (like group() or indent())
 				const objectDoc = { contents: ['String'], type: 'group' };
+				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 				const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- path key extraction for test
 					const { key } = path as { key?: number | string };
 					if (key === 'type') {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 						return objectDoc as unknown as Doc;
 					}
 					return '';
 				});
 
 				// Mock path.call to return objectDoc when called with 'type'
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock function type assertion for test
 				(mockPath.call as ReturnType<typeof vi.fn>).mockImplementation(
-					// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return Doc for test
+					// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock function returns Doc
 					(_print: unknown, key: unknown): Doc => {
 						if (key === 'type') {
+							// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 							return objectDoc as unknown as Doc;
 						}
 						return '';
@@ -779,8 +830,10 @@ describe('printer', () => {
 					print: vi.fn(() => 'original output'),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -822,6 +875,7 @@ describe('printer', () => {
 	describe('handleVariableDecls edge cases', () => {
 		it.concurrent('should return null when decls is not an array', () => {
 			// Test handleVariableDecls with non-array decls
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node type assertion for test
 			const mockNode = {
 				decls: 'not an array', // Invalid: decls should be an array
 				modifiers: [],
@@ -833,8 +887,10 @@ describe('printer', () => {
 				print: vi.fn(() => 'original output'),
 			};
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
 				mockPath,
 				createMockOptions(),
@@ -849,6 +905,7 @@ describe('printer', () => {
 			'should handle non-object declaration in decls array',
 			() => {
 				// Test hasVariableAssignments with non-object decl
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node type assertion for test
 				const mockNode = {
 					decls: [
 						'not an object', // Invalid: decl should be an object
@@ -863,8 +920,10 @@ describe('printer', () => {
 					print: vi.fn(() => 'original output'),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -881,6 +940,7 @@ describe('printer', () => {
 			() => {
 				// Test handleVariableDecls with undefined nameDoc or assignmentDoc
 				// This happens when declDoc array has undefined at NAME_INDEX (0) or ASSIGNMENT_INDEX (4)
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node type assertion for test
 				const mockNode = {
 					decls: [
 						{
@@ -902,10 +962,13 @@ describe('printer', () => {
 				} as unknown as ApexNode;
 
 				const mockPath = createMockPath(mockNode);
+				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 				const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- path key extraction for test
 					const { key } = path as { key?: number | string };
 					if (key === 'type') {
 						// Return complex Map type structure: Map<String, Map>
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 						return [
 							'Map',
 							'<',
@@ -915,6 +978,7 @@ describe('printer', () => {
 					}
 					// For name or assignment paths, return undefined to simulate sparse array
 					if (key === 'name') {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 						return undefined as unknown as Doc; // undefined nameDoc
 					}
 					if (key === 'assignment') {
@@ -926,36 +990,45 @@ describe('printer', () => {
 				// Mock path.map to call the callback, which will use mockPrint
 				// The callback returns [nameDoc, ' ', '=', ' ', assignmentDoc]
 				// Since nameDoc will be undefined, declDoc[NAME_INDEX] will be undefined
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock function type assertion for test
 				(mockPath.map as ReturnType<typeof vi.fn>).mockImplementation(
 					(
+						// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 						callback: (path: Readonly<AstPath<ApexNode>>) => Doc,
 						key: string,
-						// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return Doc[] for test
+						// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock function returns Doc[]
 					): Doc[] => {
 						if (key === 'decls') {
 							// Call callback with declPath, which will use mockPrint
 							// The callback calls declPath.call(print, 'name') and declPath.call(print, 'assignment')
 							// We need to mock declPath.call to use mockPrint
+							// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
 							const declPath: AstPath<ApexNode> = {
 								// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock path customization
 								...mockPath,
 								call: vi.fn(
 									(
 										_print: unknown,
+										// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 										...pathKeys: unknown[]
 									) => {
+										// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pathKeys extraction for test
 										const pathKey = pathKeys[0] as string;
 										if (pathKey === 'name') {
 											// Return undefined to simulate undefined nameDoc
+											// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 											return undefined as unknown as Doc;
 										}
 										if (pathKey === 'assignment') {
 											// Return assignment doc - call with 'value' as second arg
 											if (pathKeys[1] === 'value') {
+												// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 												return 'assignmentDoc' as unknown as Doc;
 											}
+											// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 											return 'assignmentDoc' as unknown as Doc;
 										}
+										// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 										return '' as unknown as Doc;
 									},
 								),
@@ -979,8 +1052,10 @@ describe('printer', () => {
 					print: vi.fn(() => 'original output'),
 				};
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 				const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 				const result = wrapped.print(
 					mockPath,
 					createMockOptions(),
@@ -1001,6 +1076,7 @@ describe('printer', () => {
 		it.concurrent('should handle non-array doc in isMapTypeDoc', () => {
 			// Test isMapTypeDoc with non-array doc (defensive check)
 			// This tests the unreachable branch when doc is not an array
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node type assertion for test
 			const mockNode = {
 				decls: [
 					{
@@ -1022,10 +1098,13 @@ describe('printer', () => {
 
 			const mockPath = createMockPath(mockNode);
 			// Mock print to return a non-array for type (simulating malformed input)
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- path key extraction for test
 				const { key } = path as { key?: number | string };
 				if (key === 'type') {
 					// Return a non-array to trigger isMapTypeDoc's defensive check
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 					return 'String' as unknown as Doc;
 				}
 				return '';
@@ -1035,8 +1114,10 @@ describe('printer', () => {
 				print: vi.fn(() => 'original output'),
 			};
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
 				mockPath,
 				createMockOptions(),
@@ -1050,6 +1131,7 @@ describe('printer', () => {
 		it.concurrent('should handle non-array param in hasNestedMap', () => {
 			// Test hasNestedMap with non-array param (defensive check)
 			// This tests the unreachable branch when param is neither string nor array
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node type assertion for test
 			const mockNode = {
 				decls: [
 					{
@@ -1071,12 +1153,15 @@ describe('printer', () => {
 
 			const mockPath = createMockPath(mockNode);
 			// Mock print to return a malformed typeDoc structure
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			const mockPrint = vi.fn((path: Readonly<AstPath<ApexNode>>) => {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- path key extraction for test
 				const { key } = path as { key?: number | string };
 				if (key === 'type') {
 					// Return a Map type with malformed params to trigger hasNestedMap's defensive check
 					// Structure: ['Map', '<', [params...], '>']
 					// params[0] could be non-array/non-string in malformed input
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 					return [
 						'Map',
 						'<',
@@ -1091,8 +1176,10 @@ describe('printer', () => {
 				print: vi.fn(() => 'original output'),
 			};
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
 				mockPath,
 				createMockOptions(),

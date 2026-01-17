@@ -189,8 +189,10 @@ class MockDocPrinter {
 		if (Array.isArray(doc)) {
 			// Type assertion needed for array map - elements are Doc type but TypeScript can't infer
 			return doc
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Array elements may be any Doc type in mock implementation
-				.map((d: unknown) => this.printDocToString(d as Doc, _options))
+				.map((d: unknown) => {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Array elements may be any Doc type in mock implementation
+					return this.printDocToString(d as Doc, _options);
+				})
 				.join('');
 		}
 		// For objects, return a placeholder
@@ -421,11 +423,11 @@ export function createPrettierMock(
 			>,
 		) => Promise<string>;
 	}>,
-		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
-	): typeof import('prettier') {
-		const suite = new PrettierMockSuite();
-		if (options?.format) {
-			suite.format = options.format;
-		}
-		return suite.getPrettierMock();
+	// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
+): typeof import('prettier') {
+	const suite = new PrettierMockSuite();
+	if (options?.format) {
+		suite.format = options.format;
+	}
+	return suite.getPrettierMock();
 }

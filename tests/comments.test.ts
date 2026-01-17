@@ -2,7 +2,7 @@
  * @file Unit tests for the comments module.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { ParserOptions } from 'prettier';
 import {
 	getIndentLevel,
@@ -17,7 +17,6 @@ import {
 	tokensToCommentString,
 } from '../src/comments.js';
 import type { ApexDocComment } from '../src/comments.js';
-import { PrettierMockSuite } from './prettier-mock.js';
 import { createMockPath } from './test-utils.js';
 import { loadFixture } from './test-utils.js';
 
@@ -607,9 +606,11 @@ describe('comments', () => {
 					value: '', // Empty comment value
 				};
 				const mockPath = {
+					// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock path customization
 					...createMockPath(emptyCommentNode),
-					getNode: () => emptyCommentNode,
+					getNode: (): ApexNode => emptyCommentNode,
 				};
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,
@@ -724,6 +725,7 @@ describe('comments', () => {
 					type: 'code',
 				};
 				const annotationDoc: ApexDocComment = {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
 					content: 'param input The input' as unknown as Doc,
 					name: 'param',
 					type: 'annotation',

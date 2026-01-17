@@ -10,23 +10,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWrappedPrinter } from '../src/printer.js';
 import type { ApexNode } from '../src/types.js';
-import {
-	setCurrentPluginInstance,
-	getCurrentPluginInstance,
-} from '../src/printer.js';
+import { setCurrentPluginInstance } from '../src/printer.js';
 import { createMockPath, createMockOptions } from './test-utils.js';
 
 // Mock processAllCodeBlocksInComment to control its return value
 const mockProcessAllCodeBlocksInComment = vi.fn();
 vi.mock('../src/apexdoc-code.js', async () => {
 	const actual = await vi.importActual<
+		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
 		typeof import('../src/apexdoc-code.js')
 	>('../src/apexdoc-code.js');
 	return {
 		...actual,
-		processAllCodeBlocksInComment: (
+		// eslint-disable-next-line @typescript-eslint/require-await -- Mock function signature
+		processAllCodeBlocksInComment: async (
 			...args: Parameters<typeof actual.processAllCodeBlocksInComment>
-		) => mockProcessAllCodeBlocksInComment(...args),
+		): Promise<ReturnType<typeof actual.processAllCodeBlocksInComment>> => {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Mock function return value
+			return mockProcessAllCodeBlocksInComment(...args);
+		},
 	};
 });
 
@@ -52,17 +54,20 @@ describe('printer embed function', () => {
 			// No embed property
 		};
 
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
 		const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 		// Should have embed function
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Testing embed property
 		expect(wrapped.embed).toBeDefined();
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Testing embed property
 		expect(typeof wrapped.embed).toBe('function');
 	});
 
 	it('should return undefined when pluginInstance is not set', async () => {
 		// Test embed function when pluginInstance is null/undefined
 		// Clear plugin instance to test the null/undefined check
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Need to set to undefined
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-type-assertion -- Need to set to undefined for test
 		setCurrentPluginInstance(undefined as any);
 		// Reset it by calling getCurrentPluginInstance which might return undefined now
 		// Actually, we need to clear the module-level variable
@@ -72,6 +77,7 @@ describe('printer embed function', () => {
 			print: vi.fn(() => 'original output'),
 		};
 
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-unsafe-assignment -- wrapped is used indirectly through mock
 		const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 		const mockNode = {
@@ -91,10 +97,10 @@ describe('printer embed function', () => {
 		// Since the beforeEach sets it, we need to clear it after beforeEach runs
 		// But we can't control beforeEach order easily, so let's mock the module
 		vi.doMock('../src/printer.js', async () => {
-			const actual =
-				await vi.importActual<typeof import('../src/printer.js')>(
-					'../src/printer.js',
-				);
+			const actual = await vi.importActual<
+				// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
+				typeof import('../src/printer.js')
+			>('../src/printer.js');
 			return {
 				...actual,
 				getCurrentPluginInstance: vi.fn(() => undefined),
@@ -107,8 +113,10 @@ describe('printer embed function', () => {
 		// Import the module again to get the mocked version
 		const { createWrappedPrinter: createWrappedPrinterMocked } =
 			await import('../src/printer.js');
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
 		const wrappedMocked = createWrappedPrinterMocked(mockOriginalPrinter);
 
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- Testing embed property
 		const embedResult = wrappedMocked.embed?.(
 			mockPath,
 			createMockOptions(),
@@ -118,6 +126,7 @@ describe('printer embed function', () => {
 		expect(typeof embedResult).toBe('function');
 
 		// Call the async processor - it should return undefined when pluginInstance is null
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await -- Testing async processor
 		const docResult = await embedResult?.(async () => 'doc');
 		expect(docResult).toBeUndefined();
 
@@ -137,6 +146,7 @@ describe('printer embed function', () => {
 			print: vi.fn(() => 'original output'),
 		};
 
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
 		const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 		// Create a comment node with {@code} but malformed blocks
@@ -148,6 +158,7 @@ describe('printer embed function', () => {
 		const mockPath = createMockPath(mockNode);
 
 		// Call embed function
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- Testing embed function
 		const embedResult = wrapped.embed?.(mockPath, createMockOptions());
 
 		// embed should return a function (the async processor)
@@ -155,6 +166,7 @@ describe('printer embed function', () => {
 		expect(embedResult).not.toBeNull();
 
 		// Call the async function
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await -- Testing async processor
 		const docResult = await embedResult?.(async () => 'doc');
 
 		// Should return undefined
@@ -171,6 +183,7 @@ describe('printer embed function', () => {
 			print: vi.fn(() => 'original output'),
 		};
 
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
 		const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 		// Create a comment node with undefined value
@@ -183,6 +196,7 @@ describe('printer embed function', () => {
 
 		// Call embed function - it should return null because hasCodeTag will be false
 		// when value is undefined (commentText?.includes('{@code') ?? false = false)
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- Testing embed function
 		const embedResult = wrapped.embed?.(mockPath, createMockOptions());
 
 		// Since hasCodeTag is false, embed should return null

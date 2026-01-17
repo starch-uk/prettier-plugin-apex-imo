@@ -14,7 +14,7 @@ import {
 } from '../src/apexdoc.js';
 import type { ApexDocComment } from '../src/comments.js';
 import { createDocContent } from '../src/comments.js';
-import { loadFixture, formatApex } from './test-utils.js';
+import { formatApex } from './test-utils.js';
 
 describe('apexdoc', () => {
 	describe('EMPTY_CODE_TAG', () => {
@@ -349,6 +349,7 @@ describe('apexdoc', () => {
 	describe('normalizeSingleApexDocComment with isEmbedFormatted', () => {
 		it.concurrent(
 			'should handle isEmbedFormatted=true for code blocks (apexdoc.ts line 920)',
+			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			async () => {
 				// Test the isEmbedFormatted=true branch when code blocks are processed
 				// This happens when embed function has already formatted the comment
@@ -356,6 +357,7 @@ describe('apexdoc', () => {
  * Example method.
  * {@code Integer x = 10; }
  */`;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,
@@ -378,6 +380,7 @@ describe('apexdoc', () => {
 
 		it.concurrent(
 			'should handle isEmbedFormatted=false for code blocks (apexdoc.ts line 353)',
+			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			async () => {
 				// Test the isEmbedFormatted=false branch when code blocks are processed
 				// This exercises the else branch at line 353: codeToUse = doc.rawCode
@@ -385,6 +388,7 @@ describe('apexdoc', () => {
  * Example method.
  * {@code Integer x = 10; }
  */`;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,
@@ -438,12 +442,14 @@ describe('apexdoc', () => {
 	describe('calculatePrefixAndWidth with commentIndent', () => {
 		it.concurrent(
 			'should handle commentIndent=0 (apexdoc.ts line 123)',
+			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			async () => {
 				// Test the branch: commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT
 				// When commentIndent is 0, bodyIndent should be BODY_INDENT_WHEN_ZERO (2)
 				const comment = `/**
  * Test comment.
  */`;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,
@@ -462,12 +468,14 @@ describe('apexdoc', () => {
 
 		it.concurrent(
 			'should handle commentIndent>0 (apexdoc.ts line 123)',
+			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			async () => {
 				// Test the branch: commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT
 				// When commentIndent > 0, bodyIndent should be ZERO_INDENT (0)
 				const comment = `/**
  * Test comment.
  */`;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,

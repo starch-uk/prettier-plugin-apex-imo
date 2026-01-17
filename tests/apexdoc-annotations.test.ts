@@ -24,8 +24,8 @@ describe('apexdoc-annotations', () => {
 			};
 			const result = renderAnnotation(doc, '   * ');
 			expect(result).not.toBeNull();
-			expect(result?.lines).toContain('   * Some text before annotation');
-			expect(result?.lines.some((l) => l.includes('@param'))).toBe(true);
+			expect(result.lines).toContain('   * Some text before annotation');
+			expect(result.lines.some((l) => l.includes('@param'))).toBe(true);
 		});
 
 		it.concurrent(
@@ -40,8 +40,8 @@ describe('apexdoc-annotations', () => {
 				};
 				const result = renderAnnotation(doc, '   * ');
 				expect(result).not.toBeNull();
-				expect(result?.lines).toContain('   * Line 1');
-				expect(result?.lines).toContain('   * Line 2');
+				expect(result.lines).toContain('   * Line 1');
+				expect(result.lines).toContain('   * Line 2');
 			},
 		);
 
@@ -55,7 +55,7 @@ describe('apexdoc-annotations', () => {
 			const result = renderAnnotation(doc, '   * ');
 			expect(result).not.toBeNull();
 			// Should have trimmed comment prefix for empty line
-			expect(result?.lines.some((l) => l.trim() === '*')).toBe(true);
+			expect(result.lines.some((l) => l.trim() === '*')).toBe(true);
 		});
 
 		it.concurrent('should render simple annotation', () => {
@@ -66,8 +66,8 @@ describe('apexdoc-annotations', () => {
 			};
 			const result = renderAnnotation(doc, '   * ');
 			expect(result).not.toBeNull();
-			expect(result?.lines[0]).toContain('@param');
-			expect(result?.lines[0]).toContain('input The input parameter');
+			expect(result.lines[0]).toContain('@param');
+			expect(result.lines[0]).toContain('input The input parameter');
 		});
 
 		it.concurrent('should render annotation with empty content', () => {
@@ -78,7 +78,7 @@ describe('apexdoc-annotations', () => {
 			};
 			const result = renderAnnotation(doc, '   * ');
 			expect(result).not.toBeNull();
-			expect(result?.lines[0]).toBe('   * @deprecated');
+			expect(result.lines[0]).toBe('   * @deprecated');
 		});
 
 		it.concurrent('should render annotation with non-empty content', () => {
@@ -90,7 +90,7 @@ describe('apexdoc-annotations', () => {
 			};
 			const result = renderAnnotation(doc, '   * ');
 			expect(result).not.toBeNull();
-			expect(result?.lines[0]).toContain(
+			expect(result.lines[0]).toContain(
 				'@param input The input parameter',
 			);
 		});
@@ -258,11 +258,13 @@ describe('apexdoc-annotations', () => {
 				const result = detectAnnotationsInDocs(docs);
 				expect(result.length).toBeGreaterThan(0);
 				const annotations = result.filter(
+					// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 					(d) => d.type === 'annotation',
 				);
 				expect(annotations.length).toBeGreaterThanOrEqual(1);
 				if (annotations[0]?.type === 'annotation') {
 					// Should include continuation line in content
+					// eslint-disable-next-line @typescript-eslint/no-base-to-string -- content is Doc type, needs stringification for test
 					const contentString = String(annotations[0].content);
 					expect(contentString).toContain('continuation line');
 				}
@@ -280,12 +282,14 @@ describe('apexdoc-annotations', () => {
 			const docs: ApexDocComment[] = [textDoc];
 			const result = detectAnnotationsInDocs(docs);
 			expect(result.length).toBeGreaterThan(0);
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			const annotations = result.filter((d) => d.type === 'annotation');
 			expect(annotations.length).toBeGreaterThanOrEqual(1);
 			if (annotations[0]?.type === 'annotation') {
 				// Should have followingText when beforeText is non-empty
 				expect(annotations[0].followingText).toBeDefined();
 				const followingTextString = String(
+					// eslint-disable-next-line @typescript-eslint/no-base-to-string -- followingText is Doc type, needs stringification for test
 					annotations[0].followingText,
 				);
 				expect(followingTextString).toContain('Some text before');
@@ -325,10 +329,12 @@ describe('apexdoc-annotations', () => {
 				// processedLines contains empty lines, which get filtered out
 				// So trimmedLines.length === 0 and we don't push a new doc
 				const annotations = result.filter(
+					// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 					(d) => d.type === 'annotation',
 				);
 				expect(annotations.length).toBeGreaterThan(0);
 				// Should not have a text doc for the empty processedLines
+				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 				const textDocs = result.filter((d) => d.type === 'text');
 				// The empty lines in processedLines are filtered out, so no text doc should be created
 				expect(textDocs.length).toBe(0);
@@ -347,6 +353,7 @@ describe('apexdoc-annotations', () => {
 			const docs: ApexDocComment[] = [paragraphDoc];
 			const result = detectAnnotationsInDocs(docs);
 			expect(result.length).toBeGreaterThan(0);
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			const annotations = result.filter((d) => d.type === 'annotation');
 			expect(annotations.length).toBeGreaterThanOrEqual(1);
 		});
@@ -370,10 +377,12 @@ describe('apexdoc-annotations', () => {
 				const result = detectAnnotationsInDocs(docs);
 				// Should have annotation plus remaining text
 				const annotations = result.filter(
+					// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 					(d) => d.type === 'annotation',
 				);
 				expect(annotations.length).toBeGreaterThanOrEqual(1);
 				// Should have remaining text as a text doc
+				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 				const textDocs = result.filter((d) => d.type === 'text');
 				expect(textDocs.length).toBeGreaterThan(0);
 			},
@@ -405,6 +414,7 @@ describe('apexdoc-annotations', () => {
 			const docs: ApexDocComment[] = [paragraphDoc];
 			const result = detectAnnotationsInDocs(docs);
 			// Empty lines should be skipped, but annotations should still be detected
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			const annotations = result.filter((d) => d.type === 'annotation');
 			expect(annotations.length).toBeGreaterThan(0);
 		});

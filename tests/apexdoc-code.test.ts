@@ -303,7 +303,8 @@ describe('apexdoc-code', () => {
 			'should return original block when not starting with {@code',
 			() => {
 				const codeBlock = 'Not a code block';
-				const getFormattedCodeBlock = () => undefined;
+				const getFormattedCodeBlock = (): undefined => undefined;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -320,7 +321,8 @@ describe('apexdoc-code', () => {
 			'should return original block when extraction fails',
 			() => {
 				const codeBlock = '{@code unmatched braces';
-				const getFormattedCodeBlock = () => undefined;
+				const getFormattedCodeBlock = (): undefined => undefined;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -338,7 +340,8 @@ describe('apexdoc-code', () => {
 			'should return original block for empty code content',
 			() => {
 				const codeBlock = '{@code }';
-				const getFormattedCodeBlock = () => undefined;
+				const getFormattedCodeBlock = (): undefined => undefined;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -353,7 +356,8 @@ describe('apexdoc-code', () => {
 
 		it.concurrent('should process single-line code block', () => {
 			const codeBlock = '{@code Integer x = 10; }';
-			const getFormattedCodeBlock = () => undefined;
+			const getFormattedCodeBlock = (): undefined => undefined;
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {} as ParserOptions;
 			const result = processCodeBlock(
 				codeBlock,
@@ -371,7 +375,8 @@ describe('apexdoc-code', () => {
 			'should process single-line code block ending with semicolon',
 			() => {
 				const codeBlock = '{@code Integer x = 10; }';
-				const getFormattedCodeBlock = () => undefined;
+				const getFormattedCodeBlock = (): undefined => undefined;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -386,7 +391,8 @@ describe('apexdoc-code', () => {
 
 		it.concurrent('should process multiline code block', () => {
 			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
-			const getFormattedCodeBlock = () => undefined;
+			const getFormattedCodeBlock = (): undefined => undefined;
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {} as ParserOptions;
 			const result = processCodeBlock(
 				codeBlock,
@@ -405,7 +411,9 @@ describe('apexdoc-code', () => {
 			() => {
 				const codeBlock =
 					'{@code\nInteger x = 10;\nString y = "test";\n}';
-				const getFormattedCodeBlock = () => 'should not be used';
+				const getFormattedCodeBlock = (): string =>
+					'should not be used';
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -429,10 +437,13 @@ describe('apexdoc-code', () => {
 				// Mock formatted embed result with comment structure ending with \n */\n
 				const embedResult =
 					'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */\n';
-				const getFormattedCodeBlock = (key: string) => {
+				const getFormattedCodeBlock = (
+					key: string,
+				): string | undefined => {
 					if (key === 'test-key') return embedResult;
 					return undefined;
 				};
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -461,10 +472,11 @@ describe('apexdoc-code', () => {
 			// Create embedResult that after prefix removal ends with just \n */
 			const embedResult =
 				'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
-			const getFormattedCodeBlock = (key: string) => {
+			const getFormattedCodeBlock = (key: string): string | undefined => {
 				if (key === 'test-key') return embedResult;
 				return undefined;
 			};
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {} as ParserOptions;
 			const result = processCodeBlock(
 				codeBlock,
@@ -486,10 +498,13 @@ describe('apexdoc-code', () => {
 				// Embed result without '/**\n' prefix
 				const embedResult =
 					' * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */\n';
-				const getFormattedCodeBlock = (key: string) => {
+				const getFormattedCodeBlock = (
+					key: string,
+				): string | undefined => {
 					if (key === 'test-key') return embedResult;
 					return undefined;
 				};
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -512,10 +527,13 @@ describe('apexdoc-code', () => {
 				// This triggers return line; when line doesn't have asterisk
 				const embedResult =
 					'/**\n * {@code\n *   Line with asterisk\nPlain line without asterisk\n * }\n */\n';
-				const getFormattedCodeBlock = (key: string) => {
+				const getFormattedCodeBlock = (
+					key: string,
+				): string | undefined => {
 					if (key === 'test-key') return embedResult;
 					return undefined;
 				};
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const result = processCodeBlock(
 					codeBlock,
@@ -541,10 +559,11 @@ describe('apexdoc-code', () => {
 			expect(result.length).toBeGreaterThan(0);
 			// Also test via processCodeBlock to ensure full path is covered
 			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
-			const getFormattedCodeBlock = (key: string) => {
+			const getFormattedCodeBlock = (key: string): string | undefined => {
 				if (key === 'test-key') return embedResult;
 				return undefined;
 			};
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {} as ParserOptions;
 			const processResult = processCodeBlock(
 				codeBlock,
@@ -563,10 +582,11 @@ describe('apexdoc-code', () => {
 			// Use multiline codeBlock to ensure extractCodeFromEmbedResult is called
 			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
 			const embedResult = '/**\n * {@code\n *text\n *more\n * }\n */\n';
-			const getFormattedCodeBlock = (key: string) => {
+			const getFormattedCodeBlock = (key: string): string | undefined => {
 				if (key === 'test-key') return embedResult;
 				return undefined;
 			};
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {} as ParserOptions;
 			const result = processCodeBlock(
 				codeBlock,
@@ -587,10 +607,11 @@ describe('apexdoc-code', () => {
 			// Format: /**\n * line1\n * line2\n * line3\n */\n
 			// After removing first 2 lines (SKIP_FIRST_TWO_LINES), should have at least line3
 			const embedResult = '/**\n * Line 1\n * Line 2\n * Line 3\n */\n';
-			const getFormattedCodeBlock = (key: string) => {
+			const getFormattedCodeBlock = (key: string): string | undefined => {
 				if (key === 'test-key') return embedResult;
 				return undefined;
 			};
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {} as ParserOptions;
 			const result = processCodeBlock(
 				codeBlock,
@@ -631,6 +652,7 @@ describe('apexdoc-code', () => {
 			() => {
 				// Test separator when code doesn't end with ';'
 				const codeBlock = '{@code Integer x = 10 }';
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {} as ParserOptions;
 				const getFormattedCodeBlock = vi.fn(() => undefined);
 				const result = processCodeBlock(
@@ -687,6 +709,7 @@ describe('apexdoc-code', () => {
 			async () => {
 				const commentText =
 					'/**\n * This is a regular comment\n * with no code blocks\n */';
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,
@@ -718,6 +741,7 @@ describe('apexdoc-code', () => {
 				// Need code that formats to have } followed by @annotation or access modifier
 				const commentText =
 					'/**\n * {@code\n *   public void method() {\n *     return;\n *   }\n *   @Future\n *   public void next() {}\n * }\n */';
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,
@@ -753,6 +777,7 @@ describe('apexdoc-code', () => {
 				// Need blank line without ' * ' prefix before code block to make beforeCode end with '\n'
 				// Format: /**\n * text\n\n{@code } - blank line has no ' * ' prefix
 				const commentText = '/**\n * Some text before\n\n{@code }\n */';
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,
@@ -783,6 +808,7 @@ describe('apexdoc-code', () => {
 			async () => {
 				// Code block with unmatched braces to trigger the continue path
 				const commentText = '/**\n * {@code unmatched braces\n */';
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					printWidth: 80,
 					tabWidth: 2,

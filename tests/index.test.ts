@@ -15,7 +15,6 @@ import plugin, {
 	isApexParser,
 	wrapParsers,
 } from '../src/index.js';
-import { loadFixture } from './test-utils.js';
 
 describe('index', () => {
 	describe('plugin structure', () => {
@@ -88,6 +87,7 @@ describe('index', () => {
 						parse: 'not a function', // parse is not a function
 					},
 					valid: {
+						// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for mock compatibility
 						parse: async () => ({}),
 					},
 				} as unknown as Readonly<Plugin<ApexNode>['parsers']>;

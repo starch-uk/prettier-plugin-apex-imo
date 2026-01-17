@@ -8,22 +8,20 @@ import type { ParserOptions } from 'prettier';
 import type { ApexNode } from '../src/types.js';
 import {
 	printComment,
-	tokensToCommentString,
 	parseCommentToDocs,
 	createDocContent,
 	normalizeBlockComment,
-	handleOwnLineComment,
 } from '../src/comments.js';
-import { docBuilders } from '../src/utils.js';
-import { PrettierMockSuite } from './prettier-mock.js';
 
 describe('comments internal functions', () => {
 	describe('printComment', () => {
 		it.concurrent('should return empty string when node is null', () => {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path for test
 			const mockPath = {
 				getNode: (): null => null,
 			} as unknown as AstPath<ApexNode>;
 
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 			const options = {
 				tabWidth: 2,
 				useTabs: false,
@@ -45,11 +43,14 @@ describe('comments internal functions', () => {
 		it.concurrent(
 			'should return empty string when node does not have value property',
 			() => {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node for test
 				const mockNode = {} as unknown as ApexNode;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path for test
 				const mockPath = {
 					getNode: (): ApexNode => mockNode,
 				} as unknown as AstPath<ApexNode>;
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					tabWidth: 2,
 					useTabs: false,
@@ -72,13 +73,16 @@ describe('comments internal functions', () => {
 		it.concurrent(
 			'should return empty string when node value is not a string',
 			() => {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node for test
 				const mockNode = {
 					value: 123,
 				} as unknown as ApexNode;
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path for test
 				const mockPath = {
 					getNode: (): ApexNode => mockNode,
 				} as unknown as AstPath<ApexNode>;
 
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
 				const options = {
 					tabWidth: 2,
 					useTabs: false,
