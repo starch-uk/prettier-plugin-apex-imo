@@ -18,40 +18,25 @@ import {
 import type { ApexNode } from '../src/types.js';
 
 describe('utils', () => {
-	describe('isEmpty', () => {
-		it.concurrent('should return true for empty string', () => {
-			expect(isEmpty('')).toBe(true);
-		});
-
-		it.concurrent('should return true for empty array', () => {
-			expect(isEmpty([])).toBe(true);
-		});
-
-		it.concurrent('should return false for non-empty string', () => {
-			expect(isEmpty('test')).toBe(false);
-		});
-
-		it.concurrent('should return false for non-empty array', () => {
-			expect(isEmpty([1, 2, 3])).toBe(false);
-		});
-	});
-
-	describe('isNotEmpty', () => {
-		it.concurrent('should return false for empty string', () => {
-			expect(isNotEmpty('')).toBe(false);
-		});
-
-		it.concurrent('should return false for empty array', () => {
-			expect(isNotEmpty([])).toBe(false);
-		});
-
-		it.concurrent('should return true for non-empty string', () => {
-			expect(isNotEmpty('test')).toBe(true);
-		});
-
-		it.concurrent('should return true for non-empty array', () => {
-			expect(isNotEmpty([1, 2, 3])).toBe(true);
-		});
+	describe('isEmpty and isNotEmpty', () => {
+		it.concurrent.each([
+			{ expectedEmpty: true, value: '' },
+			{ expectedEmpty: true, value: [] },
+			{ expectedEmpty: false, value: 'test' },
+			{ expectedEmpty: false, value: [1, 2, 3] },
+		])(
+			'isEmpty($value) returns $expectedEmpty and isNotEmpty($value) returns opposite',
+			({
+				expectedEmpty,
+				value,
+			}: Readonly<{
+				expectedEmpty: boolean;
+				value: string | readonly unknown[];
+			}>) => {
+				expect(isEmpty(value)).toBe(expectedEmpty);
+				expect(isNotEmpty(value)).toBe(!expectedEmpty);
+			},
+		);
 	});
 
 	describe('isObject', () => {
@@ -238,36 +223,79 @@ describe('utils', () => {
 	});
 
 	describe('preserveBlankLineAfterClosingBrace', () => {
-		it.concurrent(
-			'should return true when line ends with } and next line starts with @',
-			() => {
-				const lines = ['  }', '  @Test'];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(true);
+		it.concurrent.each([
+			{
+				description: 'should return true when next line starts with @',
+				expected: true,
+				index: 0,
+				lines: ['  }', '  @Test'],
 			},
-		);
-
-		it.concurrent(
-			'should return true when line ends with } and next line starts with access modifier',
-			() => {
-				const lines = ['  }', '  public void method() {}'];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(true);
+			{
+				description:
+					'should return true when next line starts with public',
+				expected: true,
+				index: 0,
+				lines: ['  }', '  public void method() {}'],
 			},
-		);
-
-		it.concurrent(
-			'should return false when line does not end with }',
-			() => {
-				const lines = ['  );', '  @Test'];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(
-					false,
+			{
+				description:
+					'should return true when next line starts with private',
+				expected: true,
+				index: 0,
+				lines: ['  }', '  private Integer count;'],
+			},
+			{
+				description:
+					'should return true when next line starts with static',
+				expected: true,
+				index: 0,
+				lines: ['  }', '  static final Integer count;'],
+			},
+			{
+				description:
+					'should return false when line does not end with }',
+				expected: false,
+				index: 0,
+				lines: ['  );', '  @Test'],
+			},
+			{
+				description: 'should return false when next line is empty',
+				expected: false,
+				index: 0,
+				lines: ['  }', ''],
+			},
+			{
+				description:
+					'should return false when next line starts with non-modifier',
+				expected: false,
+				index: 0,
+				lines: ['  }', '  String name;'],
+			},
+			{
+				description:
+					'should return false when next line is whitespace-only',
+				expected: false,
+				index: 0,
+				lines: ['  }', '   '],
+			},
+		])(
+			'$description',
+			({
+				description: _description,
+				expected,
+				index,
+				lines,
+			}: Readonly<{
+				description: string;
+				expected: boolean;
+				index: number;
+				lines: readonly string[];
+			}>) => {
+				expect(preserveBlankLineAfterClosingBrace(lines, index)).toBe(
+					expected,
 				);
 			},
 		);
-
-		it.concurrent('should return false when next line is empty', () => {
-			const lines = ['  }', ''];
-			expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(false);
-		});
 
 		it.concurrent('should return false when index is out of bounds', () => {
 			const lines = ['  }'];
@@ -301,37 +329,6 @@ describe('utils', () => {
 						1,
 					),
 				).toBe(false);
-			},
-		);
-
-		it.concurrent(
-			'should return false when next line starts with non-modifier word',
-			() => {
-				const lines = ['  }', '  String name;'];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(
-					false,
-				);
-			},
-		);
-
-		it.concurrent('should handle whitespace-only next line', () => {
-			const lines = ['  }', '   '];
-			expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(false);
-		});
-
-		it.concurrent(
-			'should return true for private modifier after closing brace',
-			() => {
-				const lines = ['  }', '  private Integer count;'];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(true);
-			},
-		);
-
-		it.concurrent(
-			'should return true for static modifier after closing brace',
-			() => {
-				const lines = ['  }', '  static final Integer count;'];
-				expect(preserveBlankLineAfterClosingBrace(lines, 0)).toBe(true);
 			},
 		);
 	});

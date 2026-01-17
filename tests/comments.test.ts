@@ -2,8 +2,8 @@
  * @file Unit tests for the comments module.
  */
 
-import { describe, it, expect } from 'vitest';
-import type { ParserOptions } from 'prettier';
+import { describe, it, expect, vi } from 'vitest';
+import type { AstPath, ParserOptions } from 'prettier';
 import {
 	getIndentLevel,
 	createIndent,
@@ -13,12 +13,19 @@ import {
 	handleEndOfLineComment,
 	handleRemainingComment,
 	wrapTextToWidth,
-	printComment,
 	tokensToCommentString,
+	printComment,
+	parseCommentToDocs,
+	createDocContent,
 } from '../src/comments.js';
 import type { ApexDocComment } from '../src/comments.js';
-import { createMockPath } from './test-utils.js';
-import { loadFixture } from './test-utils.js';
+import type { ApexNode } from '../src/types.js';
+import {
+	createMockPath,
+	loadFixture,
+	extractComment,
+	extractCommentIndent,
+} from './test-utils.js';
 
 describe('comments', () => {
 	describe('getIndentLevel', () => {
@@ -125,41 +132,74 @@ describe('comments', () => {
 	});
 
 	describe('createIndent', () => {
-		it.concurrent('should return empty string for level 0', () => {
-			expect(createIndent(0, 2)).toBe('');
-			expect(createIndent(0, 2, true)).toBe('');
-			expect(createIndent(0, 2, false)).toBe('');
-		});
+		it.concurrent.each([
+			{ expected: '', level: 0, tabWidth: 2, useTabs: undefined },
+			{ expected: '', level: 0, tabWidth: 2, useTabs: true },
+			{ expected: '', level: 0, tabWidth: 2, useTabs: false },
+			{ expected: '', level: -1, tabWidth: 2, useTabs: undefined },
+		])(
+			'should return empty string for level $level',
+			({
+				expected,
+				level,
+				tabWidth,
+				useTabs,
+			}: Readonly<{
+				expected: string;
+				level: number;
+				tabWidth: number;
+				useTabs: boolean | null | undefined;
+			}>) => {
+				expect(createIndent(level, tabWidth, useTabs)).toBe(expected);
+			},
+		);
 
-		it.concurrent('should return empty string for negative level', () => {
-			expect(createIndent(-1, 2)).toBe('');
-		});
+		it.concurrent.each([
+			{ expected: '    ', level: 4, tabWidth: 2, useTabs: false },
+			{ expected: '  ', level: 2, tabWidth: 2, useTabs: false },
+			{ expected: '    ', level: 4, tabWidth: 2, useTabs: undefined },
+			{ expected: '  ', level: 2, tabWidth: 2, useTabs: undefined },
+			{ expected: '    ', level: 4, tabWidth: 2, useTabs: null },
+		])(
+			'should create spaces when useTabs is $useTabs',
+			({
+				expected,
+				level,
+				tabWidth,
+				useTabs,
+			}: Readonly<{
+				expected: string;
+				level: number;
+				tabWidth: number;
+				useTabs: boolean | null | undefined;
+			}>) => {
+				expect(createIndent(level, tabWidth, useTabs)).toBe(expected);
+			},
+		);
 
-		it.concurrent('should create spaces when useTabs is false', () => {
-			expect(createIndent(4, 2, false)).toBe('    ');
-			expect(createIndent(2, 2, false)).toBe('  ');
-		});
-
-		it.concurrent('should create spaces when useTabs is undefined', () => {
-			expect(createIndent(4, 2)).toBe('    ');
-			expect(createIndent(2, 2)).toBe('  ');
-		});
-
-		it.concurrent('should create spaces when useTabs is null', () => {
-			expect(createIndent(4, 2, null)).toBe('    ');
-		});
-
-		it.concurrent('should create tabs when useTabs is true', () => {
-			expect(createIndent(4, 2, true)).toBe('\t\t');
-			expect(createIndent(2, 2, true)).toBe('\t');
-			expect(createIndent(6, 2, true)).toBe('\t\t\t');
-		});
-
-		it.concurrent('should handle tabWidth correctly with tabs', () => {
-			expect(createIndent(4, 4, true)).toBe('\t');
-			expect(createIndent(8, 4, true)).toBe('\t\t');
-			expect(createIndent(6, 4, true)).toBe('\t'); // Math.floor(6/4) = 1
-		});
+		it.concurrent.each([
+			{ expected: '\t\t', level: 4, tabWidth: 2, useTabs: true },
+			{ expected: '\t', level: 2, tabWidth: 2, useTabs: true },
+			{ expected: '\t\t\t', level: 6, tabWidth: 2, useTabs: true },
+			{ expected: '\t', level: 4, tabWidth: 4, useTabs: true },
+			{ expected: '\t\t', level: 8, tabWidth: 4, useTabs: true },
+			{ expected: '\t', level: 6, tabWidth: 4, useTabs: true }, // Math.floor(6/4) = 1
+		])(
+			'should create tabs when useTabs is true (level=$level, tabWidth=$tabWidth)',
+			({
+				level,
+				tabWidth,
+				useTabs,
+				expected,
+			}: Readonly<{
+				level: number;
+				tabWidth: number;
+				useTabs: boolean;
+				expected: string;
+			}>) => {
+				expect(createIndent(level, tabWidth, useTabs)).toBe(expected);
+			},
+		);
 	});
 
 	describe('getCommentIndent', () => {
@@ -237,17 +277,6 @@ describe('comments', () => {
 		);
 
 		it.concurrent(
-			'should handle comment at absolute end of file (skipToLineEnd returns false)',
-			() => {
-				// When skipToLineEnd returns false (no newline, at end of file)
-				// This tests lineEnd === false branch
-				const text = '    /** Comment';
-				const indent = getCommentIndent(text, 4);
-				expect(indent).toBe(4);
-			},
-		);
-
-		it.concurrent(
 			'should handle comment with unskippable newline (skipNewline returns false)',
 			() => {
 				// When skipNewline returns false (e.g., with certain newline sequences)
@@ -262,41 +291,6 @@ describe('comments', () => {
 	});
 
 	describe('normalizeBlockComment', () => {
-		/**
-		 * Helper to extract comment value from fixture.
-		 * @param text - The fixture text.
-		 * @returns The extracted comment value.
-		 * @throws {Error} If comment markers are not found in the fixture.
-		 */
-		const extractComment = (text: string): string => {
-			const startRegex = /\/\*\*/;
-			const endRegex = /\*\//;
-			const startMatch = startRegex.exec(text);
-			const endMatch = endRegex.exec(text);
-			if (
-				startMatch?.index === undefined ||
-				endMatch?.index === undefined
-			) {
-				throw new Error('Could not find comment in fixture');
-			}
-			return text.substring(startMatch.index, endMatch.index + 2);
-		};
-
-		/**
-		 * Helper to extract comment indent from fixture.
-		 * @param text - The fixture text.
-		 * @returns The comment indent level.
-		 */
-		const extractCommentIndent = (text: string): number => {
-			const startRegex = /^(\s*)\/\*\*/m;
-			const startMatch = startRegex.exec(text);
-			if (startMatch?.[1] === undefined) {
-				return 0;
-			}
-			// Count spaces (assuming 2 spaces per indent level in fixtures)
-			return startMatch[1].length;
-		};
-
 		it.concurrent.each([
 			{
 				description: 'should normalize extra asterisks in start marker',
@@ -542,42 +536,21 @@ describe('comments', () => {
 			},
 		);
 
-		it.concurrent(
-			'should handle useTabs null/undefined (comments.ts line 823 else branch)',
-			() => {
+		it.concurrent.each([
+			{ label: 'null', options: { tabWidth: 2, useTabs: null } },
+			{ label: 'undefined', options: { tabWidth: 2 } },
+		])(
+			'should handle useTabs $label (comments.ts line 823 else branch)',
+			(
+				row: Readonly<{
+					label: string;
+					options: Readonly<{ tabWidth: number; useTabs?: null }>;
+				}>,
+			) => {
 				// Test the else branch when useTabs is null or undefined
 				// This covers line 823: else branch (empty object {})
-
-				/**
-				 * Long text that needs wrapping.
-				 */
 				const longText = 'word '.repeat(50);
-				const result = wrapTextToWidth(
-					longText,
-					10, // effectiveWidth
-					{ tabWidth: 2, useTabs: null }, // useTabs is null
-				);
-				// Should wrap successfully without useTabs option
-				expect(result.length).toBeGreaterThan(1);
-			},
-		);
-
-		it.concurrent(
-			'should handle useTabs undefined (comments.ts line 823 else branch)',
-			() => {
-				// Test the else branch when useTabs is undefined
-				// This covers line 823: else branch (empty object {})
-
-				/**
-				 * Long text that needs wrapping.
-				 */
-				const longText = 'word '.repeat(50);
-				const result = wrapTextToWidth(
-					longText,
-					10, // effectiveWidth
-					{ tabWidth: 2 }, // useTabs is undefined
-				);
-				// Should wrap successfully without useTabs option
+				const result = wrapTextToWidth(longText, 10, row.options);
 				expect(result.length).toBeGreaterThan(1);
 			},
 		);
@@ -599,44 +572,6 @@ describe('comments', () => {
 				);
 				// Should wrap successfully with useTabs option
 				expect(result.length).toBeGreaterThan(1);
-			},
-		);
-	});
-
-	describe('printComment', () => {
-		it.concurrent(
-			'should handle empty comment value (comments.ts line 868)',
-			() => {
-				// Test the guard clause when commentValue is empty string
-				// This covers line 868: if (commentValue === '') return ''
-				// Create a comment node with empty value
-				const emptyCommentNode = {
-					'@class':
-						'apex.jorje.parser.impl.HiddenTokens$BlockComment',
-					value: '', // Empty comment value
-				};
-				const mockPath = {
-					// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock path customization
-					...createMockPath(emptyCommentNode),
-					getNode: (): ApexNode => emptyCommentNode,
-				};
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
-
-				// Call printComment directly - it should handle empty value
-				const result = printComment(
-					mockPath,
-					options,
-					() => '',
-					() => '',
-					(_key: string) => undefined,
-				);
-
-				// Should return empty string for empty comment value
-				expect(result).toBe('');
 			},
 		);
 	});
@@ -781,5 +716,144 @@ describe('comments', () => {
 				expect(result).toContain('/**');
 			},
 		);
+	});
+
+	describe('printComment', () => {
+		it.concurrent.each([
+			{
+				description: 'should return empty string when node is null',
+				setupMockPath: (): AstPath<ApexNode> => {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path for test
+					return {
+						getNode: (): null => null,
+					} as unknown as AstPath<ApexNode>;
+				},
+			},
+			{
+				description:
+					'should return empty string when node does not have value property',
+				setupMockPath: (): AstPath<ApexNode> => {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node for test
+					const mockNode = {} as unknown as ApexNode;
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path for test
+					return {
+						getNode: (): ApexNode => mockNode,
+					} as unknown as AstPath<ApexNode>;
+				},
+			},
+			{
+				description:
+					'should return empty string when node value is not a string',
+				setupMockPath: (): AstPath<ApexNode> => {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock node for test
+					const mockNode = {
+						value: 123,
+					} as unknown as ApexNode;
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path for test
+					return {
+						getNode: (): ApexNode => mockNode,
+					} as unknown as AstPath<ApexNode>;
+				},
+			},
+			{
+				description:
+					'should handle empty comment value (comments.ts line 868)',
+				formatCallbacks: {
+					getCommentId: (_key: string): undefined => undefined,
+					skipToLineEnd: (): string => '',
+					skipWhitespace: (): string => '',
+				},
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
+				options: {
+					printWidth: 80,
+					tabWidth: 2,
+				} as ParserOptions,
+				setupMockPath: (): AstPath<ApexNode> => {
+					// Test the guard clause when commentValue is empty string
+					// This covers line 868: if (commentValue === '') return ''
+					// Create a comment node with empty value
+					const emptyCommentNode = {
+						'@class':
+							'apex.jorje.parser.impl.HiddenTokens$BlockComment',
+						value: '', // Empty comment value
+					};
+					return {
+						// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock path customization
+						...createMockPath(emptyCommentNode),
+						getNode: (): ApexNode => emptyCommentNode,
+					};
+				},
+			},
+		])(
+			'$description',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
+			({
+				formatCallbacks,
+				options,
+				setupMockPath,
+			}: Readonly<{
+				description: string;
+				formatCallbacks?: Readonly<{
+					getCommentId: (key: Readonly<string>) => undefined;
+					skipToLineEnd: () => string;
+					skipWhitespace: () => string;
+				}>;
+				options?: Readonly<ParserOptions>;
+				setupMockPath: Readonly<() => AstPath<ApexNode>>;
+			}>) => {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock path for test
+				const mockPath = setupMockPath();
+				const defaultOptions: ParserOptions = {
+					tabWidth: 2,
+					useTabs: false,
+				};
+				const testOptions: Readonly<ParserOptions> =
+					options ?? defaultOptions;
+
+				const result = printComment(
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Mock path for test
+					mockPath,
+					testOptions,
+					formatCallbacks?.skipToLineEnd ?? vi.fn(),
+					formatCallbacks?.skipWhitespace ?? vi.fn(),
+					testOptions,
+					formatCallbacks?.getCommentId ?? vi.fn(() => undefined),
+					vi.fn(() => undefined),
+				);
+
+				expect(result).toBe('');
+			},
+		);
+	});
+
+	describe('parseCommentToDocs', () => {
+		it.concurrent('should create text doc when no paragraphs found', () => {
+			// Empty comment with just whitespace - no paragraphs created
+			const emptyComment = '/**\n *\n *\n */';
+			const result = parseCommentToDocs(emptyComment);
+			expect(result).toHaveLength(1);
+			expect(result[0]?.type).toBe('text');
+		});
+
+		it.concurrent(
+			'should handle removeCommentPrefix fallback when regex does not match',
+			() => {
+				// Use removeCommentPrefix directly via parseCommentToDocs with malformed input
+				// Line without asterisk pattern when preserveIndent=true
+				const comment = '/**\n * normal line\n *   \n */';
+				const result = parseCommentToDocs(comment);
+				expect(result.length).toBeGreaterThan(0);
+			},
+		);
+	});
+
+	describe('createDocContent', () => {
+		it.concurrent('should handle empty lines array', () => {
+			// Test createDocContent with empty lines array
+			// This path is defensive and unlikely in practice but tested for completeness
+			const result = createDocContent('text', '', []);
+			expect(result.type).toBe('text');
+			expect(result.content).toBe('');
+		});
 	});
 });

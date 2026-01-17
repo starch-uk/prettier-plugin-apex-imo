@@ -11,87 +11,63 @@ import {
 
 describe('casing', () => {
 	describe('normalizeReservedWord', () => {
-		it.concurrent('should normalize reserved words to lowercase', () => {
-			expect(normalizeReservedWord('PUBLIC')).toBe('public');
-			expect(normalizeReservedWord('Private')).toBe('private');
-			expect(normalizeReservedWord('STATIC')).toBe('static');
-			expect(normalizeReservedWord('Final')).toBe('final');
-			expect(normalizeReservedWord('CLASS')).toBe('class');
-			expect(normalizeReservedWord('Interface')).toBe('interface');
-			expect(normalizeReservedWord('ENUM')).toBe('enum');
-			expect(normalizeReservedWord('Void')).toBe('void');
-			expect(normalizeReservedWord('ABSTRACT')).toBe('abstract');
-			expect(normalizeReservedWord('Virtual')).toBe('virtual');
-			expect(normalizeReservedWord('IF')).toBe('if');
-			expect(normalizeReservedWord('Else')).toBe('else');
-			expect(normalizeReservedWord('FOR')).toBe('for');
-			expect(normalizeReservedWord('While')).toBe('while');
-			expect(normalizeReservedWord('RETURN')).toBe('return');
-			expect(normalizeReservedWord('Try')).toBe('try');
-			expect(normalizeReservedWord('CATCH')).toBe('catch');
-			expect(normalizeReservedWord('Finally')).toBe('finally');
-			expect(normalizeReservedWord('NEW')).toBe('new');
-			expect(normalizeReservedWord('This')).toBe('this');
-			expect(normalizeReservedWord('SUPER')).toBe('super');
-			expect(normalizeReservedWord('NULL')).toBe('null');
-		});
-
-		it.concurrent(
-			'should return lowercase unchanged for reserved words already in lowercase',
-			() => {
-				expect(normalizeReservedWord('public')).toBe('public');
-				expect(normalizeReservedWord('private')).toBe('private');
-				expect(normalizeReservedWord('static')).toBe('static');
-				expect(normalizeReservedWord('class')).toBe('class');
-				expect(normalizeReservedWord('interface')).toBe('interface');
+		it.concurrent.each([
+			// Reserved words with various cases
+			{ expected: 'public', input: 'PUBLIC' },
+			{ expected: 'private', input: 'Private' },
+			{ expected: 'static', input: 'STATIC' },
+			{ expected: 'final', input: 'Final' },
+			{ expected: 'class', input: 'CLASS' },
+			{ expected: 'interface', input: 'Interface' },
+			{ expected: 'enum', input: 'ENUM' },
+			{ expected: 'void', input: 'Void' },
+			{ expected: 'abstract', input: 'ABSTRACT' },
+			{ expected: 'virtual', input: 'Virtual' },
+			{ expected: 'if', input: 'IF' },
+			{ expected: 'else', input: 'Else' },
+			{ expected: 'for', input: 'FOR' },
+			{ expected: 'while', input: 'While' },
+			{ expected: 'return', input: 'RETURN' },
+			{ expected: 'try', input: 'Try' },
+			{ expected: 'catch', input: 'CATCH' },
+			{ expected: 'finally', input: 'Finally' },
+			{ expected: 'new', input: 'NEW' },
+			{ expected: 'this', input: 'This' },
+			{ expected: 'super', input: 'SUPER' },
+			{ expected: 'null', input: 'NULL' },
+			{ expected: 'protected', input: 'PROTECTED' },
+			{ expected: 'transient', input: 'TRANSIENT' },
+			{ expected: 'global', input: 'GLOBAL' },
+			{ expected: 'webservice', input: 'WEBSERVICE' },
+			{ expected: 'switch', input: 'SWITCH' },
+			{ expected: 'case', input: 'CASE' },
+			{ expected: 'default', input: 'DEFAULT' },
+			{ expected: 'do', input: 'DO' },
+			{ expected: 'break', input: 'BREAK' },
+			{ expected: 'continue', input: 'CONTINUE' },
+			// Already lowercase reserved words
+			{ expected: 'public', input: 'public' },
+			{ expected: 'private', input: 'private' },
+			{ expected: 'static', input: 'static' },
+			{ expected: 'class', input: 'class' },
+			{ expected: 'interface', input: 'interface' },
+			// Non-reserved words (should return unchanged)
+			{ expected: 'MyVariable', input: 'MyVariable' },
+			{ expected: 'myVariable', input: 'myVariable' },
+			{ expected: 'MYVARIABLE', input: 'MYVARIABLE' },
+			{ expected: 'Account', input: 'Account' },
+			{ expected: 'String', input: 'String' },
+			// Empty string
+			{ expected: '', input: '' },
+		])(
+			'should normalize "$input" to "$expected"',
+			({
+				expected,
+				input,
+			}: Readonly<{ expected: string; input: string }>) => {
+				expect(normalizeReservedWord(input)).toBe(expected);
 			},
 		);
-
-		it.concurrent('should return unchanged for non-reserved words', () => {
-			expect(normalizeReservedWord('MyVariable')).toBe('MyVariable');
-			expect(normalizeReservedWord('myVariable')).toBe('myVariable');
-			expect(normalizeReservedWord('MYVARIABLE')).toBe('MYVARIABLE');
-			expect(normalizeReservedWord('Account')).toBe('Account');
-			expect(normalizeReservedWord('String')).toBe('String');
-		});
-
-		it.concurrent('should handle empty string', () => {
-			expect(normalizeReservedWord('')).toBe('');
-		});
-
-		it.concurrent('should handle all declaration modifiers', () => {
-			expect(normalizeReservedWord('PUBLIC')).toBe('public');
-			expect(normalizeReservedWord('PRIVATE')).toBe('private');
-			expect(normalizeReservedWord('PROTECTED')).toBe('protected');
-			expect(normalizeReservedWord('STATIC')).toBe('static');
-			expect(normalizeReservedWord('FINAL')).toBe('final');
-			expect(normalizeReservedWord('TRANSIENT')).toBe('transient');
-			expect(normalizeReservedWord('GLOBAL')).toBe('global');
-			expect(normalizeReservedWord('WEBSERVICE')).toBe('webservice');
-		});
-
-		it.concurrent('should handle type-related reserved words', () => {
-			expect(normalizeReservedWord('ENUM')).toBe('enum');
-			expect(normalizeReservedWord('CLASS')).toBe('class');
-			expect(normalizeReservedWord('INTERFACE')).toBe('interface');
-			expect(normalizeReservedWord('VOID')).toBe('void');
-			expect(normalizeReservedWord('ABSTRACT')).toBe('abstract');
-			expect(normalizeReservedWord('VIRTUAL')).toBe('virtual');
-		});
-
-		it.concurrent('should handle control flow keywords', () => {
-			expect(normalizeReservedWord('IF')).toBe('if');
-			expect(normalizeReservedWord('ELSE')).toBe('else');
-			expect(normalizeReservedWord('SWITCH')).toBe('switch');
-			expect(normalizeReservedWord('CASE')).toBe('case');
-			expect(normalizeReservedWord('DEFAULT')).toBe('default');
-			expect(normalizeReservedWord('FOR')).toBe('for');
-			expect(normalizeReservedWord('WHILE')).toBe('while');
-			expect(normalizeReservedWord('DO')).toBe('do');
-			expect(normalizeReservedWord('BREAK')).toBe('break');
-			expect(normalizeReservedWord('CONTINUE')).toBe('continue');
-			expect(normalizeReservedWord('RETURN')).toBe('return');
-		});
 	});
 
 	describe('normalizeTypeName', () => {

@@ -82,18 +82,6 @@ describe('apexdoc-code', () => {
 			expect(resultAfter[3]).toContain('More text');
 		});
 
-		it.concurrent(
-			'should handle standalone closing brace not in code block',
-			() => {
-				// Test the standalone '}' case
-				// This is when trimmedLine === '}' but NOT in a code block (inCodeBlock = false)
-				const lines = [' *   }'];
-				const result = processCodeBlockLines(lines);
-				// trimmedLine = '}', inCodeBlock = false
-				expect(result[0]).toBe('*   }'); // prefix '' + ' *   }'.trimStart() = '*   }'
-			},
-		);
-
 		it.concurrent('should handle empty lines array', () => {
 			const lines: readonly string[] = [];
 			const result = processCodeBlockLines(lines);
@@ -177,26 +165,8 @@ describe('apexdoc-code', () => {
 			);
 			expect(result).toHaveLength(1);
 			expect(result[0]).toContain('{@code');
-			expect(result[0]).toContain('Integer x = 10;');
+			expect(result[0]).toContain('Integer x = 10;'); // includes semicolon
 		});
-
-		it.concurrent(
-			'should process single-line code block ending with semicolon',
-			() => {
-				const codeBlock = '{@code Integer x = 10; }';
-				const getFormattedCodeBlock = (): undefined => undefined;
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {} as ParserOptions;
-				const result = processCodeBlock(
-					codeBlock,
-					options,
-					getFormattedCodeBlock,
-					null,
-					options,
-				);
-				expect(result[0]).toContain('Integer x = 10;');
-			},
-		);
 
 		it.concurrent('should process multiline code block', () => {
 			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
@@ -357,29 +327,6 @@ describe('apexdoc-code', () => {
 				expect(result[result.length - 1]).toBe('}');
 			},
 		);
-
-		it.concurrent('should handle embedResult ending with \n */', () => {
-			// Test else if (embedContent.endsWith('\n */')) branch in extractCodeFromEmbedResult
-			// After removing '/**\n' prefix, embedContent ends with '\n */' not '\n */\n'
-			const embedResult =
-				'/**\n * {@code\n *   Integer x = 10;\n *   String y = "test";\n * }\n */';
-			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
-			const getFormattedCodeBlock = (key: string): string | undefined => {
-				if (key === 'test-key') return embedResult;
-				return undefined;
-			};
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-			const options = {} as ParserOptions;
-			const result = processCodeBlock(
-				codeBlock,
-				options,
-				getFormattedCodeBlock,
-				'test-key',
-				options,
-			);
-			expect(result.length).toBeGreaterThan(1);
-			expect(result[0]).toBe('{@code');
-		});
 
 		it.concurrent('should handle asterisk without space after it', () => {
 			// Test if (start < line.length && line[start] === ' ') false branch

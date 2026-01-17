@@ -1,5 +1,5 @@
 /**
- * @file Tests for the printer module.
+ * @file Tests for the collections module.
  */
 
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
@@ -19,7 +19,7 @@ import type {
 
 const nodeClassKey = '@class';
 
-describe('utils', () => {
+describe('collections', () => {
 	describe('isListInit', () => {
 		it.concurrent.each([
 			{

@@ -158,6 +158,47 @@ export function createMockOriginalPrinter(
 	};
 }
 
+/**
+ * Helper to extract comment value from fixture text.
+ * @param text - The fixture text containing a comment.
+ * @returns The extracted comment value (from comment start to end markers).
+ * @throws {Error} If comment markers are not found in the fixture.
+ * @example
+ * ```typescript
+ * const comment = extractComment('  /' + '* *\n   * Test\n   * /');
+ * ```
+ */
+export function extractComment(text: string): string {
+	const startRegex = /\/\*\*/;
+	const endRegex = /\*\//;
+	const startMatch = startRegex.exec(text);
+	const endMatch = endRegex.exec(text);
+	if (startMatch?.index === undefined || endMatch?.index === undefined) {
+		throw new Error('Could not find comment in fixture');
+	}
+	return text.substring(startMatch.index, endMatch.index + 2);
+}
+
+/**
+ * Helper to extract comment indent from fixture text.
+ * @param text - The fixture text containing a comment.
+ * @returns The comment indent level (number of spaces before comment start).
+ * @example
+ * ```typescript
+ * const indent = extractCommentIndent('    /' + '* *\n     * Test\n     * /');
+ * // Returns 4
+ * ```
+ */
+export function extractCommentIndent(text: string): number {
+	const startRegex = /^(\s*)\/\*\*/m;
+	const startMatch = startRegex.exec(text);
+	if (startMatch?.[1] === undefined) {
+		return 0;
+	}
+	// Count spaces (assuming 2 spaces per indent level in fixtures)
+	return startMatch[1].length;
+}
+
 // Re-export Prettier and prettier-plugin-apex mocks for convenience
 export {
 	PrettierMockSuite,

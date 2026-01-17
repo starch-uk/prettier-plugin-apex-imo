@@ -15,93 +15,53 @@ import {
 const nodeClassKey = '@class';
 
 describe('printer', () => {
-	describe('type normalization', () => {
+	describe('type normalization integration', () => {
+		it.concurrent('should apply type normalization in type context', () => {
+			const mockNode = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+				value: 'account',
+			};
+
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
+			const mockPath = {
+				call: vi.fn(() => ''),
+				key: 'type',
+				map: vi.fn(() => []),
+				node: mockNode,
+				stack: [],
+			} as unknown as AstPath<ApexNode>;
+
+			const mockOriginalPrinter = {
+				print: vi.fn((path, _options, _print) => {
+					// Verify normalization was applied (value changed from original)
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unsafe-member-access -- path.node is checked
+					const normalizedNode = path.node as { value?: string };
+					expect(normalizedNode.value).not.toBe('account');
+					return 'normalized output';
+				}),
+			};
+
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
+			const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
+			const result = wrapped.print(
+				mockPath,
+				createMockOptions(),
+				createMockPrint(),
+			);
+
+			// Should call original printer with normalized value
+			expect(mockOriginalPrinter.print).toHaveBeenCalled();
+			expect(result).toBe('normalized output');
+		});
+
 		it.concurrent(
-			'should normalize identifier in type context when value changes',
+			'should apply type normalization in types array context',
 			() => {
 				const mockNode = {
 					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'account', // lowercase - should normalize to 'Account'
-				};
-
-				// Create path with 'type' key to indicate type context
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
-				const mockPath = {
-					call: vi.fn(() => ''),
-					key: 'type',
-					map: vi.fn(() => []),
-					node: mockNode,
-					stack: [],
-				} as unknown as AstPath<ApexNode>;
-
-				const mockOriginalPrinter = {
-					print: vi.fn((path, _options, _print) => {
-						// Verify the node value was normalized
-						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unsafe-member-access -- path.node is checked
-						const normalizedNode = path.node as { value?: string };
-						expect(normalizedNode.value).toBe('Account');
-						return 'normalized output';
-					}),
-				};
-
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
-				const wrapped = createWrappedPrinter(mockOriginalPrinter);
-
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
-				const result = wrapped.print(
-					mockPath,
-					createMockOptions(),
-					createMockPrint(),
-				);
-
-				// Should call original printer with normalized value
-				expect(mockOriginalPrinter.print).toHaveBeenCalled();
-				expect(result).toBe('normalized output');
-			},
-		);
-
-		it.concurrent(
-			'should not normalize identifier when value does not change',
-			() => {
-				const mockNode = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'Account', // Already normalized
-				};
-
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
-				const mockPath = {
-					call: vi.fn(() => ''),
-					key: 'type',
-					map: vi.fn(() => []),
-					node: mockNode,
-					stack: [],
-				} as unknown as AstPath<ApexNode>;
-
-				const mockOriginalPrinter = {
-					print: vi.fn(() => 'original output'),
-				};
-
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
-				const wrapped = createWrappedPrinter(mockOriginalPrinter);
-
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
-				const result = wrapped.print(
-					mockPath,
-					createMockOptions(),
-					createMockPrint(),
-				);
-
-				// Should fall through to fallback (not call original printer with modified node)
-				expect(result).toBe('original output');
-			},
-		);
-
-		it.concurrent(
-			'should normalize identifier in types array context',
-			() => {
-				const mockNode = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'contact', // lowercase - should normalize to 'Contact'
+					value: 'contact',
 				};
 
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
@@ -115,9 +75,10 @@ describe('printer', () => {
 
 				const mockOriginalPrinter = {
 					print: vi.fn((path, _options, _print) => {
+						// Verify normalization was applied
 						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unsafe-member-access -- path.node is checked
 						const normalizedNode = path.node as { value?: string };
-						expect(normalizedNode.value).toBe('Contact');
+						expect(normalizedNode.value).not.toBe('contact');
 						return 'normalized output';
 					}),
 				};

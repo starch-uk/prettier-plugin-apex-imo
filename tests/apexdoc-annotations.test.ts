@@ -59,6 +59,7 @@ describe('apexdoc-annotations', () => {
 		});
 
 		it.concurrent('should render simple annotation', () => {
+			// Covers non-empty firstContent (ternary true branch in renderAnnotation)
 			const doc: ApexDocAnnotation = {
 				content: 'input The input parameter' as Doc,
 				name: 'param',
@@ -79,20 +80,6 @@ describe('apexdoc-annotations', () => {
 			const result = renderAnnotation(doc, '   * ');
 			expect(result).not.toBeNull();
 			expect(result.lines[0]).toBe('   * @deprecated');
-		});
-
-		it.concurrent('should render annotation with non-empty content', () => {
-			// Test ternary true branch when firstContent is not empty
-			const doc: ApexDocAnnotation = {
-				content: 'input The input parameter' as Doc,
-				name: 'param',
-				type: 'annotation',
-			};
-			const result = renderAnnotation(doc, '   * ');
-			expect(result).not.toBeNull();
-			expect(result.lines[0]).toContain(
-				'@param input The input parameter',
-			);
 		});
 	});
 
@@ -165,27 +152,23 @@ describe('apexdoc-annotations', () => {
 			expect(result[0]?.type).toBe('annotation');
 		});
 
-		it.concurrent('should handle useTabs null/undefined', () => {
-			// Test useTabsOption ternary with null/undefined
-			const doc: ApexDocAnnotation = {
-				content: 'input The input parameter' as Doc,
-				name: 'param',
-				type: 'annotation',
-			};
-			const docs: ApexDocComment[] = [doc];
-			// Test with useTabs: null
-			const result1 = wrapAnnotations(docs, 80, 0, 5, {
-				tabWidth: 2,
-				useTabs: null,
-			});
-			expect(result1).toHaveLength(1);
-			// Test with useTabs: undefined
-			const result2 = wrapAnnotations(docs, 80, 0, 5, {
-				tabWidth: 2,
-				useTabs: undefined,
-			});
-			expect(result2).toHaveLength(1);
-		});
+		it.concurrent.each([{ useTabs: null }, { useTabs: undefined }])(
+			'should handle useTabs $useTabs',
+			({ useTabs }: Readonly<{ useTabs: null | undefined }>) => {
+				// Test useTabsOption ternary with null/undefined
+				const doc: ApexDocAnnotation = {
+					content: 'input The input parameter' as Doc,
+					name: 'param',
+					type: 'annotation',
+				};
+				const docs: ApexDocComment[] = [doc];
+				const result = wrapAnnotations(docs, 80, 0, 5, {
+					tabWidth: 2,
+					useTabs,
+				});
+				expect(result).toHaveLength(1);
+			},
+		);
 
 		it.concurrent(
 			'should handle first word too long for first line',
