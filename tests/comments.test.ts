@@ -2,7 +2,6 @@
  * @file Unit tests for the comments module.
  */
 
-/* eslint-disable @typescript-eslint/no-magic-numbers */
 import { describe, it, expect, vi } from 'vitest';
 import type { ParserOptions } from 'prettier';
 import {

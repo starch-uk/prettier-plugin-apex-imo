@@ -2,7 +2,7 @@
  * @file Tests for the main plugin entry point.
  */
 
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-magic-numbers -- Test file needs type assertions and magic numbers for testing edge cases */
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Test file needs type assertions for testing edge cases */
 import { describe, it, expect, vi } from 'vitest';
 import type { Plugin } from 'prettier';
 import type { ApexNode } from '../src/types.js';

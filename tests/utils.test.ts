@@ -122,6 +122,7 @@ describe('utils', () => {
 		it.concurrent(
 			'should return undefined when @class is not a string',
 			() => {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing invalid @class type
 				const node = {
 					'@class': 123,
 				} as unknown as ApexNode;
@@ -130,6 +131,7 @@ describe('utils', () => {
 		);
 
 		it.concurrent('should return undefined when @class is missing', () => {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing node without @class property
 			const node = {} as ApexNode;
 			expect(getNodeClassOptional(node)).toBeUndefined();
 		});
@@ -295,6 +297,7 @@ describe('utils', () => {
 				// This tests line 137: if (currentLine === undefined) return false;
 				expect(
 					preserveBlankLineAfterClosingBrace(
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing sparse array with undefined elements
 						lines as readonly string[],
 						1,
 					),

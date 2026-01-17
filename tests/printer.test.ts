@@ -10,16 +10,12 @@ import {
 	hasMultipleListEntries,
 	hasMultipleMapEntries,
 	isCollectionAssignment,
-	LIST_LITERAL_CLASS,
-	SET_LITERAL_CLASS,
-	MAP_LITERAL_CLASS,
 } from '../src/collections.js';
 import type {
 	ApexNode,
 	ApexListInitNode,
 	ApexMapInitNode,
 } from '../src/types.js';
-import { createMockPath } from './test-utils.js';
 
 const nodeClassKey = '@class';
 

@@ -3,7 +3,7 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types, @typescript-eslint/no-unsafe-type-assertion */
-import { describe, it, expect, test } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
 	normalizeTypeName,
 	normalizeReservedWord,
@@ -13,8 +13,6 @@ import {
 	createReservedWordNormalizingPrint,
 	createTypeNormalizingPrint,
 } from '../src/casing.js';
-import { STANDARD_OBJECTS } from '../src/refs/standard-objects.js';
-import { APEX_OBJECT_SUFFIXES } from '../src/refs/object-suffixes.js';
 import type { ApexNode, ApexIdentifier } from '../src/types.js';
 import { createMockPath, createMockPrint } from './test-utils.js';
 
@@ -732,8 +730,8 @@ describe('casing', () => {
 				// Use Identifier node with names property to trigger normalizeNamesArray
 				// (normalizeNamesArray is called when isIdent is true and 'names' in node and value is not string)
 				const node = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
 					names: [nameNode1, nameNode2],
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
 					// value is not a string, so it falls through to normalizeNamesArray check
 					value: undefined,
 				} as unknown as ApexNode & {
@@ -803,6 +801,7 @@ describe('casing', () => {
 			} as ApexNode;
 			// Create path with null key (which gets normalized to undefined)
 			const basePath = createMockPath(node, undefined);
+			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed to override key property
 			const path = { ...basePath, key: null } as typeof basePath;
 
 			const result = typeNormalizingPrint(path);

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { AstPath } from 'prettier';
+import type { AstPath, Doc } from 'prettier';
 import { createWrappedPrinter } from '../src/printer.js';
 import type { ApexNode } from '../src/types.js';
 import {
@@ -766,7 +766,7 @@ describe('printer', () => {
 
 				// Mock path.call to return objectDoc when called with 'type'
 				(mockPath.call as ReturnType<typeof vi.fn>).mockImplementation(
-					// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return value for test
+					// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return Doc for test
 					(_print: unknown, key: unknown): Doc => {
 						if (key === 'type') {
 							return objectDoc as unknown as Doc;
@@ -930,7 +930,7 @@ describe('printer', () => {
 					(
 						callback: (path: Readonly<AstPath<ApexNode>>) => Doc,
 						key: string,
-						// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return value for test
+						// eslint-disable-next-line @typescript-eslint/strict-void-return -- Mock implementation needs to return Doc[] for test
 					): Doc[] => {
 						if (key === 'decls') {
 							// Call callback with declPath, which will use mockPrint

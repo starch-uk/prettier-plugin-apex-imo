@@ -41,7 +41,6 @@ class MockDocBuilders {
 	 * @param doc - The document to wrap in a group.
 	 * @returns A Doc array with 'group' marker and the document.
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Doc type from prettier, can't modify
 	public group(doc: Doc): Doc {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
 		return ['group', doc];
@@ -52,7 +51,6 @@ class MockDocBuilders {
 	 * @param doc - The document to indent, either a single Doc or an array of Docs.
 	 * @returns A Doc array with 'indent' marker and the document(s).
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Doc type from prettier, can't modify
 	public indent(doc: Doc | Doc[]): Doc {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
 		return ['indent', Array.isArray(doc) ? doc : [doc]];
@@ -64,7 +62,6 @@ class MockDocBuilders {
 	 * @param noBreak - The document to use if no line breaks occur (defaults to empty string).
 	 * @returns A Doc array with 'ifBreak' marker and the documents.
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Doc type from prettier, can't modify
 	public ifBreak(ifBreak: Doc, noBreak: Doc = ''): Doc {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
 		return ['ifBreak', ifBreak, noBreak];
@@ -76,7 +73,6 @@ class MockDocBuilders {
 	 * @param docs - The array of documents to join.
 	 * @returns A Doc array with 'join' marker, separator, and documents.
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Doc type from prettier, can't modify
 	public join(separator: Doc, docs: readonly Doc[]): Doc {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
 		return ['join', separator, ...docs];
@@ -87,7 +83,6 @@ class MockDocBuilders {
 	 * @param docs - The array of documents to fill.
 	 * @returns A Doc array with 'fill' marker and the documents.
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Doc type from prettier, can't modify
 	public fill(docs: readonly Doc[]): Doc {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
 		return ['fill', ...docs];
@@ -183,7 +178,6 @@ class MockDocPrinter {
 	 * @param _options - Optional parser options (unused in mock implementation).
 	 * @returns String representation of the document.
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Doc type from prettier, can't modify
 	public printDocToString(
 		doc: Doc,
 		_options?: Readonly<ParserOptions>,
@@ -194,8 +188,6 @@ class MockDocPrinter {
 		}
 		if (Array.isArray(doc)) {
 			// Type assertion needed for array map - elements are Doc type but TypeScript can't infer
-			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Array elements from doc, can't modify
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Array elements may be any Doc type in mock implementation
 			return doc
 				.map((d: unknown) => this.printDocToString(d as Doc, _options))
 				.join('');
@@ -239,7 +231,6 @@ export class PrettierMockSuite {
 	 * Can be customized with custom implementations.
 	 */
 	public format = vi.fn(
-		// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Parameters match prettier.format signature
 		async (
 			code: string,
 			_options?: Readonly<
@@ -247,7 +238,6 @@ export class PrettierMockSuite {
 			>,
 		): Promise<string> => {
 			// Default: return code as-is (identity formatter)
-			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for mock compatibility
 			return code;
 		},
 	);
@@ -272,7 +262,6 @@ export class PrettierMockSuite {
 	 * vi.mock('prettier', () => mock.getPrettierMock());
 	 * ```
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Customizations parameter needs mutable access for spreading
 	public getPrettierMock(
 		customizations?: Readonly<{
 			format?: typeof this.format;
@@ -281,29 +270,23 @@ export class PrettierMockSuite {
 			docPrinter?: Readonly<Partial<MockDocPrinter>>;
 		}>,
 	): typeof import('prettier') {
-		// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
 		const customDocBuilders = {
 			...this.docBuilders,
 			...(customizations?.doc?.builders ?? {}),
 		};
 
-		// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
 		const customUtil = {
 			...this.util,
 			...(customizations?.util ?? {}),
 		};
 
-		// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
 		const customDocPrinter = {
 			...this.docPrinter,
 			...(customizations?.docPrinter ?? {}),
 		};
 
-		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock type assertion for test utilities
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock assignment for test utilities
 		const format = customizations?.format ?? this.format;
-		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
 		return {
 			doc: {
 				builders: customDocBuilders,
@@ -327,12 +310,10 @@ export class PrettierMockSuite {
 	 * });
 	 * ```
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Overrides parameter needs mutable access for spreading
 	public createMockPlugin(
 		overrides?: Readonly<Partial<Plugin<ApexNode>>>,
 	): Plugin<ApexNode> {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock type assertion for test utilities
 		return {
 			defaultOptions: {},
 			languages: [],
@@ -348,21 +329,16 @@ export class PrettierMockSuite {
 	 * @param printImplementation - Optional custom print function.
 	 * @returns Mock printer object.
 	 */
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Function type from prettier API, can't modify
 	public createMockPrinter(
 		printImplementation?: Readonly<
 			(
-				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Function signature matches prettier API
 				path: AstPath<ApexNode>,
-				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Function signature matches prettier API
 				options: ParserOptions,
-				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Function signature matches prettier API
 				print: (path: AstPath<ApexNode>) => Doc,
 			) => Doc
 		>,
 	): Printer<ApexNode> {
 		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock type assertion for test utilities
 		return {
 			print: printImplementation ?? vi.fn(() => 'mock output'),
 		} as Printer<ApexNode>;
@@ -424,10 +400,8 @@ export const defaultPrettierMock = new PrettierMockSuite();
  * }));
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Options parameter needs mutable access
 export function createPrettierMock(
 	options?: Readonly<{
-		// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Function signature matches prettier.format
 		format?: (
 			code: string,
 			opts?: Readonly<
@@ -440,6 +414,5 @@ export function createPrettierMock(
 	if (options?.format) {
 		suite.format = options.format;
 	}
-	// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
 	return suite.getPrettierMock();
 }
