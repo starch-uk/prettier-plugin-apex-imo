@@ -23,50 +23,17 @@ describe('apexdoc-group', () => {
 				expected: 'Interface API interfaces',
 				input: 'interface API interfaces',
 			},
-		])(
-			'should normalize "$input" to "$expected"',
-			({
-				expected,
-				input,
-			}: Readonly<{ expected: string; input: string }>) => {
-				expect(normalizeGroupContent(input)).toBe(expected);
-			},
-		);
-
-		it.concurrent.each([
 			{ expected: '', input: '' },
 			{ expected: '', input: '   ' },
-		])(
-			'should handle "$input" as empty',
-			({
-				expected,
-				input,
-			}: Readonly<{ expected: string; input: string }>) => {
-				expect(normalizeGroupContent(input)).toBe(expected);
-			},
-		);
-
-		it.concurrent.each([
 			{ expected: 'unknown', input: 'unknown' },
 			{ expected: 'UnknownGroup', input: 'UnknownGroup' },
-		])(
-			'should preserve case for unknown group name "$input"',
-			({
-				expected,
-				input,
-			}: Readonly<{ expected: string; input: string }>) => {
-				expect(normalizeGroupContent(input)).toBe(expected);
-			},
-		);
-
-		it.concurrent.each([
 			{
 				expected: 'Class   My   description',
 				input: 'class   My   description',
 			},
 			{ expected: 'Class description', input: '  class description  ' },
 		])(
-			'should handle whitespace in "$input"',
+			'should normalize "$input" to "$expected"',
 			({
 				expected,
 				input,

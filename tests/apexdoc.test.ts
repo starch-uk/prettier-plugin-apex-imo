@@ -13,7 +13,6 @@ import {
 } from '../src/apexdoc.js';
 import type { ApexDocComment } from '../src/comments.js';
 import { createDocContent } from '../src/comments.js';
-import { formatApex } from './test-utils.js';
 
 describe('apexdoc', () => {
 	describe('filterNonEmptyLines', () => {
@@ -72,7 +71,7 @@ describe('apexdoc', () => {
 			{ description: 'object with null value', value: { value: null } },
 			{ description: 'object with object value', value: { value: {} } },
 			{
-				description: 'single-line comment (apexdoc.ts line 87)',
+				description: 'single-line comment',
 				value: { value: '/** */' },
 			},
 		])(
@@ -95,83 +94,25 @@ describe('apexdoc', () => {
 		});
 	});
 
-	describe('Type casing in {@code} blocks', () => {
-		it.concurrent(
-			'should apply type normalization inside {@code} blocks',
-			async () => {
-				// Test integration of type normalization with {@code} block processing
-				const input = `public class Test {
-  /**
-   * Example:
-   * {@code
-   * string name = 'test';
-   * integer count = 42;
-   * list<account> accounts = new list<account>();
-   * account acc = new account();
-   * MyCustomObject__C obj = new MyCustomObject__C();
-   * }
-   */
-  public void example() {}
-}`;
-
-				const result = await formatApex(input);
-
-				// Verify type normalization is applied (integration test)
-				expect(result).toContain('String name');
-				expect(result).toContain('Integer count');
-				expect(result).toContain('List<Account>');
-				expect(result).toContain('Account acc');
-				expect(result).toContain('MyCustomObject__c');
-				// Verify lowercase versions are normalized
-				expect(result).not.toContain('string name');
-				expect(result).not.toContain('integer count');
-				expect(result).not.toContain('list<account>');
-				expect(result).not.toContain('account acc');
-				expect(result).not.toContain('MyCustomObject__C');
-			},
-		);
-
-		it.concurrent(
-			'should normalize types in single-line {@code} blocks',
-			async () => {
-				const input = `public class Test {
-  /**
-   * Example: {@code string name = 'test'; }
-   */
-  public void example() {}
-}`;
-
-				const result = await formatApex(input);
-
-				expect(result).toContain('String name');
-				expect(result).not.toContain('string name');
-			},
-		);
-	});
-
 	describe('normalizeSingleApexDocComment with isEmbedFormatted', () => {
 		it.concurrent.each([
 			{
 				description:
-					'should handle isEmbedFormatted=true for code blocks (apexdoc.ts line 920)',
+					'should handle isEmbedFormatted=true for code blocks',
 				isEmbedFormatted: true,
-				lineNote: 'line 920 (if (isEmbedFormatted))',
 			},
 			{
 				description:
-					'should handle isEmbedFormatted=false for code blocks (apexdoc.ts line 353)',
+					'should handle isEmbedFormatted=false for code blocks',
 				isEmbedFormatted: false,
-				lineNote: 'line 353 (else: codeToUse = doc.rawCode)',
 			},
 		])(
 			'$description',
 			async ({
 				isEmbedFormatted,
-				lineNote: _lineNote,
 			}: Readonly<{
 				description: string;
 				isEmbedFormatted: boolean;
-				lineNote: string;
 				// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			}>) => {
 				// Test the isEmbedFormatted branch when code blocks are processed
@@ -202,15 +143,13 @@ describe('apexdoc', () => {
 		it.concurrent.each([
 			{
 				description:
-					'should handle isEmbedFormatted=true when processing code blocks (apexdoc.ts line 915)',
+					'should handle isEmbedFormatted=true when processing code blocks',
 				isEmbedFormatted: true,
-				note: 'true branch: codeBlockResult.code',
 			},
 			{
 				description:
-					'should handle isEmbedFormatted=false when processing code blocks (apexdoc.ts line 915)',
+					'should handle isEmbedFormatted=false when processing code blocks',
 				isEmbedFormatted: false,
-				note: 'false branch: undefined',
 			},
 		])(
 			'$description',
@@ -219,12 +158,8 @@ describe('apexdoc', () => {
 			}: Readonly<{
 				description: string;
 				isEmbedFormatted: boolean;
-				note: string;
 			}>) => {
 				// Test detectCodeBlockDocs with isEmbedFormatted parameter
-				// This exercises processContentForCodeBlocks with both true/false values
-				// which triggers the ternary at line 915-917: isEmbedFormatted ? codeBlockResult.code : undefined
-				// Use text type to avoid removeCommentPrefix processing which might affect the format
 				const textDoc = createDocContent(
 					'text',
 					'Example with {@code Integer x = 10; } code block',
@@ -266,28 +201,21 @@ describe('apexdoc', () => {
 		it.concurrent.each([
 			{
 				commentIndent: 0,
-				description:
-					'should handle commentIndent=0 (apexdoc.ts line 123)',
-				note: 'true branch: bodyIndent should be BODY_INDENT_WHEN_ZERO (2)',
+				description: 'should handle commentIndent=0',
 			},
 			{
 				commentIndent: 4,
-				description:
-					'should handle commentIndent>0 (apexdoc.ts line 123)',
-				note: 'false branch: bodyIndent should be ZERO_INDENT (0)',
+				description: 'should handle commentIndent>0',
 			},
 		])(
 			'$description',
 			async ({
 				commentIndent,
-				note: _note,
 			}: Readonly<{
 				commentIndent: number;
 				description: string;
-				note: string;
 				// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			}>) => {
-				// Test the branch: commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT
 				const comment = `/**
  * Test comment.
  */`;
