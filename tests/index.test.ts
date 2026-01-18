@@ -15,7 +15,7 @@ import plugin, {
 	isApexParser,
 	wrapParsers,
 } from '../src/index.js';
-import { createMockPrettierPluginApex } from './prettier-mock.js';
+import { createMockPrettierPluginApex } from './mocks/prettier.js';
 
 describe('index', () => {
 	describe('plugin structure', () => {

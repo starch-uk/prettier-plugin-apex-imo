@@ -10,26 +10,20 @@ import {
 	createMockPath,
 	createMockOptions,
 	createMockPrint,
+	createMockTypePath,
+	createMockTypesPath,
 } from '../test-utils.js';
-
-const nodeClassKey = '@class';
+import {
+	NODE_CLASS_KEY,
+	createMockIdentifier,
+	createMockTypeRef,
+} from '../mocks/nodes.js';
 
 describe('printer', () => {
 	describe('type normalization integration', () => {
 		it.concurrent('should apply type normalization in type context', () => {
-			const mockNode = {
-				[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-				value: 'account',
-			};
-
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
-			const mockPath = {
-				call: vi.fn(() => ''),
-				key: 'type',
-				map: vi.fn(() => []),
-				node: mockNode,
-				stack: [],
-			} as unknown as AstPath<ApexNode>;
+			const mockNode = createMockIdentifier('account');
+			const mockPath = createMockTypePath(mockNode);
 
 			const mockOriginalPrinter = {
 				print: vi.fn((path, _options, _print) => {
@@ -59,19 +53,8 @@ describe('printer', () => {
 		it.concurrent(
 			'should apply type normalization in types array context',
 			() => {
-				const mockNode = {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'contact',
-				};
-
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path type assertion for test
-				const mockPath = {
-					call: vi.fn(() => ''),
-					key: 'types',
-					map: vi.fn(() => []),
-					node: mockNode,
-					stack: [],
-				} as unknown as AstPath<ApexNode>;
+				const mockNode = createMockIdentifier('contact');
+				const mockPath = createMockTypesPath(mockNode);
 
 				const mockOriginalPrinter = {
 					print: vi.fn((path, _options, _print) => {
@@ -101,15 +84,7 @@ describe('printer', () => {
 
 	describe('TypeRef handling', () => {
 		it.concurrent('should handle TypeRef node with names array', () => {
-			const mockNode = {
-				names: [
-					{
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'account',
-					},
-				],
-				[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
-			};
+			const mockNode = createMockTypeRef(['account']);
 
 			const mockPath = createMockPath(mockNode);
 			const mockOriginalPrinter = {
@@ -149,11 +124,7 @@ describe('printer', () => {
 		it.concurrent(
 			'should pass through TypeRef node with empty names array',
 			() => {
-				const mockNode = {
-					names: [],
-					[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
-				};
-
+				const mockNode = createMockTypeRef([]);
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = {
 					print: vi.fn(() => 'original output'),
@@ -178,8 +149,8 @@ describe('printer', () => {
 			'should pass through TypeRef node without names property',
 			() => {
 				const mockNode = {
-					[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
-				};
+					[NODE_CLASS_KEY]: 'apex.jorje.data.ast.TypeRef',
+				} as ApexNode;
 
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = {
@@ -205,9 +176,9 @@ describe('printer', () => {
 			'should pass through TypeRef node with non-array names',
 			() => {
 				const mockNode = {
+					[NODE_CLASS_KEY]: 'apex.jorje.data.ast.TypeRef',
 					names: 'not an array',
-					[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
-				};
+				} as ApexNode;
 
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = {
@@ -235,10 +206,10 @@ describe('printer', () => {
 				// Test makeTypeDocBreakable with object Doc (neither string nor array)
 				// This tests fallback for object Doc
 				const mockNode = {
+					[NODE_CLASS_KEY]: 'apex.jorje.data.ast.VariableDecls',
 					decls: [{ '@class': 'apex.jorje.data.ast.Variable' }],
 					modifiers: [],
-					[nodeClassKey]: 'apex.jorje.data.ast.VariableDecls',
-				};
+				} as ApexNode;
 
 				const mockPath = createMockPath(mockNode);
 				// Mock print to return an object Doc for 'type' (like group() or indent())

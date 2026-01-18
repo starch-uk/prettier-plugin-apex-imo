@@ -8,10 +8,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as prettier from 'prettier';
-import { expect, vi } from 'vitest';
-import type { AstPath, Doc, ParserOptions } from 'prettier';
+import { expect } from 'vitest';
 import type { ApexDocComment } from '../src/comments.js';
-import type { ApexNode } from '../src/types.js';
 import plugin from '../src/index.js';
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +68,7 @@ export async function formatApex(
 	code: Readonly<string>,
 	options?: Readonly<Partial<ParserOptions>>,
 ): Promise<string> {
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Options may have additional properties for testing
 	return prettier.format(code, {
 		parser: 'apex',
 		// Only include our plugin - it re-exports everything from prettier-plugin-apex
@@ -79,85 +78,29 @@ export async function formatApex(
 	});
 }
 
-/**
- * Helper function to create type-safe mock path.
- * @param node - The Apex node to create a mock path for.
- * @param key - Optional key for the path.
- * @param stack - Optional stack for the path.
- * @returns A mock AST path for the given node.
- * @example
- * ```typescript
- * const path = createMockPath(mockNode);
- * const pathWithKey = createMockPath(mockNode, 'type');
- * const pathWithStack = createMockPath(mockNode, undefined, [parentNode]);
- * ```
- */
-export function createMockPath(
-	node: Readonly<ApexNode>,
-	key?: number | string,
-	stack?: Readonly<readonly unknown[]>,
-): AstPath<ApexNode> {
-	const stackValue = stack ?? [];
-	const mockPath = {
-		call: vi.fn(() => ''),
-		key,
-		map: vi.fn(() => []),
-		node,
-		stack: stackValue,
-	};
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	return mockPath as unknown as AstPath<ApexNode>;
-}
+// Re-export mock utilities from mocks directory for backward compatibility
+export {
+	createMockPath,
+	createMockTypePath,
+	createMockTypesPath,
+	createMockNamesPath,
+	createMockArrayPath,
+	createMockPathWithParent,
+	createMockTypePathWithParent,
+} from './mocks/paths.js';
 
-/**
- * Helper function to create type-safe mock options.
- * @returns A mock parser options object.
- * @example
- * ```typescript
- * const options = createMockOptions();
- * ```
- */
-export function createMockOptions(): Readonly<ParserOptions> {
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	return {} as Readonly<ParserOptions>;
-}
+export {
+	createMockOptions,
+	createMockOptionsWithTabs,
+	createMockOptionsWithPrintWidth,
+	createMockOptionsWithTabWidth,
+} from './mocks/options.js';
 
-/**
- * Helper function to create type-safe mock print function.
- * @param returnValue - Optional return value for the mock (defaults to 'original output').
- * @returns A mock print function.
- * @example
- * ```typescript
- * const print = createMockPrint();
- * const printWithValue = createMockPrint('custom output');
- * ```
- */
-export function createMockPrint(
-	returnValue: Readonly<Doc | string> = 'original output',
-): (path: Readonly<AstPath<ApexNode>>) => Doc {
-	const mockPrint = vi.fn(() => returnValue);
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-	return mockPrint as (path: Readonly<AstPath<ApexNode>>) => Doc;
-}
-
-/**
- * Helper function to create mock original printer.
- * @param returnValue - Optional return value for the mock (defaults to 'original output').
- * @returns A mock original printer object.
- * @example
- * ```typescript
- * const printer = createMockOriginalPrinter();
- * ```
- */
-export function createMockOriginalPrinter(
-	returnValue: Readonly<Doc | string> = 'original output',
-): {
-	print: ReturnType<typeof vi.fn>;
-} {
-	return {
-		print: vi.fn(() => returnValue),
-	};
-}
+export {
+	createMockPrint,
+	createMockOriginalPrinter,
+	createMockPrinter,
+} from './mocks/printers.js';
 
 /**
  * Helper to extract comment value from fixture text.
@@ -307,4 +250,4 @@ export {
 	createPrettierMock,
 	createMockPrettierPluginApex,
 	defaultPrettierMock,
-} from './prettier-mock.js';
+} from './mocks/prettier.js';

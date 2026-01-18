@@ -24,5 +24,13 @@ export default defineConfig({
 			NODE_OPTIONS: '--no-deprecation',
 		},
 		globals: true,
+		// Reset mocks before each test to ensure fresh state
+		mockReset: true,
+		// Performance optimization: use threads pool for faster execution
+		pool: 'threads',
+		// Enable concurrent test execution by default
+		sequence: {
+			concurrent: true,
+		},
 	},
 });

@@ -13,22 +13,17 @@ import {
 	createMockPrint,
 	createMockOriginalPrinter,
 } from '../test-utils.js';
-
-const nodeClassKey = '@class';
+import {
+	createMockAnnotation,
+	createMockAnnotationStringParameter,
+} from '../mocks/nodes.js';
 
 describe('printer', () => {
 	describe('annotation integration', () => {
 		it.concurrent(
 			'should use custom annotation printing for annotation nodes',
 			() => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [],
-				};
+				const mockNode = createMockAnnotation('test', []);
 
 				const mockPath = createMockPath(mockNode);
 				const mockOriginalPrinter = createMockOriginalPrinter();
@@ -44,7 +39,6 @@ describe('printer', () => {
 				);
 
 				// Should use custom annotation printing (not original printer)
-				expect(result).toBeDefined();
 				expect(result).not.toBe('original output');
 				// Verify it's using the annotation printing logic
 				if (Array.isArray(result)) {
@@ -54,20 +48,9 @@ describe('printer', () => {
 		);
 
 		it.concurrent('should handle annotations with parameters', () => {
-			const mockNode = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'test',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [
-					{
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-						value: 'value',
-					},
-				],
-			};
+			const mockNode = createMockAnnotation('test', [
+				createMockAnnotationStringParameter('value'),
+			]);
 
 			const mockPath = createMockPath(mockNode);
 			const mockOriginalPrinter = createMockOriginalPrinter();
@@ -82,7 +65,6 @@ describe('printer', () => {
 			);
 
 			// Should handle annotations with parameters
-			expect(result).toBeDefined();
 			expect(result).not.toBe('original output');
 		});
 	});

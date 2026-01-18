@@ -170,15 +170,23 @@ const preserveBlankLineAfterClosingBrace = (
  * normalization fallback is needed.
  * @param code - The code to format.
  * @param options - Parser options including printWidth, tabWidth, useTabs, and plugins.
- * @returns Promise resolving to formatted code string.
+ * @param formatFn - Optional format function (for testing). Defaults to prettier.format.
+ * @returns Promise resolving to formatted code string, or the original code if both parsers fail.
  */
 const formatApexCodeWithFallback = async (
 	code: Readonly<string>,
 	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Options type is already Readonly wrapper
 	options: Readonly<ParserOptions & { plugins?: unknown[] }>,
+	formatFn: (
+		code: Readonly<string>,
+		// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Function parameter type doesn't need readonly wrapper
+		opts?: Readonly<
+			ParserOptions & { parser?: string; plugins?: unknown[] }
+		>,
+	) => Promise<string> = prettier.format,
 ): Promise<string> => {
 	try {
-		const result = await prettier.format(code, {
+		const result = await formatFn(code, {
 			...options,
 			parser: 'apex-anonymous',
 		});
@@ -186,7 +194,7 @@ const formatApexCodeWithFallback = async (
 		return result;
 	} catch {
 		try {
-			const result = await prettier.format(code, {
+			const result = await formatFn(code, {
 				...options,
 				parser: 'apex',
 			});

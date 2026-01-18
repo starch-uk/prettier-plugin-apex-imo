@@ -1,5 +1,5 @@
 /**
- * @file Tests for the collections module.
+ * @file Tests for the printer module.
  */
 
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
@@ -16,32 +16,38 @@ import type {
 	ApexListInitNode,
 	ApexMapInitNode,
 } from '../src/types.js';
-import {
-	NODE_CLASS_KEY,
-	createMockListInit,
-	createMockSetInit,
-	createMockMapInit,
-	createMockLiteralExpr,
-	createMockMapLiteralKeyValue,
-} from './mocks/nodes.js';
 
-describe('collections', () => {
+const nodeClassKey = '@class';
+
+describe('utils', () => {
 	describe('isListInit', () => {
 		it.concurrent.each([
 			{
 				desc: 'identifies NewListLiteral nodes',
 				expected: true,
-				node: createMockListInit([]),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [],
+				} as Readonly<ApexNode>,
 			},
 			{
 				desc: 'identifies NewSetLiteral nodes',
 				expected: true,
-				node: createMockSetInit([]),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					values: [],
+				} as Readonly<ApexNode>,
 			},
 			{
 				desc: 'rejects other node types',
 				expected: false,
-				node: createMockMapInit([]),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [],
+				} as Readonly<ApexNode>,
 			},
 		])(
 			'$desc',
@@ -62,12 +68,20 @@ describe('collections', () => {
 			{
 				desc: 'identifies NewMapLiteral nodes',
 				expected: true,
-				node: createMockMapInit([]),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [],
+				} as Readonly<ApexNode>,
 			},
 			{
 				desc: 'rejects other node types',
 				expected: false,
-				node: createMockListInit([]),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [],
+				} as Readonly<ApexNode>,
 			},
 		])(
 			'$desc',
@@ -84,35 +98,56 @@ describe('collections', () => {
 	});
 
 	describe('hasMultipleListEntries', () => {
-		const singleValue = [createMockLiteralExpr()];
-		const twoValues = [createMockLiteralExpr(), createMockLiteralExpr()];
-
 		it.concurrent.each([
 			{
 				desc: 'returns false for empty list',
 				expected: false,
-				node: createMockListInit([]),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [],
+				} as Readonly<ApexListInitNode>,
 			},
 			{
 				desc: 'returns false for single item',
 				expected: false,
-				node: createMockListInit(singleValue),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					],
+				} as Readonly<ApexListInitNode>,
 			},
 			{
 				desc: 'returns true for 2+ items',
 				expected: true,
-				node: createMockListInit(twoValues),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewListLiteral',
+					values: [
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					],
+				} as Readonly<ApexListInitNode>,
 			},
 			{
 				desc: 'returns true for set with 2+ items',
 				expected: true,
-				node: createMockSetInit(twoValues),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewSetLiteral',
+					values: [
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+					],
+				} as Readonly<ApexListInitNode>,
 			},
 			{
 				desc: 'handles null/undefined values gracefully',
 				expected: false,
 				node: {
-					[NODE_CLASS_KEY]:
+					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: null as unknown as ApexNode[],
 				} as Readonly<ApexListInitNode>,
@@ -121,7 +156,7 @@ describe('collections', () => {
 				desc: 'handles non-array values gracefully',
 				expected: false,
 				node: {
-					[NODE_CLASS_KEY]:
+					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
 					values: 'not an array' as unknown as ApexNode[],
 				} as Readonly<ApexListInitNode>,
@@ -142,36 +177,55 @@ describe('collections', () => {
 	});
 
 	describe('hasMultipleMapEntries', () => {
-		const literalExpr = createMockLiteralExpr();
 		const singlePair = [
-			createMockMapLiteralKeyValue(literalExpr, literalExpr),
+			{
+				key: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+				[nodeClassKey]: 'apex.jorje.data.ast.MapLiteralKeyValue',
+				value: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+			},
 		];
 		const twoPairs = [
 			...singlePair,
-			createMockMapLiteralKeyValue(literalExpr, literalExpr),
+			{
+				key: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+				[nodeClassKey]: 'apex.jorje.data.ast.MapLiteralKeyValue',
+				value: { [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+			},
 		];
 
 		it.concurrent.each([
 			{
 				desc: 'returns false for empty map',
 				expected: false,
-				node: createMockMapInit([]),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: [],
+				} as Readonly<ApexMapInitNode>,
 			},
 			{
 				desc: 'returns false for single pair',
 				expected: false,
-				node: createMockMapInit(singlePair),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: singlePair,
+				} as Readonly<ApexMapInitNode>,
 			},
 			{
 				desc: 'returns true for 2+ pairs',
 				expected: true,
-				node: createMockMapInit(twoPairs),
+				node: {
+					[nodeClassKey]:
+						'apex.jorje.data.ast.NewObject$NewMapLiteral',
+					pairs: twoPairs,
+				} as Readonly<ApexMapInitNode>,
 			},
 			{
 				desc: 'handles null/undefined pairs gracefully',
 				expected: false,
 				node: {
-					[NODE_CLASS_KEY]:
+					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: null as unknown as ApexNode[],
 				} as Readonly<ApexMapInitNode>,
@@ -180,7 +234,7 @@ describe('collections', () => {
 				desc: 'handles non-array pairs gracefully',
 				expected: false,
 				node: {
-					[NODE_CLASS_KEY]:
+					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewMapLiteral',
 					pairs: 'not an array' as unknown as ApexNode[],
 				} as Readonly<ApexMapInitNode>,
@@ -201,13 +255,10 @@ describe('collections', () => {
 	});
 
 	describe('isCollectionAssignment', () => {
-		// Use different names to avoid shadowing imported constants
-		const LOCAL_LIST_LITERAL_CLASS =
+		const LIST_LITERAL_CLASS =
 			'apex.jorje.data.ast.NewObject$NewListLiteral';
-		const LOCAL_SET_LITERAL_CLASS =
-			'apex.jorje.data.ast.NewObject$NewSetLiteral';
-		const LOCAL_MAP_LITERAL_CLASS =
-			'apex.jorje.data.ast.NewObject$NewMapLiteral';
+		const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
+		const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
 		const NEW_EXPR_CLASS = 'apex.jorje.data.ast.Expr$NewExpr';
 
 		it.concurrent.each([
@@ -216,7 +267,7 @@ describe('collections', () => {
 					value: {
 						'@class': NEW_EXPR_CLASS,
 						creator: {
-							'@class': LOCAL_LIST_LITERAL_CLASS,
+							'@class': LIST_LITERAL_CLASS,
 						},
 					},
 				},
@@ -228,7 +279,7 @@ describe('collections', () => {
 					value: {
 						'@class': NEW_EXPR_CLASS,
 						creator: {
-							'@class': LOCAL_SET_LITERAL_CLASS,
+							'@class': SET_LITERAL_CLASS,
 						},
 					},
 				},
@@ -240,7 +291,7 @@ describe('collections', () => {
 					value: {
 						'@class': NEW_EXPR_CLASS,
 						creator: {
-							'@class': LOCAL_MAP_LITERAL_CLASS,
+							'@class': MAP_LITERAL_CLASS,
 						},
 					},
 				},
@@ -295,36 +346,6 @@ describe('collections', () => {
 				desc: 'rejects assignment with non-collection creator',
 				expected: false,
 			},
-			{
-				assignment: {
-					value: {
-						'@class': NEW_EXPR_CLASS,
-						// Missing creator property
-					},
-				},
-				desc: 'rejects assignment with missing creator property',
-				expected: false,
-			},
-			{
-				assignment: {
-					value: {
-						'@class': NEW_EXPR_CLASS,
-						creator: 'not an object',
-					},
-				},
-				desc: 'rejects assignment with non-object creator',
-				expected: false,
-			},
-			{
-				assignment: {
-					value: {
-						'@class': NEW_EXPR_CLASS,
-						creator: {},
-					},
-				},
-				desc: 'rejects assignment with creator without @class property',
-				expected: false,
-			},
 		])(
 			'$desc',
 			({
@@ -335,6 +356,45 @@ describe('collections', () => {
 				expected: boolean;
 			}>) => {
 				expect(isCollectionAssignment(assignment)).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle assignment with missing creator property',
+			() => {
+				const assignment = {
+					value: {
+						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+						// Missing creator property
+					},
+				};
+				expect(isCollectionAssignment(assignment)).toBe(false);
+			},
+		);
+
+		it.concurrent(
+			'should handle assignment with non-object creator',
+			() => {
+				const assignment = {
+					value: {
+						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+						creator: 'not an object',
+					},
+				};
+				expect(isCollectionAssignment(assignment)).toBe(false);
+			},
+		);
+
+		it.concurrent(
+			'should handle assignment with creator without @class property',
+			() => {
+				const assignment = {
+					value: {
+						'@class': 'apex.jorje.data.ast.Expr$NewExpr',
+						creator: {},
+					},
+				};
+				expect(isCollectionAssignment(assignment)).toBe(false);
 			},
 		);
 	});

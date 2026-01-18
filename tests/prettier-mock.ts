@@ -11,7 +11,13 @@
  * ```
  */
 
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Mock implementations require type assertions for testing */
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types -- Mock utilities need mutable parameters to match Prettier API signatures */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Mock implementations require unsafe assignments for testing */
+/* eslint-disable @typescript-eslint/no-misused-spread -- Spread operator needed for mock customization */
+/* eslint-disable @typescript-eslint/consistent-type-imports -- import() type is required for typeof import() */
+/* eslint-disable @typescript-eslint/promise-function-async -- Mock format function signature must match Prettier API */
+/* eslint-disable jsdoc/require-returns -- Mock implementations have simple return descriptions */
 import { vi } from 'vitest';
 import type { AstPath, Doc, ParserOptions, Plugin, Printer } from 'prettier';
 import type { ApexNode } from '../src/types.js';
@@ -38,53 +44,48 @@ class MockDocBuilders {
 
 	/**
 	 * Mock group builder - returns array with 'group' marker.
-	 * @param doc - The document to wrap in a group.
-	 * @returns A Doc array with 'group' marker and the document.
+	 * @param doc - The document to group.
+	 * @returns Grouped document.
 	 */
-	public group(doc: Doc): Doc {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static group(doc: Doc): Doc {
 		return ['group', doc];
 	}
 
 	/**
 	 * Mock indent builder - returns array with 'indent' marker.
-	 * @param doc - The document to indent, either a single Doc or an array of Docs.
-	 * @returns A Doc array with 'indent' marker and the document(s).
+	 * @param doc - The document to indent.
+	 * @returns Indented document.
 	 */
-	public indent(doc: Doc | Doc[]): Doc {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static indent(doc: Doc | Doc[]): Doc {
 		return ['indent', Array.isArray(doc) ? doc : [doc]];
 	}
 
 	/**
 	 * Mock ifBreak builder - returns array with 'ifBreak' marker.
-	 * @param ifBreak - The document to use if line breaks occur.
-	 * @param noBreak - The document to use if no line breaks occur (defaults to empty string).
-	 * @returns A Doc array with 'ifBreak' marker and the documents.
+	 * @param ifBreak - Document to use if break occurs.
+	 * @param noBreak - Document to use if no break occurs.
+	 * @returns IfBreak document.
 	 */
-	public ifBreak(ifBreak: Doc, noBreak: Doc = ''): Doc {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static ifBreak(ifBreak: Doc, noBreak: Doc = ''): Doc {
 		return ['ifBreak', ifBreak, noBreak];
 	}
 
 	/**
 	 * Mock join builder - joins docs with separator.
-	 * @param separator - The separator document to insert between docs.
-	 * @param docs - The array of documents to join.
-	 * @returns A Doc array with 'join' marker, separator, and documents.
+	 * @param separator - Separator document.
+	 * @param docs - Documents to join.
+	 * @returns Joined document.
 	 */
-	public join(separator: Doc, docs: readonly Doc[]): Doc {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static join(separator: Doc, docs: readonly Doc[]): Doc {
 		return ['join', separator, ...docs];
 	}
 
 	/**
 	 * Mock fill builder - returns array with 'fill' marker.
-	 * @param docs - The array of documents to fill.
-	 * @returns A Doc array with 'fill' marker and the documents.
+	 * @param docs - Documents to fill.
+	 * @returns Fill document.
 	 */
-	public fill(docs: readonly Doc[]): Doc {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static fill(docs: readonly Doc[]): Doc {
 		return ['fill', ...docs];
 	}
 }
@@ -92,27 +93,26 @@ class MockDocBuilders {
 /**
  * Mock implementation of Prettier utilities.
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- Mock class needed for type compatibility
 class MockPrettierUtil {
 	/**
 	 * Mock getStringWidth - returns string length.
-	 * @param str - The string to measure.
-	 * @returns The length of the string.
+	 * @param str - String to measure.
+	 * @returns The length of the string as its width.
 	 */
-	public getStringWidth(str: Readonly<string>): number {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static getStringWidth(str: string): number {
 		return str.length;
 	}
 
 	/**
 	 * Mock skipWhitespace - returns index after whitespace.
-	 * @param text - The text to search.
-	 * @param startIndex - The starting index.
-	 * @returns The index after whitespace characters.
+	 * @param text - Text to search.
+	 * @param startIndex - Starting index.
+	 * @returns Index after whitespace.
 	 */
-	public skipWhitespace(text: Readonly<string>, startIndex: number): number {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static skipWhitespace(text: string, startIndex: number): number {
 		let index = startIndex;
-		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- index is checked to be < text.length
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Index is validated by loop condition
 		while (index < text.length && /\s/.test(text[index]!)) {
 			index++;
 		}
@@ -121,49 +121,45 @@ class MockPrettierUtil {
 
 	/**
 	 * Mock getIndentSize - calculates indent size based on leading spaces/tabs.
-	 * @param line - The line to measure indent for.
-	 * @param _tabWidth - The tab width (unused in mock implementation).
-	 * @returns The indent size in characters.
+	 * @param line - Line to measure.
+	 * @param _tabWidth - Tab width (unused in mock).
+	 * @returns The number of leading whitespace characters in the line.
 	 */
-	public getIndentSize(line: Readonly<string>, _tabWidth: number): number {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static getIndentSize(line: string, _tabWidth: number): number {
 		const trimmed = line.trimStart();
 		const indent = line.length - trimmed.length;
 		return indent;
 	}
 
 	/**
-	 * Mock addLeadingComment - adds comment before node (no-op implementation).
-	 * @param _node - The node to add the comment to (unused in mock).
-	 * @param _comment - The comment to add (unused in mock).
+	 * Mock addLeadingComment - adds comment before node.
+	 * @param _node - Node to add comment to.
+	 * @param _comment - Comment to add.
 	 */
-	public addLeadingComment(_node: unknown, _comment: unknown): void {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static addLeadingComment(_node: unknown, _comment: unknown): void {
 		// Mock implementation - no-op for testing
 	}
 
 	/**
-	 * Mock addTrailingComment - adds comment after node (no-op implementation).
-	 * @param _node - The node to add the comment to (unused in mock).
-	 * @param _comment - The comment to add (unused in mock).
+	 * Mock addTrailingComment - adds comment after node.
+	 * @param _node - Node to add comment to.
+	 * @param _comment - Comment to add.
 	 */
-	public addTrailingComment(_node: unknown, _comment: unknown): void {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
+	public static addTrailingComment(_node: unknown, _comment: unknown): void {
 		// Mock implementation - no-op for testing
 	}
 
 	/**
-	 * Mock addDanglingComment - adds dangling comment to node (no-op implementation).
-	 * @param _node - The node to add the comment to (unused in mock).
-	 * @param _comment - The comment to add (unused in mock).
-	 * @param _marker - The comment marker (unused in mock).
+	 * Mock addDanglingComment - adds dangling comment to node.
+	 * @param _node - Node to add comment to.
+	 * @param _comment - Comment to add.
+	 * @param _marker - Comment marker.
 	 */
-	public addDanglingComment(
+	public static addDanglingComment(
 		_node: unknown,
 		_comment: unknown,
 		_marker: unknown,
 	): void {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
 		// Mock implementation - no-op for testing
 	}
 }
@@ -174,9 +170,9 @@ class MockPrettierUtil {
 class MockDocPrinter {
 	/**
 	 * Mock printDocToString - converts Doc to string representation.
-	 * @param doc - The document to convert to string.
-	 * @param _options - Optional parser options (unused in mock implementation).
-	 * @returns String representation of the document.
+	 * @param doc - Document to print.
+	 * @param _options - Parser options (unused in mock).
+	 * @returns String representation of document.
 	 */
 	public printDocToString(
 		doc: Doc,
@@ -187,36 +183,12 @@ class MockDocPrinter {
 			return doc;
 		}
 		if (Array.isArray(doc)) {
-			// Type assertion needed for array map - elements are Doc type but TypeScript can't infer
-			return doc
-				.map((d: unknown) => {
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Array elements may be any Doc type in mock implementation
-					return this.printDocToString(d as Doc, _options);
-				})
-				.join('');
+			return doc.map((d) => this.printDocToString(d, _options)).join('');
 		}
 		// For objects, return a placeholder
 		return '[Doc]';
 	}
 }
-
-/**
- * Default instance of PrettierMockSuite for convenience.
- * Can be imported directly for quick access.
- *
- * Helper to create a mock Prettier module with custom format implementation.
- * @param options - Optional configuration options.
- * @param options.format - Custom format function implementation.
- * @param options.format.code - The code to format.
- * @param options.format.opts - Optional parser options.
- * @returns Mock Prettier module.
- * @example
- * ```typescript
- * vi.mock('prettier', () => createPrettierMock({
- *   format: vi.fn().mockResolvedValue('formatted')
- * }));
- * ```
- */
 
 /**
  * Comprehensive Prettier mock suite for testing.
@@ -228,22 +200,20 @@ class MockDocPrinter {
  * - doc.printer
  * - Plugin structures.
  */
-// eslint-disable-next-line import/group-exports -- Exports consolidated below
-export class PrettierMockSuite {
+class PrettierMockSuite {
 	/**
 	 * Mock implementation of prettier.format.
 	 * Can be customized with custom implementations.
 	 */
 	public format = vi.fn(
-		async (
+		(
 			code: string,
 			_options?: Readonly<
 				ParserOptions & { parser?: string; plugins?: unknown[] }
 			>,
-			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for mock compatibility
 		): Promise<string> => {
 			// Default: return code as-is (identity formatter)
-			return code;
+			return Promise.resolve(code);
 		},
 	);
 
@@ -252,67 +222,9 @@ export class PrettierMockSuite {
 	private readonly docPrinter = new MockDocPrinter();
 
 	/**
-	 * Creates a complete Prettier mock object that can be used with vi.mock.
-	 * @param customizations - Optional customizations to override default mocks.
-	 * @param customizations.format - Optional custom format function implementation.
-	 * @param customizations.doc - Optional doc builders customizations.
-	 * @param customizations.doc.builders - Optional doc builder overrides.
-	 * @param customizations.util - Optional utility function customizations.
-	 * @param customizations.docPrinter - Optional doc printer customizations.
-	 * @returns Mock Prettier module object.
-	 * @example
-	 * ```typescript
-	 * const mock = new PrettierMockSuite();
-	 * mock.format.mockResolvedValue('formatted code');
-	 * vi.mock('prettier', () => mock.getPrettierMock());
-	 * ```
-	 */
-	public getPrettierMock(
-		customizations?: Readonly<{
-			format?: typeof this.format;
-			doc?: Readonly<{ builders?: Readonly<Partial<MockDocBuilders>> }>;
-			util?: Readonly<Partial<MockPrettierUtil>>;
-			docPrinter?: Readonly<Partial<MockDocPrinter>>;
-		}>,
-		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
-	): typeof import('prettier') {
-		const customDocBuilders = {
-			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
-			...this.docBuilders,
-			...(customizations?.doc?.builders ?? {}),
-		};
-
-		const customUtil = {
-			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
-			...this.util,
-			...(customizations?.util ?? {}),
-		};
-
-		const customDocPrinter = {
-			// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock customization
-			...this.docPrinter,
-			...(customizations?.docPrinter ?? {}),
-		};
-
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock assignment for test utilities
-		const format = customizations?.format ?? this.format;
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock type assertion for test utilities
-		return {
-			doc: {
-				builders: customDocBuilders,
-				printer: customDocPrinter,
-			},
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- format is assigned above
-			format,
-			util: customUtil,
-			// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
-		} as unknown as typeof import('prettier');
-	}
-
-	/**
 	 * Creates a mock Prettier plugin structure.
 	 * @param overrides - Optional overrides for default plugin structure.
-	 * @returns Mock plugin object.
+	 * @returns A Prettier plugin object with default structure and optional overrides applied.
 	 * @example
 	 * ```typescript
 	 * const mock = new PrettierMockSuite();
@@ -321,10 +233,9 @@ export class PrettierMockSuite {
 	 * });
 	 * ```
 	 */
-	public createMockPlugin(
-		overrides?: Readonly<Partial<Plugin<ApexNode>>>,
+	public static createMockPlugin(
+		overrides?: Partial<Plugin<ApexNode>>,
 	): Plugin<ApexNode> {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
 		return {
 			defaultOptions: {},
 			languages: [],
@@ -340,26 +251,68 @@ export class PrettierMockSuite {
 	 * @param printImplementation - Optional custom print function.
 	 * @returns Mock printer object.
 	 */
-	public createMockPrinter(
-		printImplementation?: Readonly<
-			(
-				path: AstPath<ApexNode>,
-				options: ParserOptions,
-				print: (path: AstPath<ApexNode>) => Doc,
-			) => Doc
-		>,
+	public static createMockPrinter(
+		printImplementation?: (
+			path: Readonly<AstPath<ApexNode>>,
+			options: Readonly<ParserOptions>,
+			print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+		) => Doc,
 	): Printer<ApexNode> {
-		void this; // Satisfy class-methods-use-this (method kept as instance for mock API compatibility)
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock type assertion for test utilities
 		return {
 			print: printImplementation ?? vi.fn(() => 'mock output'),
 		} as Printer<ApexNode>;
 	}
 
 	/**
+	 * Creates a complete Prettier mock object that can be used with vi.mock.
+	 * @param customizations - Optional customizations to override default mocks.
+	 * @param customizations.format - Custom format function implementation.
+	 * @param customizations.doc - Custom doc builders configuration.
+	 * @param customizations.doc.builders - Custom doc builders to override defaults.
+	 * @param customizations.util - Custom Prettier utilities to override defaults.
+	 * @param customizations.docPrinter - Custom doc printer to override defaults.
+	 * @returns Mock Prettier module object.
+	 * @example
+	 * ```typescript
+	 * const mock = new PrettierMockSuite();
+	 * mock.format.mockResolvedValue('formatted code');
+	 * vi.mock('prettier', () => mock.getPrettierMock());
+	 * ```
+	 */
+	public getPrettierMock(customizations?: {
+		format?: typeof this.format;
+		doc?: { builders?: Partial<MockDocBuilders> };
+		util?: Partial<MockPrettierUtil>;
+		docPrinter?: Partial<MockDocPrinter>;
+	}): typeof import('prettier') {
+		const customDocBuilders = {
+			...this.docBuilders,
+			...(customizations?.doc?.builders ?? {}),
+		};
+
+		const customUtil = {
+			...this.util,
+			...(customizations?.util ?? {}),
+		};
+
+		const customDocPrinter = {
+			...this.docPrinter,
+			...(customizations?.docPrinter ?? {}),
+		};
+
+		return {
+			doc: {
+				builders: customDocBuilders,
+				printer: customDocPrinter,
+			},
+			format: customizations?.format ?? this.format,
+			util: customUtil,
+		} as unknown as typeof import('prettier');
+	}
+
+	/**
 	 * Gets the mock Doc builders.
 	 * Useful for accessing builders directly in tests.
-	 * @returns The mock Doc builders instance.
 	 */
 	public getDocBuilders(): MockDocBuilders {
 		return this.docBuilders;
@@ -368,7 +321,6 @@ export class PrettierMockSuite {
 	/**
 	 * Gets the mock Prettier utilities.
 	 * Useful for accessing utilities directly in tests.
-	 * @returns The mock Prettier utilities instance.
 	 */
 	public getUtil(): MockPrettierUtil {
 		return this.util;
@@ -377,7 +329,6 @@ export class PrettierMockSuite {
 	/**
 	 * Gets the mock doc printer.
 	 * Useful for accessing doc printer directly in tests.
-	 * @returns The mock doc printer instance.
 	 */
 	public getDocPrinter(): MockDocPrinter {
 		return this.docPrinter;
@@ -396,15 +347,12 @@ export class PrettierMockSuite {
  * Default instance of PrettierMockSuite for convenience.
  * Can be imported directly for quick access.
  */
-// eslint-disable-next-line import/group-exports -- Exports consolidated with class export above
-export const defaultPrettierMock = new PrettierMockSuite();
+const defaultPrettierMock = new PrettierMockSuite();
 
 /**
  * Helper to create a mock Prettier module with custom format implementation.
- * @param options - Optional configuration options.
+ * @param options - Optional configuration for the mock.
  * @param options.format - Custom format function implementation.
- * @param options.format.code - The code to format.
- * @param options.format.opts - Optional parser options.
  * @returns Mock Prettier module.
  * @example
  * ```typescript
@@ -413,18 +361,14 @@ export const defaultPrettierMock = new PrettierMockSuite();
  * }));
  * ```
  */
-// eslint-disable-next-line import/group-exports -- Exports consolidated with class export above
-export function createPrettierMock(
-	options?: Readonly<{
-		format?: (
-			code: string,
-			opts?: Readonly<
-				ParserOptions & { parser?: string; plugins?: unknown[] }
-			>,
-		) => Promise<string>;
-	}>,
-	// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
-): typeof import('prettier') {
+function createPrettierMock(options?: {
+	format?: (
+		code: string,
+		opts?: Readonly<
+			ParserOptions & { parser?: string; plugins?: unknown[] }
+		>,
+	) => Promise<string>;
+}): typeof import('prettier') {
 	const suite = new PrettierMockSuite();
 	if (options?.format) {
 		suite.format = options.format;
@@ -432,52 +376,5 @@ export function createPrettierMock(
 	return suite.getPrettierMock();
 }
 
-/**
- * Shape of the default export of prettier-plugin-apex.
- */
-interface PrettierPluginApexDefault {
-	defaultOptions: object;
-	languages: unknown[];
-	options: object;
-	parsers: object;
-	printers: unknown;
-}
-
-/**
- * Shape of the prettier-plugin-apex module (default and named exports).
- */
-interface PrettierPluginApexModule {
-	default: PrettierPluginApexDefault;
-	defaultOptions: object;
-	languages: unknown[];
-	options: object;
-	parsers: object;
-	printers: unknown;
-}
-
-/**
- * Creates a mock for the prettier-plugin-apex module for use with vi.doMock or vi.mock.
- * Matches the shape consumed by src/index (default and named exports).
- * @param overrides - Optional overrides for defaultOptions, languages, options, parsers, printers.
- * @returns Mock module object.
- * @example
- * ```typescript
- * vi.doMock('prettier-plugin-apex', () => createMockPrettierPluginApex({ printers: undefined }));
- * vi.resetModules();
- * await import('../src/index.js'); // throws when printers is missing
- * ```
- */
-// eslint-disable-next-line import/group-exports -- Exports consolidated with PrettierMockSuite
-export function createMockPrettierPluginApex(
-	overrides?: Readonly<Partial<PrettierPluginApexDefault>>,
-): PrettierPluginApexModule {
-	const base = {
-		defaultOptions: {},
-		languages: [],
-		options: {},
-		parsers: {},
-		printers: undefined as unknown,
-	};
-	const merged = { ...base, ...overrides };
-	return { default: merged, ...merged };
-}
+// Export all functions and constants in a single export declaration
+export { PrettierMockSuite, createPrettierMock, defaultPrettierMock };

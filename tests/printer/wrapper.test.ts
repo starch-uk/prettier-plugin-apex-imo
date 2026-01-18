@@ -11,8 +11,12 @@ import {
 	createMockPrint,
 	createMockOriginalPrinter,
 } from '../test-utils.js';
-
-const nodeClassKey = '@class';
+import {
+	NODE_CLASS_KEY,
+	createMockMethodDecl,
+	createMockSetInit,
+	createMockLiteralExpr,
+} from '../mocks/nodes.js';
 
 describe('printer', () => {
 	describe('createWrappedPrinter', () => {
@@ -37,9 +41,7 @@ describe('printer', () => {
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = createMockPath({
-				[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
-			} as ApexNode);
+			const mockPath = createMockPath(createMockMethodDecl());
 
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
@@ -51,7 +53,7 @@ describe('printer', () => {
 			expect(result).toBe('original output');
 			expect(mockOriginalPrinter.print).toHaveBeenCalledWith(
 				mockPath,
-				{},
+				createMockOptions(),
 				expect.any(Function),
 			);
 		});
@@ -132,7 +134,7 @@ describe('printer', () => {
 
 				const mockPath = createMockPath({
 					...nodeData,
-					[nodeClassKey]: nodeClass,
+					[NODE_CLASS_KEY]: nodeClass,
 				} as ApexNode);
 
 				// Mock the path.map to return empty arrays
@@ -208,7 +210,7 @@ describe('printer', () => {
 
 				const mockPath = createMockPath({
 					...nodeData,
-					[nodeClassKey]: nodeClass,
+					[NODE_CLASS_KEY]: nodeClass,
 				} as ApexNode);
 
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
@@ -229,10 +231,9 @@ describe('printer', () => {
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer return type
 			const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
-			const mockPath = createMockPath({
-				[nodeClassKey]: 'apex.jorje.data.ast.NewObject$NewSetLiteral',
-				values: [{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' }],
-			} as ApexNode);
+			const mockPath = createMockPath(
+				createMockSetInit([createMockLiteralExpr()]),
+			);
 
 			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods
 			const result = wrapped.print(
@@ -284,7 +285,7 @@ describe('printer', () => {
 
 				const mockPath = createMockPath({
 					...nodeData,
-					[nodeClassKey]: nodeClass,
+					[NODE_CLASS_KEY]: nodeClass,
 				} as ApexNode);
 
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Mock printer methods

@@ -11,9 +11,9 @@ import {
 } from '../../src/printer.js';
 import type { ApexNode } from '../../src/types.js';
 import {
-	createMockPath,
 	createMockOptions,
 	createMockPrint,
+	createMockPath,
 } from '../test-utils.js';
 
 const nodeClassKey = '@class';
@@ -163,7 +163,7 @@ describe('printer', () => {
 				// Mock path.map to call the callback, which will use mockPrint
 				// The callback returns [nameDoc, ' ', '=', ' ', assignmentDoc]
 				// Since nameDoc will be undefined, declDoc[NAME_INDEX] will be undefined
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock function type assertion for test
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock path for testing
 				(mockPath.map as ReturnType<typeof vi.fn>).mockImplementation(
 					(
 						// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access

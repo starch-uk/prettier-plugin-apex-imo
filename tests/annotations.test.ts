@@ -7,14 +7,19 @@ import { describe, it, expect } from 'vitest';
 import type { AstPath } from 'prettier';
 import { isAnnotation, printAnnotation } from '../src/annotations.js';
 import type {
-	ApexNode,
 	ApexAnnotationNode,
-	ApexAnnotationValue,
 	ApexAnnotationParameter,
+	ApexAnnotationValue,
 } from '../src/types.js';
 import { createMockPath } from './test-utils.js';
-
-const nodeClassKey = '@class';
+import {
+	NODE_CLASS_KEY,
+	createMockIdentifier,
+	createMockAnnotation,
+	createMockAnnotationStringParameter,
+	createMockAnnotationKeyValueParameter,
+	createMockMethodDecl,
+} from './mocks/nodes.js';
 /** Minimum parameter length for multiline formatting. */
 const MIN_PARAM_LENGTH_FOR_MULTILINE = 40;
 /** Offset to create a string longer than minimum. */
@@ -26,22 +31,13 @@ const THIRD_INDEX = 2;
 describe('annotations', () => {
 	describe('isAnnotation', () => {
 		it.concurrent('should return true for annotation nodes', () => {
-			const node = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'Test',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [],
-			} as Readonly<ApexNode>;
+			const node = createMockAnnotation('Test', []);
 
 			expect(isAnnotation(node)).toBe(true);
 		});
 
 		it.concurrent('should return false for non-annotation nodes', () => {
-			const node = {
-				[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
-			} as Readonly<ApexNode>;
+			const node = createMockMethodDecl();
 
 			expect(isAnnotation(node)).toBe(false);
 		});
@@ -49,21 +45,13 @@ describe('annotations', () => {
 
 	describe('printAnnotation', () => {
 		it.concurrent('should print annotation without parameters', () => {
-			const mockNode = {
-				name: {
-					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-					value: 'test',
-				},
-				[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-				parameters: [],
-			} as Readonly<ApexAnnotationNode>;
+			const mockNode = createMockAnnotation('test', []);
 
 			const mockPath = createMockPath(
 				mockNode,
 			) as AstPath<ApexAnnotationNode>;
 			const result = printAnnotation(mockPath);
 
-			expect(result).toBeDefined();
 			expect(Array.isArray(result)).toBe(true);
 			if (Array.isArray(result)) {
 				expect(result[FIRST_INDEX]).toBe('@');
@@ -78,29 +66,16 @@ describe('annotations', () => {
 				description:
 					'should print annotation with single string parameter',
 				parameters: [
-					{
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-						value: 'PMD.UnusedLocalVariable',
-					} as Readonly<ApexAnnotationParameter>,
+					createMockAnnotationStringParameter(
+						'PMD.UnusedLocalVariable',
+					),
 				],
 			},
 			{
 				annotationName: 'future',
 				description: 'should print annotation with key-value parameter',
 				parameters: [
-					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'callout',
-						},
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-						value: {
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
-						},
-					} as Readonly<ApexAnnotationParameter>,
+					createMockAnnotationKeyValueParameter('callout', true),
 				],
 			},
 		])(
@@ -114,21 +89,16 @@ describe('annotations', () => {
 				description: string;
 				parameters: readonly ApexAnnotationParameter[];
 			}>) => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: annotationName,
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+				const mockNode = createMockAnnotation(
+					annotationName,
 					parameters,
-				} as Readonly<ApexAnnotationNode>;
+				);
 
 				const mockPath = createMockPath(
 					mockNode,
 				) as AstPath<ApexAnnotationNode>;
 				const result = printAnnotation(mockPath);
 
-				expect(result).toBeDefined();
 				// Verify result is a valid Doc structure (array or Prettier doc object)
 				expect(
 					Array.isArray(result) || typeof result === 'object',
@@ -140,19 +110,7 @@ describe('annotations', () => {
 			{
 				description: 'should handle annotation with empty string value',
 				parameters: [
-					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'label',
-						},
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-						value: {
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-							value: '',
-						} as Readonly<ApexAnnotationValue>,
-					} as Readonly<ApexAnnotationParameter>,
+					createMockAnnotationKeyValueParameter('label', ''),
 				],
 			},
 			{
@@ -160,15 +118,13 @@ describe('annotations', () => {
 					'should handle annotation with undefined value field',
 				parameters: [
 					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'label',
-						},
-						[nodeClassKey]:
+						[NODE_CLASS_KEY]:
 							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						key: createMockIdentifier('label'),
 						value: {
-							[nodeClassKey]:
+							[NODE_CLASS_KEY]:
 								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+							// value property intentionally undefined for test
 						} as Readonly<ApexAnnotationValue>,
 					} as Readonly<ApexAnnotationParameter>,
 				],
@@ -178,7 +134,7 @@ describe('annotations', () => {
 					'should handle annotation parameter without value property',
 				parameters: [
 					{
-						[nodeClassKey]:
+						[NODE_CLASS_KEY]:
 							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
 					} as unknown as Readonly<ApexAnnotationParameter>,
 				],
@@ -188,14 +144,11 @@ describe('annotations', () => {
 					'should handle AnnotationKeyValue with non-string value (fallback to empty string)',
 				parameters: [
 					{
-						key: {
-							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'label',
-						},
-						[nodeClassKey]:
+						[NODE_CLASS_KEY]:
 							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						key: createMockIdentifier('label'),
 						value: {
-							[nodeClassKey]:
+							[NODE_CLASS_KEY]:
 								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
 							value: { someProperty: 'value' },
 						} as unknown as Readonly<ApexAnnotationValue>,
@@ -207,7 +160,7 @@ describe('annotations', () => {
 					'should handle AnnotationString with non-string value (fallback to empty string)',
 				parameters: [
 					{
-						[nodeClassKey]:
+						[NODE_CLASS_KEY]:
 							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
 						value: 123,
 					} as unknown as Readonly<ApexAnnotationParameter>,
@@ -218,22 +171,13 @@ describe('annotations', () => {
 			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 			({
 				parameters,
-			}: Readonly<{
-				description: string;
+			}: {
 				parameters: readonly ApexAnnotationParameter[];
-			}>) => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters,
-				} as Readonly<ApexAnnotationNode>;
+			}) => {
+				const mockNode = createMockAnnotation('test', parameters);
 				const result = printAnnotation(
 					createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
 				);
-				expect(result).toBeDefined();
 				expect(
 					Array.isArray(result) || typeof result === 'object',
 				).toBe(true);
@@ -243,50 +187,22 @@ describe('annotations', () => {
 		it.concurrent(
 			'should handle multiline annotation with multiple key-value parameters',
 			() => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'invocablemethod',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'label',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								value: 'Test Label',
-							} as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'description',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								value: 'Another Parameter',
-							} as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
+				const mockNode = createMockAnnotation('invocablemethod', [
+					createMockAnnotationKeyValueParameter(
+						'label',
+						'Test Label',
+					),
+					createMockAnnotationKeyValueParameter(
+						'description',
+						'Another Parameter',
+					),
+				]);
 
 				const mockPath = createMockPath(
 					mockNode,
 				) as AstPath<ApexAnnotationNode>;
 				const result = printAnnotation(mockPath);
 
-				expect(result).toBeDefined();
 				// Multiline annotations should return a grouped doc structure
 				expect(
 					Array.isArray(result) || typeof result === 'object',
@@ -297,41 +213,19 @@ describe('annotations', () => {
 		it.concurrent(
 			'should handle multiline annotation with mixed param types',
 			() => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'invocablemethod',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-							value: 'StringParam',
-						} as Readonly<ApexAnnotationParameter>,
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'label',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-								value: 'Test Label',
-							} as Readonly<ApexAnnotationValue>,
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
+				const mockNode = createMockAnnotation('invocablemethod', [
+					createMockAnnotationStringParameter('StringParam'),
+					createMockAnnotationKeyValueParameter(
+						'label',
+						'Test Label',
+					),
+				]);
 
 				const mockPath = createMockPath(
 					mockNode,
 				) as AstPath<ApexAnnotationNode>;
 				const result = printAnnotation(mockPath);
 
-				expect(result).toBeDefined();
 				// Multiline annotations should return a grouped doc structure
 				expect(
 					Array.isArray(result) || typeof result === 'object',
@@ -342,35 +236,18 @@ describe('annotations', () => {
 		it.concurrent(
 			'should normalize annotation option name when annotation has no option mapping',
 			() => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'deprecated',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						{
-							key: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.Identifier',
-								value: 'unknownOption',
-							},
-							[nodeClassKey]:
-								'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-							value: {
-								[nodeClassKey]:
-									'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue',
-							},
-						} as Readonly<ApexAnnotationParameter>,
-					],
-				} as Readonly<ApexAnnotationNode>;
+				const mockNode = createMockAnnotation('deprecated', [
+					createMockAnnotationKeyValueParameter(
+						'unknownOption',
+						true,
+					),
+				]);
 
 				const mockPath = createMockPath(
 					mockNode,
 				) as AstPath<ApexAnnotationNode>;
 				const result = printAnnotation(mockPath);
 
-				expect(result).toBeDefined();
 				expect(
 					Array.isArray(result) || typeof result === 'object',
 				).toBe(true);
@@ -416,42 +293,24 @@ describe('annotations', () => {
 					MIN_PARAM_LENGTH_FOR_MULTILINE + LENGTH_OFFSET,
 				);
 
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: annotationName,
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters: [
-						parameterType === 'AnnotationString'
-							? ({
-									[nodeClassKey]:
-										'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-									value: longString,
-								} as Readonly<ApexAnnotationParameter>)
-							: ({
-									key: {
-										[nodeClassKey]:
-											'apex.jorje.data.ast.Identifier',
-										value: 'label',
-									},
-									[nodeClassKey]:
-										'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-									value: {
-										[nodeClassKey]:
-											'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-										value: longString,
-									} as Readonly<ApexAnnotationValue>,
-								} as Readonly<ApexAnnotationParameter>),
-					],
-				} as Readonly<ApexAnnotationNode>;
+				const parameters = [
+					parameterType === 'AnnotationString'
+						? createMockAnnotationStringParameter(longString)
+						: createMockAnnotationKeyValueParameter(
+								'label',
+								longString,
+							),
+				];
+				const mockNode = createMockAnnotation(
+					annotationName,
+					parameters,
+				);
 
 				const mockPath = createMockPath(
 					mockNode,
 				) as AstPath<ApexAnnotationNode>;
 				const result = printAnnotation(mockPath);
 
-				expect(result).toBeDefined();
 				// Verify result is a valid Doc structure
 				expect(
 					Array.isArray(result) || typeof result === 'object',

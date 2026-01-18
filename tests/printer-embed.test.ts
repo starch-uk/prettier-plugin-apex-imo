@@ -14,8 +14,11 @@ import { setCurrentPluginInstance } from '../src/printer.js';
 import { createMockPath, createMockOptions } from './test-utils.js';
 
 // Mock processAllCodeBlocksInComment to control its return value
-const mockProcessAllCodeBlocksInComment = vi.fn();
-vi.mock('../src/apexdoc-code.js', async () => {
+const { mockProcessAllCodeBlocksInComment } = vi.hoisted(() => ({
+	mockProcessAllCodeBlocksInComment: vi.fn(),
+}));
+
+vi.mock(import('../src/apexdoc-code.js'), async () => {
 	const actual = await vi.importActual<
 		// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
 		typeof import('../src/apexdoc-code.js')
@@ -32,7 +35,8 @@ vi.mock('../src/apexdoc-code.js', async () => {
 	};
 });
 
-const nodeClassKey = '@class';
+import { NODE_CLASS_KEY, createMockBlockComment } from './mocks/nodes.js';
+
 const BLOCK_COMMENT_CLASS = 'apex.jorje.parser.impl.HiddenTokens$BlockComment';
 
 describe('printer embed function', () => {
@@ -45,6 +49,48 @@ describe('printer embed function', () => {
 	afterEach(() => {
 		// Restore plugin instance after each test
 		setCurrentPluginInstance({ default: {} });
+	});
+
+	describe('when pluginInstance is not set', () => {
+		beforeEach(() => {
+			// Don't set plugin instance for these tests
+			// Reset modules to ensure fresh state
+			vi.resetModules();
+		});
+
+		afterEach(() => {
+			vi.resetModules();
+		});
+
+		it('should return undefined when pluginInstance is not set', async () => {
+			// Test embed function when pluginInstance is undefined
+			const { createWrappedPrinter: createWrappedPrinterFresh } =
+				await import('../src/printer.js');
+			const mockOriginalPrinter = {
+				print: vi.fn(() => 'original output'),
+			};
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
+			const wrappedFresh = createWrappedPrinterFresh(mockOriginalPrinter);
+
+			const mockNode = createMockBlockComment(
+				' * Comment with {@code Integer x = 10;}',
+			);
+			const mockPath = createMockPath(mockNode);
+
+			// Call embed - pluginInstance should be undefined since we reset modules and didn't set it
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- Testing embed property
+			const embedResult = wrappedFresh.embed?.(
+				mockPath,
+				createMockOptions(),
+			);
+			expect(embedResult).toBeDefined();
+			expect(typeof embedResult).toBe('function');
+
+			// Call the async processor - it should return undefined when pluginInstance is undefined
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await -- Testing async processor
+			const docResult = await embedResult?.(async () => 'doc');
+			expect(docResult).toBeUndefined();
+		});
 	});
 
 	it('should add embed function when original printer does not have one', () => {
@@ -64,53 +110,6 @@ describe('printer embed function', () => {
 		expect(typeof wrapped.embed).toBe('function');
 	});
 
-	it('should return undefined when pluginInstance is not set', async () => {
-		// Test embed function when pluginInstance is undefined
-		// Mock the module to return undefined for getCurrentPluginInstance
-		vi.doMock('../src/printer.js', async () => {
-			const actual = await vi.importActual<
-				// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
-				typeof import('../src/printer.js')
-			>('../src/printer.js');
-			return {
-				...actual,
-				getCurrentPluginInstance: vi.fn(() => undefined),
-			};
-		});
-
-		vi.resetModules();
-
-		const { createWrappedPrinter: createWrappedPrinterMocked } =
-			await import('../src/printer.js');
-		const mockOriginalPrinter = {
-			print: vi.fn(() => 'original output'),
-		};
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
-		const wrappedMocked = createWrappedPrinterMocked(mockOriginalPrinter);
-
-		const mockNode = {
-			[nodeClassKey]: BLOCK_COMMENT_CLASS,
-			value: ' * Comment with {@code Integer x = 10;}',
-		} as ApexNode;
-		const mockPath = createMockPath(mockNode);
-
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- Testing embed property
-		const embedResult = wrappedMocked.embed?.(
-			mockPath,
-			createMockOptions(),
-		);
-		expect(embedResult).toBeDefined();
-		expect(typeof embedResult).toBe('function');
-
-		// Call the async processor - it should return undefined when pluginInstance is undefined
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await -- Testing async processor
-		const docResult = await embedResult?.(async () => 'doc');
-		expect(docResult).toBeUndefined();
-
-		vi.doUnmock('../src/printer.js');
-		vi.resetModules();
-	});
-
 	it('should return undefined when processAllCodeBlocksInComment returns undefined', async () => {
 		// Set plugin instance for embed to work
 		setCurrentPluginInstance({ default: {} });
@@ -126,10 +125,9 @@ describe('printer embed function', () => {
 		const wrapped = createWrappedPrinter(mockOriginalPrinter);
 
 		// Create a comment node with {@code} but malformed blocks
-		const mockNode = {
-			[nodeClassKey]: BLOCK_COMMENT_CLASS,
-			value: ' * This is a comment with {@code but no closing brace',
-		} as ApexNode;
+		const mockNode = createMockBlockComment(
+			' * This is a comment with {@code but no closing brace',
+		);
 
 		const mockPath = createMockPath(mockNode);
 
@@ -164,7 +162,7 @@ describe('printer embed function', () => {
 
 		// Create a comment node with undefined value
 		const mockNode = {
-			[nodeClassKey]: BLOCK_COMMENT_CLASS,
+			[NODE_CLASS_KEY]: BLOCK_COMMENT_CLASS,
 			value: undefined,
 		} as ApexNode;
 
@@ -177,5 +175,45 @@ describe('printer embed function', () => {
 
 		// Since hasCodeTag is false, embed should return null
 		expect(embedResult).toBeNull();
+	});
+
+	it('should handle options without tabWidth', async () => {
+		// Test branch coverage: options.tabWidth ?? DEFAULT_TAB_WIDTH when tabWidth is undefined
+		setCurrentPluginInstance({ default: {} });
+		mockProcessAllCodeBlocksInComment.mockResolvedValue('formatted code');
+
+		const mockOriginalPrinter = {
+			print: vi.fn(() => 'original output'),
+		};
+
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
+		const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+		const mockNode = createMockBlockComment(
+			' * Comment with {@code Integer x = 10;}',
+		);
+		const mockPath = createMockPath(mockNode);
+
+		// Call embed with options that don't include tabWidth to test the ?? DEFAULT_TAB_WIDTH branch
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Testing embed function with mock options
+		const embedResult = wrapped.embed?.(
+			mockPath,
+			// Options without tabWidth to test the ?? DEFAULT_TAB_WIDTH branch
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing embed function with mock options
+			{ printWidth: 80 } as unknown as ReturnType<
+				typeof createMockOptions
+			>,
+		);
+
+		expect(embedResult).toBeDefined();
+		expect(typeof embedResult).toBe('function');
+
+		// Call the async processor - the result should be the formatted code from processAllCodeBlocksInComment
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await -- Testing async processor
+		const docResult = await embedResult?.(async () => 'doc');
+		// The embed function should have been called with options that include the default tabWidth
+		expect(mockProcessAllCodeBlocksInComment).toHaveBeenCalled();
+		// The result should be the formatted code (which is a string, but embed returns it as a Doc)
+		expect(docResult).toBeDefined();
 	});
 });
