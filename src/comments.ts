@@ -513,6 +513,80 @@ const CommentPrefix = {
 };
 
 /**
+ * Normalizes inline comments to have exactly one space between // and content.
+ * Handles edge cases like //comment (no space), //  comment (multiple spaces),
+ * and preserves leading whitespace before //.
+ * @param comment - The inline comment string to normalize.
+ * @returns The normalized comment with exactly one space after //.
+ * @example
+ * normalizeInlineComment('//comment') // returns '// comment'
+ * normalizeInlineComment('//  comment') // returns '// comment'
+ * normalizeInlineComment('   //comment') // returns '   // comment'
+ */
+const normalizeInlineComment = (comment: Readonly<string>): string => {
+	const trimmedComment = comment.trim();
+	const INLINE_COMMENT_PREFIX = '//';
+
+	// If not an inline comment, return as-is
+	if (!trimmedComment.startsWith(INLINE_COMMENT_PREFIX)) {
+		return comment;
+	}
+
+	// Find the position of // in the original comment (preserving leading whitespace)
+	const slashSlashIndex = comment.indexOf(INLINE_COMMENT_PREFIX);
+
+	// Extract leading whitespace before //
+	const ZERO_INDEX = 0;
+	const leadingWhitespace = comment.substring(ZERO_INDEX, slashSlashIndex);
+	const afterSlashes = comment.substring(
+		slashSlashIndex + INLINE_COMMENT_PREFIX.length,
+	);
+
+	// If there's no content after //, return as-is (// with no content)
+	const ZERO_LENGTH = 0;
+	if (afterSlashes.trim().length === ZERO_LENGTH) {
+		return comment;
+	}
+
+	// Trim any existing spaces after //, then add exactly one space
+	const contentAfterTrim = afterSlashes.trimStart();
+	const SINGLE_SPACE = ' ';
+	return `${leadingWhitespace}${INLINE_COMMENT_PREFIX}${SINGLE_SPACE}${contentAfterTrim}`;
+};
+
+/**
+ * Normalizes inline comments in multi-line code.
+ * Applies normalizeInlineComment to each line that contains an inline comment.
+ * @param code - The code string that may contain inline comments.
+ * @returns The code with all inline comments normalized.
+ */
+const normalizeInlineCommentsInCode = (code: Readonly<string>): string => {
+	const lines = code.split('\n');
+	const normalizedLines = lines.map((line) => {
+		// Check if line contains an inline comment
+		const trimmedLine = line.trim();
+		if (!trimmedLine.includes('//')) {
+			return line;
+		}
+
+		// Find the position of // in the line
+		const slashSlashIndex = line.indexOf('//');
+
+		// Extract code before comment and comment part
+		const ZERO_INDEX = 0;
+		const beforeComment = line.substring(ZERO_INDEX, slashSlashIndex);
+		const commentPart = line.substring(slashSlashIndex);
+
+		// Normalize the comment part
+		const normalizedComment = normalizeInlineComment(commentPart);
+
+		return `${beforeComment}${normalizedComment}`;
+	});
+
+	return normalizedLines.join('\n');
+};
+
+/**
  * Removes comment prefix (asterisk and spaces) from a line.
  * @param line - Line to remove prefix from.
  * @param preserveIndent - If true, only removes asterisk and single space after it to preserve code indentation. Otherwise removes all prefix and trims.
@@ -972,11 +1046,11 @@ const printComment = (
 			return [commentDoc];
 		} else {
 			// Check if this is an inline comment (starts with //)
-			// Inline comments should be passed through unchanged, like the reference implementation
+			// Inline comments should be normalized to have exactly one space between // and content
 			const isInlineComment = commentValue.trim().startsWith('//');
 			if (isInlineComment) {
-				// Return inline comment as-is (no normalization needed)
-				return commentValue;
+				// Normalize inline comment to have exactly one space after //
+				return normalizeInlineComment(commentValue);
 			}
 
 			// Non-ApexDoc block comments: normalize annotations in text
@@ -1070,6 +1144,8 @@ export {
 	createIndent,
 	getCommentIndent,
 	normalizeBlockComment,
+	normalizeInlineComment,
+	normalizeInlineCommentsInCode,
 	parseCommentToDocs,
 	tokensToCommentString,
 	wrapTextToWidth,

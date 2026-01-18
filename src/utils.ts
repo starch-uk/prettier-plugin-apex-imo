@@ -6,6 +6,7 @@ import type { ParserOptions } from 'prettier';
 import * as prettier from 'prettier';
 import type { ApexNode } from './types.js';
 import { DECLARATION_MODIFIERS_SET } from './refs/reserved-words.js';
+import { normalizeInlineCommentsInCode } from './comments.js';
 
 /**
  * Shared Prettier doc builders for consistent usage across the codebase.
@@ -191,7 +192,8 @@ const formatApexCodeWithFallback = async (
 			parser: 'apex-anonymous',
 		});
 		// Annotations are already normalized via AST during printing (see printAnnotation in annotations.ts)
-		return result;
+		// Normalize inline comments to have exactly one space between // and content
+		return normalizeInlineCommentsInCode(result);
 	} catch {
 		try {
 			const result = await formatFn(code, {
@@ -199,7 +201,8 @@ const formatApexCodeWithFallback = async (
 				parser: 'apex',
 			});
 			// Annotations are already normalized via AST during printing (see printAnnotation in annotations.ts)
-			return result;
+			// Normalize inline comments to have exactly one space between // and content
+			return normalizeInlineCommentsInCode(result);
 		} catch {
 			return code;
 		}

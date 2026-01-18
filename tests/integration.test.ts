@@ -1160,4 +1160,149 @@ describe('prettier-plugin-apex-imo integration', () => {
 			},
 		);
 	});
+
+	describe('Inline comment normalization', () => {
+		it.concurrent(
+			'should normalize inline comment with no space after //',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    Integer x = 1; //comment
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should normalize inline comment with multiple spaces after //',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    Integer x = 1; //  comment
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should preserve inline comment with single space after //',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent('should normalize multiple inline comments', async () => {
+			const input = `public class Test {
+  public void test() {
+    Integer x = 1; //comment1
+    Integer y = 2; //comment2
+  }
+}`;
+			const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment1
+    Integer y = 2; // comment2
+  }
+}
+`;
+			const result = await formatApex(input);
+			expect(result).toBe(expected);
+		});
+
+		it.concurrent(
+			'should normalize inline comment at start of line',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    //comment at start
+    Integer x = 1;
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    // comment at start
+    Integer x = 1;
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should normalize inline comments in {@code} blocks',
+			async () => {
+				const input = `public class Test {
+  /**
+   * Example code block
+   * {@code
+   *   Integer x = 1; //comment
+   *   Integer y = 2; //  another comment
+   * }
+   */
+  public void method() {}
+}`;
+				const result = await formatApex(input);
+				// Verify that inline comments are normalized (check for "// comment" pattern)
+				expect(result).toContain('// comment');
+				expect(result).toContain('// another comment');
+				expect(result).not.toContain('//comment');
+				expect(result).not.toContain('//  another comment');
+			},
+		);
+
+		it.concurrent(
+			'should normalize inline comments in complex {@code} blocks',
+			async () => {
+				const input = `public class Test {
+  /**
+   * Example with code
+   * {@code
+   *   @TestSetup
+   *   static void setup() {
+   *     //Setup code here
+   *     Integer x = 1; //comment
+   *   }
+   * }
+   */
+  public void method() {}
+}`;
+				const result = await formatApex(input);
+				// Verify that inline comments are normalized (check for "// comment" pattern)
+				expect(result).toContain('// Setup code here');
+				expect(result).toContain('// comment');
+				expect(result).not.toContain('//Setup code here');
+				expect(result).not.toContain('//comment');
+			},
+		);
+	});
 });

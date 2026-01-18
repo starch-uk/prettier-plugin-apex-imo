@@ -11,6 +11,8 @@ import {
 	parseCommentToDocs,
 	createDocContent,
 	normalizeBlockComment,
+	normalizeInlineComment,
+	normalizeInlineCommentsInCode,
 } from '../src/comments.js';
 
 describe('comments internal functions', () => {
@@ -154,6 +156,155 @@ describe('comments internal functions', () => {
 				});
 				expect(result).toContain('/*');
 				// normalizeCommentStart line 276 should be executed
+			},
+		);
+	});
+
+	describe('normalizeInlineComment', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should add space when comment has no space after //',
+				expected: '// comment',
+				input: '//comment',
+			},
+			{
+				description:
+					'should normalize multiple spaces to single space after //',
+				expected: '// comment',
+				input: '//  comment',
+			},
+			{
+				description: 'should normalize many spaces to single space',
+				expected: '// comment',
+				input: '//     comment',
+			},
+			{
+				description: 'should preserve comment with single space',
+				expected: '// comment',
+				input: '// comment',
+			},
+			{
+				description: 'should handle comment with no content (just //)',
+				expected: '//',
+				input: '//',
+			},
+			{
+				description: 'should handle comment with only space after //',
+				expected: '// ',
+				input: '// ',
+			},
+			{
+				description: 'should preserve leading whitespace before //',
+				expected: '   // comment',
+				input: '   //comment',
+			},
+			{
+				description:
+					'should preserve leading whitespace and normalize space',
+				expected: '   // comment',
+				input: '   //  comment',
+			},
+			{
+				description:
+					'should handle comment with multiple words and spaces',
+				expected: '// comment with spaces',
+				input: '//comment with spaces',
+			},
+			{
+				description: 'should handle comment with special characters',
+				expected: '// comment with special chars !@#$%',
+				input: '//comment with special chars !@#$%',
+			},
+			{
+				description: 'should return non-inline comment as-is',
+				expected: '/* block comment */',
+				input: '/* block comment */',
+			},
+			{
+				description: 'should return regular text as-is',
+				expected: 'regular text',
+				input: 'regular text',
+			},
+		])(
+			'$description',
+			({
+				expected,
+				input,
+			}: Readonly<{
+				description: string;
+				expected: string;
+				input: string;
+			}>) => {
+				const result = normalizeInlineComment(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('normalizeInlineCommentsInCode', () => {
+		it.concurrent.each([
+			{
+				description: 'should normalize inline comment on single line',
+				expected: 'code; // comment',
+				input: 'code; //comment',
+			},
+			{
+				description: 'should normalize inline comment at start of line',
+				expected: '// comment',
+				input: '//comment',
+			},
+			{
+				description:
+					'should normalize multiple inline comments in multiple lines',
+				expected: 'code1; // comment1\ncode2; // comment2',
+				input: 'code1; //comment1\ncode2; //comment2',
+			},
+			{
+				description: 'should handle lines without comments',
+				expected: 'code1;\ncode2;',
+				input: 'code1;\ncode2;',
+			},
+			{
+				description:
+					'should normalize inline comment with leading whitespace',
+				expected: '   code; // comment',
+				input: '   code; //comment',
+			},
+			{
+				description:
+					'should handle mixed lines with and without comments',
+				expected: 'code1;\ncode2; // comment\ncode3;',
+				input: 'code1;\ncode2; //comment\ncode3;',
+			},
+			{
+				description: 'should preserve existing single space comments',
+				expected: 'code; // comment',
+				input: 'code; // comment',
+			},
+			{
+				description:
+					'should normalize multiple spaces in inline comment',
+				expected: 'code; // comment',
+				input: 'code; //  comment',
+			},
+			{
+				description: 'should handle empty lines in code',
+				expected: 'code1;\n\ncode2; // comment',
+				input: 'code1;\n\ncode2; //comment',
+			},
+		])(
+			'$description',
+			({
+				expected,
+				input,
+			}: Readonly<{
+				description: string;
+				expected: string;
+				input: string;
+			}>) => {
+				const result = normalizeInlineCommentsInCode(input);
+				expect(result).toBe(expected);
 			},
 		);
 	});
