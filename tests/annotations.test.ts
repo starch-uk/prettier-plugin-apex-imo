@@ -185,103 +185,142 @@ describe('annotations', () => {
 				const result = printAnnotation(mockPath);
 
 				expect(result).toBeDefined();
+				// Verify result is a valid Doc structure (array or Prettier doc object)
+				expect(
+					Array.isArray(result) || typeof result === 'object',
+				).toBe(true);
 			},
 		);
 
-		it.concurrent(
-			'should handle annotation value with missing, undefined, or empty string',
-			() => {
-				// Empty string, undefined value field, and parameter without value property
-				const keyValueEmpty = {
-					key: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'label',
-					},
-					[nodeClassKey]:
-						'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-					value: {
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-						value: '',
-					} as Readonly<ApexAnnotationValue>,
-				} as Readonly<ApexAnnotationParameter>;
-				const keyValueUndefined = {
-					key: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'label',
-					},
-					[nodeClassKey]:
-						'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-					value: {
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-					} as Readonly<ApexAnnotationValue>,
-				} as Readonly<ApexAnnotationParameter>;
-				const stringNoValue = {
-					[nodeClassKey]:
-						'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-				} as unknown as Readonly<ApexAnnotationParameter>;
-
-				for (const params of [
-					[keyValueEmpty],
-					[keyValueUndefined],
-					[stringNoValue],
-				]) {
-					const mockNode = {
-						name: {
+		it.concurrent.each([
+			{
+				description: 'should handle annotation with empty string value',
+				parameters: [
+					{
+						key: {
 							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'test',
+							value: 'label',
 						},
 						[nodeClassKey]:
-							'apex.jorje.data.ast.Modifier$Annotation',
-						parameters: params,
-					} as Readonly<ApexAnnotationNode>;
-					const result = printAnnotation(
-						createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
-					);
-					expect(result).toBeDefined();
-				}
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						value: {
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+							value: '',
+						} as Readonly<ApexAnnotationValue>,
+					} as Readonly<ApexAnnotationParameter>,
+				],
+			},
+			{
+				description:
+					'should handle annotation with undefined value field',
+				parameters: [
+					{
+						key: {
+							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+							value: 'label',
+						},
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						value: {
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+						} as Readonly<ApexAnnotationValue>,
+					} as Readonly<ApexAnnotationParameter>,
+				],
+			},
+			{
+				description:
+					'should handle annotation parameter without value property',
+				parameters: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+					} as unknown as Readonly<ApexAnnotationParameter>,
+				],
+			},
+		])(
+			'$description',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
+			({
+				parameters,
+			}: Readonly<{
+				description: string;
+				parameters: readonly ApexAnnotationParameter[];
+			}>) => {
+				const mockNode = {
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'test',
+					},
+					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+					parameters,
+				} as Readonly<ApexAnnotationNode>;
+				const result = printAnnotation(
+					createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
+				);
+				expect(result).toBeDefined();
+				expect(
+					Array.isArray(result) || typeof result === 'object',
+				).toBe(true);
 			},
 		);
 
-		it.concurrent(
-			'should handle annotation parameter with non-string value (fallback to empty string)',
-			() => {
-				// AnnotationKeyValue with object value; AnnotationString with number value
-				const keyValueNonString = {
-					key: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'label',
-					},
-					[nodeClassKey]:
-						'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
-					value: {
-						[nodeClassKey]:
-							'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
-						value: { someProperty: 'value' },
-					} as unknown as Readonly<ApexAnnotationValue>,
-				} as Readonly<ApexAnnotationParameter>;
-				const stringNonString = {
-					[nodeClassKey]:
-						'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
-					value: 123,
-				} as unknown as Readonly<ApexAnnotationParameter>;
-
-				for (const params of [[keyValueNonString], [stringNonString]]) {
-					const mockNode = {
-						name: {
+		it.concurrent.each([
+			{
+				description:
+					'should handle AnnotationKeyValue with non-string value (fallback to empty string)',
+				parameters: [
+					{
+						key: {
 							[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-							value: 'test',
+							value: 'label',
 						},
 						[nodeClassKey]:
-							'apex.jorje.data.ast.Modifier$Annotation',
-						parameters: params,
-					} as Readonly<ApexAnnotationNode>;
-					const result = printAnnotation(
-						createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
-					);
-					expect(result).toBeDefined();
-				}
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue',
+						value: {
+							[nodeClassKey]:
+								'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue',
+							value: { someProperty: 'value' },
+						} as unknown as Readonly<ApexAnnotationValue>,
+					} as Readonly<ApexAnnotationParameter>,
+				],
+			},
+			{
+				description:
+					'should handle AnnotationString with non-string value (fallback to empty string)',
+				parameters: [
+					{
+						[nodeClassKey]:
+							'apex.jorje.data.ast.AnnotationParameter$AnnotationString',
+						value: 123,
+					} as unknown as Readonly<ApexAnnotationParameter>,
+				],
+			},
+		])(
+			'$description',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
+			({
+				parameters,
+			}: Readonly<{
+				description: string;
+				parameters: readonly ApexAnnotationParameter[];
+			}>) => {
+				const mockNode = {
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'test',
+					},
+					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
+					parameters,
+				} as Readonly<ApexAnnotationNode>;
+				const result = printAnnotation(
+					createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
+				);
+				expect(result).toBeDefined();
+				expect(
+					Array.isArray(result) || typeof result === 'object',
+				).toBe(true);
 			},
 		);
 
@@ -332,6 +371,10 @@ describe('annotations', () => {
 				const result = printAnnotation(mockPath);
 
 				expect(result).toBeDefined();
+				// Multiline annotations should return a grouped doc structure
+				expect(
+					Array.isArray(result) || typeof result === 'object',
+				).toBe(true);
 			},
 		);
 
@@ -373,6 +416,10 @@ describe('annotations', () => {
 				const result = printAnnotation(mockPath);
 
 				expect(result).toBeDefined();
+				// Multiline annotations should return a grouped doc structure
+				expect(
+					Array.isArray(result) || typeof result === 'object',
+				).toBe(true);
 			},
 		);
 
@@ -408,6 +455,9 @@ describe('annotations', () => {
 				const result = printAnnotation(mockPath);
 
 				expect(result).toBeDefined();
+				expect(
+					Array.isArray(result) || typeof result === 'object',
+				).toBe(true);
 			},
 		);
 
@@ -486,6 +536,10 @@ describe('annotations', () => {
 				const result = printAnnotation(mockPath);
 
 				expect(result).toBeDefined();
+				// Verify result is a valid Doc structure
+				expect(
+					Array.isArray(result) || typeof result === 'object',
+				).toBe(true);
 			},
 		);
 	});

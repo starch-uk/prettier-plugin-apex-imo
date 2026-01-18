@@ -466,37 +466,34 @@ describe('casing', () => {
 			},
 		);
 
-		it.concurrent(
-			'should normalize reserved words in print context (integration test)',
-			() => {
+		it.concurrent.each([
+			{ expected: 'public', input: 'PUBLIC' },
+			{ expected: 'static', input: 'STATIC' },
+			{ expected: 'class', input: 'Class' },
+		])(
+			'should normalize reserved word "$input" to "$expected" in print context (integration test)',
+			({
+				expected,
+				input,
+			}: Readonly<{ expected: string; input: string }>) => {
 				// Test integration: verify that reserved word normalization works
 				// in the context of the print function. Only test a few examples
 				// since normalization.test.ts already tests all reserved words.
-				const testCases = [
-					{ expected: 'public', input: 'PUBLIC' },
-					{ expected: 'static', input: 'STATIC' },
-					{ expected: 'class', input: 'Class' },
-				];
+				const mockPrint = createMockPrint();
+				const reservedWordNormalizingPrint =
+					createReservedWordNormalizingPrint(mockPrint);
+				const node = {
+					[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+					value: input,
+				} as ApexIdentifier;
+				// Use array index to test normalization without restoration
+				const path = createMockPath(node, 0);
 
-				for (const testCase of testCases) {
-					const mockPrint = createMockPrint();
-					const reservedWordNormalizingPrint =
-						createReservedWordNormalizingPrint(mockPrint);
-					const node = {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: testCase.input,
-					} as ApexIdentifier;
-					// Use array index to test normalization without restoration
-					const path = createMockPath(node, 0);
+				reservedWordNormalizingPrint(path);
 
-					reservedWordNormalizingPrint(path);
-
-					// For array indices, value should remain normalized (not restored)
-					expect((node as { value: string }).value).toBe(
-						testCase.expected,
-					);
-					expect(mockPrint).toHaveBeenCalled();
-				}
+				// For array indices, value should remain normalized (not restored)
+				expect((node as { value: string }).value).toBe(expected);
+				expect(mockPrint).toHaveBeenCalled();
 			},
 		);
 	});
