@@ -409,13 +409,6 @@ const processCodeBlockLines = (lines: readonly string[]): readonly string[] => {
 };
 
 /**
- * Shared logic for formatting code blocks with prettier.
- * @param normalizedCode - The normalized code to format.
- * @param optionsWithPlugin - Parser options with plugin configured.
- * @returns The formatted code string.
- */
-
-/**
  * Processes embed result to extract formatted code lines.
  * @param embedResult - The embed result string to process.
  * @returns Array of extracted code lines.

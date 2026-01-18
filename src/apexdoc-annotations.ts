@@ -88,7 +88,7 @@ const collectContinuationFromComment = (
 
 	let continuationContent = continuationMatchGroup;
 	continuationContent = continuationContent.replace(/\s*\*\s*$/, '').trim();
-	// Removed unreachable brace check: regex pattern [^@{]*? on line 70 explicitly excludes '{'
+	// Removed unreachable brace check: the regex pattern [^@{]*? in specificAnnotationRegex explicitly excludes '{'
 	// from the continuation match, so continuationContent can never contain '{'
 	const continuationLines = continuationContent
 		.split('\n')
@@ -390,8 +390,7 @@ const renderAnnotation = (
 	}
 
 	// First line includes the @annotation name
-	// contentLines always has at least one element (line 332-334)
-	// contentLines always has at least one element (line 332-334)
+	// contentLines always has at least one element (initialized with [''] if contentString is empty)
 	// Removed unreachable undefined check: contentLines[FIRST_ELEMENT_INDEX] is always defined
 	const FIRST_ELEMENT_INDEX = 0;
 	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contentLines[FIRST_ELEMENT_INDEX] is always defined
@@ -413,7 +412,7 @@ const renderAnnotation = (
 	}
 
 	const cleanedLines = removeTrailingEmptyLines(lines);
-	// Removed unreachable null branch: we always push firstLine with @annotation name on line 362,
+	// Removed unreachable null branch: we always push firstLine with @annotation name before this point,
 	// so cleanedLines.length will always be >= 1 (removeTrailingEmptyLines only removes trailing empty lines)
 	return {
 		content: cleanedLines.join('\n'),

@@ -93,13 +93,12 @@ describe('apexdoc-annotations', () => {
 
 	describe('wrapAnnotations', () => {
 		it.concurrent(
-			'should skip annotation when firstLineAvailableWidth <= 0',
+			'should skip annotation when no space available on first line',
 			() => {
 				// Test early return when no space available
-				// firstLineAvailableWidth = printWidth - (actualPrefixLength + annotationPrefixLength)
-				// Since printWidth = effectiveWidth + actualPrefixLength,
-				// firstLineAvailableWidth = effectiveWidth - annotationPrefixLength
-				// For @param, annotationPrefixLength = 7 (@param )
+				// When the available width is less than the annotation prefix length,
+				// there's no room for content on the first line
+				// For @param, the prefix is '@param ' (7 characters)
 				// So we need effectiveWidth <= 7 to trigger the condition
 				const doc: ApexDocAnnotation = {
 					content: 'input The input parameter' as Doc,
@@ -287,21 +286,24 @@ describe('apexdoc-annotations', () => {
 			}
 		});
 
-		it.concurrent('should handle doc when docLinesToCheck is empty', () => {
-			// Test when there are no lines to check
-			// This happens when all lines are empty, start with @, or start with {@code}
-			// In this case, we skip the check and push the doc directly
-			const textDoc: ApexDocComment = {
-				content: '   * \n   * ',
-				lines: ['   * ', '   * '],
-				type: 'text',
-			};
-			const docs: ApexDocComment[] = [textDoc];
-			const result = detectAnnotationsInDocs(docs);
-			// When there are no lines to check, we skip the consumed check and push doc
-			expect(result.length).toBe(1);
-			expect(result[0]).toEqual(textDoc);
-		});
+		it.concurrent(
+			'should handle doc when there are no lines to check',
+			() => {
+				// Test when there are no lines to check
+				// This happens when all lines are empty, start with @, or start with {@code}
+				// In this case, we skip the check and push the doc directly
+				const textDoc: ApexDocComment = {
+					content: '   * \n   * ',
+					lines: ['   * ', '   * '],
+					type: 'text',
+				};
+				const docs: ApexDocComment[] = [textDoc];
+				const result = detectAnnotationsInDocs(docs);
+				// When there are no lines to check, we skip the consumed check and push doc
+				expect(result.length).toBe(1);
+				expect(result[0]).toEqual(textDoc);
+			},
+		);
 
 		it.concurrent(
 			'should skip doc when all processed lines filtered out',
@@ -324,10 +326,10 @@ describe('apexdoc-annotations', () => {
 					(d) => d.type === 'annotation',
 				);
 				expect(annotations.length).toBeGreaterThan(0);
-				// Should not have a text doc for the empty processedLines
+				// Should not have a text doc when all content lines are empty
 				// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 				const textDocs = result.filter((d) => d.type === 'text');
-				// The empty lines in processedLines are filtered out, so no text doc should be created
+				// Empty lines are filtered out, so no text doc should be created
 				expect(textDocs.length).toBe(0);
 			},
 		);
@@ -352,7 +354,7 @@ describe('apexdoc-annotations', () => {
 		it.concurrent(
 			'should create text doc from remaining processed lines',
 			() => {
-				// Test creating text doc from processedLines
+				// Test creating text doc from remaining content
 				// This happens when some lines have annotations and some don't
 				const textDoc: ApexDocComment = {
 					content:

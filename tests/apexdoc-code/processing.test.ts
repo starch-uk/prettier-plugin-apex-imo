@@ -476,10 +476,9 @@ describe('apexdoc-code', () => {
 		it.concurrent(
 			'should handle empty code block when beforeCode ends with newline',
 			async () => {
-				// Test false branch of needsLeadingNewline when isEmptyBlock is true
-				// beforeCode ends with '\n', so needsLeadingNewline = false, isEmptyBlock = true
-				// This covers: (needsLeadingNewline ? '\n' : '') when isEmptyBlock is true
-				// Need blank line without ' * ' prefix before code block to make beforeCode end with '\n'
+				// Test when code block is empty and no leading newline is needed
+				// This happens when there's already a blank line before the code block
+				// Need blank line without ' * ' prefix before code block
 				// Format: /**\n * text\n\n{@code } - blank line has no ' * ' prefix
 				const commentText = '/**\n * Some text before\n\n{@code }\n */';
 

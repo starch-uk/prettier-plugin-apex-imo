@@ -48,7 +48,7 @@ const originalApexPrinter = getApexPrinter();
 
 /**
  * PrintComment function that preserves our wrapped lines.
- * The original printApexDocComment trims each line, which removes our carefully
+ * Default comment printing behavior trims each line, which removes our carefully
  * calculated wrapping. This version preserves the line structure we created.
  * @param path - The AST path to the comment node.
  * @param options - Parser options (unused but required by Prettier API).

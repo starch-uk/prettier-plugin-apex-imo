@@ -150,8 +150,7 @@ type ReadonlyCodeBlock = Readonly<CodeBlock>;
 
 /**
  * Normalizes a single ApexDoc comment value.
- * This function handles all normalization including annotation casing, spacing, and wrapping.
- * Normalizes a single ApexDoc comment by formatting annotations, code blocks, and text.
+ * Handles all normalization including annotation casing, spacing, wrapping, and formatting annotations, code blocks, and text.
  * @param commentValue - The comment text (e.g., comment block).
  * @param commentIndent - The indentation level of the comment in spaces.
  * @param options - Parser options including printWidth, tabWidth, and useTabs.
@@ -203,7 +202,7 @@ const normalizeSingleApexDocComment = (
 	);
 
 	// Cache prefix and width calculations (used in both wrapAnnotations and docsToApexDocString)
-	// printWidth is guaranteed to be defined because parseApexDocs (line 179) calls calculateEffectiveWidth (line 570),
+	// printWidth is guaranteed to be defined because parseApexDocs calls calculateEffectiveWidth,
 	// which throws if printWidth is undefined. So prefixAndWidth is never null after parseApexDocs succeeds.
 	const prefixAndWidth = calculatePrefixAndWidth(commentIndent, printWidth, {
 		tabWidth: tabWidthValue,
@@ -472,7 +471,7 @@ const docsToApexDocString = (
 	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
 ): string => {
 	// cachedPrefixAndWidth is always defined when this function is called because:
-	// - When printWidth is undefined, parseApexDocs throws before reaching here (line 570)
+	// - When printWidth is undefined, parseApexDocs throws before reaching here (via calculateEffectiveWidth)
 	// - When printWidth is defined, prefixAndWidth is calculated (not null) and passed here
 	const { commentPrefix, effectiveWidth } = cachedPrefixAndWidth;
 
