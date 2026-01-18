@@ -1,5 +1,9 @@
 /**
  * @file Integration tests for ApexDoc formatting in the plugin.
+ *
+ * These tests verify end-to-end formatting behavior of ApexDoc comments and code blocks
+ * in complete documents. For unit tests of specific extraction, processing, and rendering
+ * functions, see tests/apexdoc-code/*.
  */
 
 import { describe, it, expect } from 'vitest';

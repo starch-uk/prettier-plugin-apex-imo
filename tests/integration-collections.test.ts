@@ -196,14 +196,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 				fixture: 'map-many-pairs',
 			},
 			{
-				description: 'should handle Set with generic types',
-				fixture: 'set-generic-types',
-			},
-			{
-				description: 'should handle List with generic types',
-				fixture: 'list-generic-types',
-			},
-			{
 				description: 'should handle Map with complex key types',
 				fixture: 'map-complex-keys',
 			},
@@ -316,7 +308,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
-	describe('Type formatting differences', () => {
+	describe('Type formatting and collection type names', () => {
 		it.concurrent.each([
 			{
 				description:
@@ -333,21 +325,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 					'should format Map types with comma-space separator',
 				fixture: 'map-qualified-types',
 			},
-		])(
-			'$description',
-			async ({
-				fixture,
-			}: Readonly<{ description: string; fixture: string }>) => {
-				const input = loadFixture(fixture, 'input');
-				const expected = loadFixture(fixture, 'output');
-				const result = await formatApex(input);
-				expect(result).toBe(expected);
-			},
-		);
-	});
-
-	describe('Collection type name formatting', () => {
-		it.concurrent.each([
 			{
 				description:
 					'should use List type name and dot separator for List literals',

@@ -108,22 +108,30 @@ describe('utils', () => {
 			);
 		});
 
-		it.concurrent(
-			'should return undefined when @class is not a string',
-			() => {
+		it.concurrent.each([
+			{
+				description:
+					'should return undefined when @class is not a string',
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing invalid @class type
-				const node = {
-					'@class': 123,
-				} as unknown as ApexNode;
+				node: { '@class': 123 } as unknown as ApexNode,
+			},
+			{
+				description: 'should return undefined when @class is missing',
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing node without @class property
+				node: {} as ApexNode,
+			},
+		])(
+			'$description',
+			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- it.each provides readonly data
+			({
+				node,
+			}: Readonly<{
+				description: string;
+				node: ApexNode;
+			}>) => {
 				expect(getNodeClassOptional(node)).toBeUndefined();
 			},
 		);
-
-		it.concurrent('should return undefined when @class is missing', () => {
-			// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing node without @class property
-			const node = {} as ApexNode;
-			expect(getNodeClassOptional(node)).toBeUndefined();
-		});
 	});
 
 	describe('createNodeClassGuard', () => {
@@ -156,15 +164,24 @@ describe('utils', () => {
 			},
 		);
 
-		it.concurrent('should return false for null', () => {
-			const guard = createNodeClassGuard<ApexNode>('test.Class');
-			expect(guard(null)).toBe(false);
-		});
-
-		it.concurrent('should return false for undefined', () => {
-			const guard = createNodeClassGuard<ApexNode>('test.Class');
-			expect(guard(undefined)).toBe(false);
-		});
+		it.concurrent.each([
+			{ description: 'should return false for null', value: null },
+			{
+				description: 'should return false for undefined',
+				value: undefined,
+			},
+		])(
+			'$description',
+			({
+				value,
+			}: Readonly<{
+				description: string;
+				value: null | undefined;
+			}>) => {
+				const guard = createNodeClassGuard<ApexNode>('test.Class');
+				expect(guard(value)).toBe(false);
+			},
+		);
 	});
 
 	describe('startsWithAccessModifier', () => {

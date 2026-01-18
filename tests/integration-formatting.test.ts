@@ -9,12 +9,13 @@ describe('prettier-plugin-apex-imo integration', () => {
 	describe('Annotation formatting', () => {
 		it.concurrent.each([
 			{
-				description: 'should normalize annotation names to PascalCase',
+				description:
+					'should format annotations with correct name casing',
 				fixture: 'annotation-single-param',
 			},
 			{
 				description:
-					'should normalize annotation option names to camelCase',
+					'should format annotations with multiple parameters and correct option casing',
 				fixture: 'annotation-multiple-params',
 			},
 			{
@@ -48,7 +49,7 @@ describe('prettier-plugin-apex-imo integration', () => {
 			},
 			{
 				description:
-					'should normalize incorrect casing in annotations and modifiers',
+					'should format annotations and modifiers with corrected casing',
 				fixture: 'annotation-incorrect-casing',
 			},
 		])(
@@ -64,21 +65,21 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
-	describe('Standard object type normalization', () => {
+	describe('Standard object type formatting', () => {
 		it.concurrent.each([
 			{
 				description:
-					'should normalize standard object types to correct casing',
+					'should format standard object types with correct casing',
 				fixture: 'standard-object-type-normalization',
 			},
 			{
 				description:
-					'should not convert variable names that match standard object names',
+					'should preserve variable names even when they match standard object names',
 				fixture: 'variable-name-not-type',
 			},
 			{
 				description:
-					'should normalize standard object types in ApexDoc {@code} blocks',
+					'should format standard object types correctly in ApexDoc {@code} blocks',
 				fixture: 'apexdoc-standard-object-type',
 			},
 		])(
@@ -94,11 +95,11 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
-	describe('Primitive type normalization', () => {
+	describe('Primitive type formatting', () => {
 		it.concurrent.each([
 			{
 				description:
-					'should normalize primitive types to PascalCase in variables, parameters, generics, and attributes',
+					'should format primitive types with correct casing in all contexts',
 				fixture: 'primitive-type-normalization',
 			},
 		])(
@@ -114,16 +115,16 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
-	describe('Object suffix normalization', () => {
+	describe('Object suffix formatting', () => {
 		it.concurrent.each([
 			{
 				description:
-					'should normalize object type suffixes to correct casing',
+					'should format object type suffixes with correct casing',
 				fixture: 'object-suffix-normalization',
 			},
 			{
 				description:
-					'should normalize object type suffixes in ApexDoc {@code} blocks',
+					'should format object type suffixes correctly in ApexDoc {@code} blocks',
 				fixture: 'apexdoc-object-suffix-normalization',
 			},
 		])(
@@ -174,11 +175,11 @@ describe('prettier-plugin-apex-imo integration', () => {
 		);
 	});
 
-	describe('Reserved word normalization', () => {
+	describe('Reserved word formatting', () => {
 		it.concurrent.each([
 			{
 				description:
-					'should normalize all reserved words to lowercase (modifiers, keywords, control flow)',
+					'should format all reserved words with correct casing (modifiers, keywords, control flow)',
 				fixture: 'reserved-word-normalization',
 			},
 		])(

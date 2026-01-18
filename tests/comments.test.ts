@@ -29,179 +29,110 @@ import {
 
 describe('comments', () => {
 	describe('getIndentLevel', () => {
-		describe('spaces', () => {
-			it.concurrent.each([
-				{
-					description:
-						'should return correct indent for spaces (2 spaces)',
-					expected: 2,
-					line: '  code',
-					tabWidth: undefined,
-				},
-				{
-					description:
-						'should return correct indent for spaces (4 spaces)',
-					expected: 4,
-					line: '    code',
-					tabWidth: undefined,
-				},
-				{
-					description:
-						'should handle line with only whitespace (spaces)',
-					expected: 4,
-					line: '    ',
-					tabWidth: undefined,
-				},
-			])(
-				'$description',
-				({
-					expected,
-					line,
-					tabWidth,
-				}: Readonly<{
-					description: string;
-					expected: number;
-					line: string;
-					tabWidth: number | undefined;
-				}>) => {
-					if (tabWidth !== undefined) {
-						expect(getIndentLevel(line, tabWidth)).toBe(expected);
-					} else {
-						expect(getIndentLevel(line)).toBe(expected);
-					}
-				},
-			);
-		});
-
-		describe('tabs', () => {
-			it.concurrent.each([
-				{
-					description:
-						'should return correct indent for tabs with default tabWidth (1 tab)',
-					expected: 2,
-					line: '\tcode',
-					tabWidth: undefined,
-				},
-				{
-					description:
-						'should return correct indent for tabs with default tabWidth (2 tabs)',
-					expected: 4,
-					line: '\t\tcode',
-					tabWidth: undefined,
-				},
-				{
-					description:
-						'should return correct indent for tabs with custom tabWidth (1 tab)',
-					expected: 4,
-					line: '\tcode',
-					tabWidth: 4,
-				},
-				{
-					description:
-						'should return correct indent for tabs with custom tabWidth (2 tabs)',
-					expected: 8,
-					line: '\t\tcode',
-					tabWidth: 4,
-				},
-				{
-					description:
-						'should handle line with only whitespace (tabs)',
-					expected: 4,
-					line: '\t\t',
-					tabWidth: undefined,
-				},
-			])(
-				'$description',
-				({
-					expected,
-					line,
-					tabWidth,
-				}: Readonly<{
-					description: string;
-					expected: number;
-					line: string;
-					tabWidth: number | undefined;
-				}>) => {
-					if (tabWidth !== undefined) {
-						expect(getIndentLevel(line, tabWidth)).toBe(expected);
-					} else {
-						expect(getIndentLevel(line)).toBe(expected);
-					}
-				},
-			);
-		});
-
-		describe('mixed spaces and tabs', () => {
-			it.concurrent.each([
-				{
-					description:
-						'should return correct indent for mixed spaces and tabs (default tabWidth)',
-					expected: 4, // 2 spaces + 1 tab (2 spaces) = 4
-					line: '  \tcode',
-					tabWidth: undefined,
-				},
-			])(
-				'$description',
-				({
-					expected,
-					line,
-					tabWidth,
-				}: Readonly<{
-					description: string;
-					expected: number;
-					line: string;
-					tabWidth: number | undefined;
-				}>) => {
-					if (tabWidth !== undefined) {
-						expect(getIndentLevel(line, tabWidth)).toBe(expected);
-					} else {
-						expect(getIndentLevel(line)).toBe(expected);
-					}
-				},
-			);
-		});
-
-		describe('edge cases', () => {
-			it.concurrent.each([
-				{
-					description: 'should return 0 for line with no indentation',
-					expected: 0,
-					line: 'code',
-					tabWidth: undefined,
-				},
-				{
-					description: 'should handle empty string',
-					expected: 0,
-					line: '',
-					tabWidth: undefined,
-				},
-				{
-					description:
-						'should handle line that does not match regex pattern',
-					expected: 0,
-					line: 'code',
-					tabWidth: undefined,
-				},
-			])(
-				'$description',
-				({
-					expected,
-					line,
-					tabWidth,
-				}: Readonly<{
-					description: string;
-					expected: number;
-					line: string;
-					tabWidth: number | undefined;
-				}>) => {
-					if (tabWidth !== undefined) {
-						expect(getIndentLevel(line, tabWidth)).toBe(expected);
-					} else {
-						expect(getIndentLevel(line)).toBe(expected);
-					}
-				},
-			);
-		});
+		it.concurrent.each([
+			// Spaces
+			{
+				description:
+					'should return correct indent for spaces (2 spaces)',
+				expected: 2,
+				line: '  code',
+				tabWidth: undefined,
+			},
+			{
+				description:
+					'should return correct indent for spaces (4 spaces)',
+				expected: 4,
+				line: '    code',
+				tabWidth: undefined,
+			},
+			{
+				description: 'should handle line with only whitespace (spaces)',
+				expected: 4,
+				line: '    ',
+				tabWidth: undefined,
+			},
+			// Tabs
+			{
+				description:
+					'should return correct indent for tabs with default tabWidth (1 tab)',
+				expected: 2,
+				line: '\tcode',
+				tabWidth: undefined,
+			},
+			{
+				description:
+					'should return correct indent for tabs with default tabWidth (2 tabs)',
+				expected: 4,
+				line: '\t\tcode',
+				tabWidth: undefined,
+			},
+			{
+				description:
+					'should return correct indent for tabs with custom tabWidth (1 tab)',
+				expected: 4,
+				line: '\tcode',
+				tabWidth: 4,
+			},
+			{
+				description:
+					'should return correct indent for tabs with custom tabWidth (2 tabs)',
+				expected: 8,
+				line: '\t\tcode',
+				tabWidth: 4,
+			},
+			{
+				description: 'should handle line with only whitespace (tabs)',
+				expected: 4,
+				line: '\t\t',
+				tabWidth: undefined,
+			},
+			// Mixed spaces and tabs
+			{
+				description:
+					'should return correct indent for mixed spaces and tabs (default tabWidth)',
+				expected: 4, // 2 spaces + 1 tab (2 spaces) = 4
+				line: '  \tcode',
+				tabWidth: undefined,
+			},
+			// Edge cases
+			{
+				description: 'should return 0 for line with no indentation',
+				expected: 0,
+				line: 'code',
+				tabWidth: undefined,
+			},
+			{
+				description: 'should handle empty string',
+				expected: 0,
+				line: '',
+				tabWidth: undefined,
+			},
+			{
+				description:
+					'should handle line that does not match regex pattern',
+				expected: 0,
+				line: 'code',
+				tabWidth: undefined,
+			},
+		])(
+			'$description',
+			({
+				expected,
+				line,
+				tabWidth,
+			}: Readonly<{
+				description: string;
+				expected: number;
+				line: string;
+				tabWidth: number | undefined;
+			}>) => {
+				if (tabWidth !== undefined) {
+					expect(getIndentLevel(line, tabWidth)).toBe(expected);
+				} else {
+					expect(getIndentLevel(line)).toBe(expected);
+				}
+			},
+		);
 	});
 
 	describe('createIndent', () => {
