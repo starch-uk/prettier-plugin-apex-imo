@@ -154,16 +154,10 @@ describe('casing', () => {
 		);
 
 		it.concurrent('should handle empty string input', () => {
+			// Test empty string handling in both functions
 			expect(normalizeTypeName('')).toBe('');
+			expect(normalizeStandardObjectType('')).toBe('');
 		});
-
-		it.concurrent(
-			'should handle empty string in normalizeStandardObjectType',
-			() => {
-				// Test the defensive empty string check in normalizeStandardObjectType
-				expect(normalizeStandardObjectType('')).toBe('');
-			},
-		);
 
 		it.concurrent(
 			'should return unchanged for types without normalization needs',

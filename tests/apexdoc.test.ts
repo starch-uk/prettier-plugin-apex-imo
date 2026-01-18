@@ -151,48 +151,45 @@ describe('apexdoc', () => {
 				expect(normalizeResult).toBeDefined();
 			},
 		);
-
-		describe('detectCodeBlockDocs with isEmbedFormatted', () => {
-			it.concurrent.each([
-				{
-					description:
-						'should handle isEmbedFormatted=true for code blocks',
-					isEmbedFormatted: true,
-				},
-				{
-					description:
-						'should handle isEmbedFormatted=false for code blocks',
-					isEmbedFormatted: false,
-				},
-			])(
-				'$description',
-				({
-					isEmbedFormatted,
-				}: Readonly<{
-					description: string;
-					isEmbedFormatted: boolean;
-				}>) => {
-					// Test detectCodeBlockDocs with isEmbedFormatted parameter
-					const textDoc = createDocContent(
-						'text',
-						'Example with {@code Integer x = 10; } code block',
-						['Example with {@code Integer x = 10; } code block'],
-					);
-					const docs: ApexDocComment[] = [textDoc];
-
-					const detectResult = detectCodeBlockDocs(
-						docs,
-						'',
-						isEmbedFormatted,
-					);
-					expect(Array.isArray(detectResult)).toBe(true);
-					expect(detectResult.length).toBeGreaterThan(0);
-				},
-			);
-		});
 	});
 
 	describe('detectCodeBlockDocs', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should handle isEmbedFormatted=true for code blocks',
+				isEmbedFormatted: true,
+			},
+			{
+				description:
+					'should handle isEmbedFormatted=false for code blocks',
+				isEmbedFormatted: false,
+			},
+		])(
+			'$description',
+			({
+				isEmbedFormatted,
+			}: Readonly<{
+				description: string;
+				isEmbedFormatted: boolean;
+			}>) => {
+				// Test detectCodeBlockDocs with isEmbedFormatted parameter
+				const textDoc = createDocContent(
+					'text',
+					'Example with {@code Integer x = 10; } code block',
+					['Example with {@code Integer x = 10; } code block'],
+				);
+				const docs: ApexDocComment[] = [textDoc];
+
+				const detectResult = detectCodeBlockDocs(
+					docs,
+					'',
+					isEmbedFormatted,
+				);
+				expect(Array.isArray(detectResult)).toBe(true);
+				expect(detectResult.length).toBeGreaterThan(0);
+			},
+		);
 		it.concurrent(
 			'should pass through non-text/non-paragraph docs unchanged in detectCodeBlockDocs',
 			() => {

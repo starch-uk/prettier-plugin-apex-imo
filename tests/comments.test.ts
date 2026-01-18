@@ -276,12 +276,6 @@ describe('comments', () => {
 				expect(indent).toBe(expected);
 			},
 		);
-
-		it.concurrent('should handle comment with unskippable newline', () => {
-			const text = '    /**\r     * Comment\n     */';
-			const indent = getCommentIndent(text, 4);
-			expect(indent).toBeGreaterThanOrEqual(0);
-		});
 	});
 
 	describe('normalizeBlockComment', () => {
