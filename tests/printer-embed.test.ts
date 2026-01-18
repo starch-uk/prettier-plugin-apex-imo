@@ -65,37 +65,8 @@ describe('printer embed function', () => {
 	});
 
 	it('should return undefined when pluginInstance is not set', async () => {
-		// Test embed function when pluginInstance is null/undefined
-		// Clear plugin instance to test the null/undefined check
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-type-assertion -- Need to set to undefined for test
-		setCurrentPluginInstance(undefined as any);
-		// Reset it by calling getCurrentPluginInstance which might return undefined now
-		// Actually, we need to clear the module-level variable
-		// The test needs to ensure getCurrentPluginInstance returns null/undefined
-
-		const mockOriginalPrinter = {
-			print: vi.fn(() => 'original output'),
-		};
-
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-unsafe-assignment -- wrapped is used indirectly through mock
-		const wrapped = createWrappedPrinter(mockOriginalPrinter);
-
-		const mockNode = {
-			[nodeClassKey]: BLOCK_COMMENT_CLASS,
-			value: ' * Comment with {@code Integer x = 10;}',
-		} as ApexNode;
-
-		const mockPath = createMockPath(mockNode);
-
-		// Mock getCurrentPluginInstance to return undefined
-		// We can't directly mock module-level functions, so we need to use a different approach
-		// Since getCurrentPluginInstance just returns currentPluginInstance, we need to clear it
-		// But setCurrentPluginInstance expects an object, so we need to access the module directly
-		// For now, let's try clearing it and see if that works
-		// Actually, let's test by ensuring the function is called when pluginInstance might be undefined
-		// The best way is to temporarily not set it, but we need to ensure it's actually undefined
-		// Since the beforeEach sets it, we need to clear it after beforeEach runs
-		// But we can't control beforeEach order easily, so let's mock the module
+		// Test embed function when pluginInstance is undefined
+		// Mock the module to return undefined for getCurrentPluginInstance
 		vi.doMock('../src/printer.js', async () => {
 			const actual = await vi.importActual<
 				// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- import() type is required for typeof import()
@@ -107,30 +78,35 @@ describe('printer embed function', () => {
 			};
 		});
 
-		// Reset modules to ensure fresh import
 		vi.resetModules();
 
-		// Import the module again to get the mocked version
 		const { createWrappedPrinter: createWrappedPrinterMocked } =
 			await import('../src/printer.js');
+		const mockOriginalPrinter = {
+			print: vi.fn(() => 'original output'),
+		};
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Mock printer for test
 		const wrappedMocked = createWrappedPrinterMocked(mockOriginalPrinter);
+
+		const mockNode = {
+			[nodeClassKey]: BLOCK_COMMENT_CLASS,
+			value: ' * Comment with {@code Integer x = 10;}',
+		} as ApexNode;
+		const mockPath = createMockPath(mockNode);
 
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- Testing embed property
 		const embedResult = wrappedMocked.embed?.(
 			mockPath,
 			createMockOptions(),
 		);
-		// embedResult should be a function (the async processor)
 		expect(embedResult).toBeDefined();
 		expect(typeof embedResult).toBe('function');
 
-		// Call the async processor - it should return undefined when pluginInstance is null
+		// Call the async processor - it should return undefined when pluginInstance is undefined
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await -- Testing async processor
 		const docResult = await embedResult?.(async () => 'doc');
 		expect(docResult).toBeUndefined();
 
-		// Restore module
 		vi.doUnmock('../src/printer.js');
 		vi.resetModules();
 	});

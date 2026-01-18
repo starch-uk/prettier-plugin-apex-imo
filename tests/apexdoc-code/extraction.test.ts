@@ -4,32 +4,11 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-	CODE_TAG,
-	CODE_TAG_LENGTH,
-	EMPTY_CODE_TAG,
 	extractCodeFromBlock,
 	extractCodeFromEmbedResult,
 } from '../../src/apexdoc-code.js';
 
 describe('apexdoc-code', () => {
-	describe('CODE_TAG', () => {
-		it.concurrent('should be {@code', () => {
-			expect(CODE_TAG).toBe('{@code');
-		});
-	});
-
-	describe('CODE_TAG_LENGTH', () => {
-		it.concurrent('should match CODE_TAG length', () => {
-			expect(CODE_TAG_LENGTH).toBe(CODE_TAG.length);
-		});
-	});
-
-	describe('EMPTY_CODE_TAG', () => {
-		it.concurrent('should be {@code}', () => {
-			expect(EMPTY_CODE_TAG).toBe('{@code}');
-		});
-	});
-
 	describe('extractCodeFromBlock', () => {
 		it.concurrent('should extract simple code block', () => {
 			const text = '{@code Integer x = 10; }';
