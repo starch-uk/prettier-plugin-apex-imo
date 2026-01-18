@@ -199,20 +199,23 @@ describe('apexdoc-annotations', () => {
 			},
 		);
 
-		it.concurrent('should pass through non-annotation docs', () => {
-			const textDoc: ApexDocComment = {
-				content: 'Some text',
-				lines: ['Some text'],
-				type: 'text',
-			};
-			const docs: ApexDocComment[] = [textDoc];
-			const result = wrapAnnotations(docs, 80, 0, 5, {
-				tabWidth: 2,
-				useTabs: false,
-			});
-			expect(result).toHaveLength(1);
-			expect(result[0]).toEqual(textDoc);
-		});
+		it.concurrent(
+			'should pass through non-annotation docs unchanged in wrapAnnotations',
+			() => {
+				const textDoc: ApexDocComment = {
+					content: 'Some text',
+					lines: ['Some text'],
+					type: 'text',
+				};
+				const docs: ApexDocComment[] = [textDoc];
+				const result = wrapAnnotations(docs, 80, 0, 5, {
+					tabWidth: 2,
+					useTabs: false,
+				});
+				expect(result).toHaveLength(1);
+				expect(result[0]).toEqual(textDoc);
+			},
+		);
 	});
 
 	describe('detectAnnotationsInDocs', () => {
@@ -381,17 +384,20 @@ describe('apexdoc-annotations', () => {
 			},
 		);
 
-		it.concurrent('should pass through non-text docs', () => {
-			const codeDoc: ApexDocComment = {
-				content: 'System.debug("test");',
-				rawCode: 'System.debug("test");',
-				type: 'code',
-			};
-			const docs: ApexDocComment[] = [codeDoc];
-			const result = detectAnnotationsInDocs(docs);
-			expect(result).toHaveLength(1);
-			expect(result[0]).toEqual(codeDoc);
-		});
+		it.concurrent(
+			'should pass through non-text docs unchanged in detectAnnotationsInDocs',
+			() => {
+				const codeDoc: ApexDocComment = {
+					content: 'System.debug("test");',
+					rawCode: 'System.debug("test");',
+					type: 'code',
+				};
+				const docs: ApexDocComment[] = [codeDoc];
+				const result = detectAnnotationsInDocs(docs);
+				expect(result).toHaveLength(1);
+				expect(result[0]).toEqual(codeDoc);
+			},
+		);
 
 		it.concurrent('should skip empty lines in docLines', () => {
 			// Test if (line === '') continue;
@@ -449,17 +455,5 @@ describe('apexdoc-annotations', () => {
 				}
 			},
 		);
-
-		it.concurrent('should pass through non-annotation docs', () => {
-			const textDoc: ApexDocComment = {
-				content: 'Some text',
-				lines: ['Some text'],
-				type: 'text',
-			};
-			const docs: ApexDocComment[] = [textDoc];
-			const result = normalizeAnnotations(docs);
-			expect(result).toHaveLength(1);
-			expect(result[0]).toEqual(textDoc);
-		});
 	});
 });

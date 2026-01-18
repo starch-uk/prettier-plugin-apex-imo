@@ -60,7 +60,6 @@ const originalApexPrinter = getApexPrinter();
  * const doc = printComment(path);
  * ```
  */
-
 const printComment = (
 	path: Readonly<AstPath<ApexNode>>,
 	options: Readonly<ParserOptions>,

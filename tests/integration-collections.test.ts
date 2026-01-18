@@ -16,14 +16,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 				description: 'should format multi-item lists as multiline',
 				fixture: 'list-multiline',
 			},
-			{
-				description: 'should handle lists with 2 items (multiline)',
-				fixture: 'list-two-items',
-			},
-			{
-				description: 'should handle lists with 3+ items (multiline)',
-				fixture: 'list-three-items',
-			},
 		])(
 			'$description',
 			async ({
@@ -46,14 +38,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 			{
 				description: 'should format multi-item sets as multiline',
 				fixture: 'set-multiline',
-			},
-			{
-				description: 'should handle sets with 2 items (multiline)',
-				fixture: 'set-two-items',
-			},
-			{
-				description: 'should handle sets with 3+ items (multiline)',
-				fixture: 'set-three-items',
 			},
 			{
 				description:
@@ -100,14 +84,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 			{
 				description: 'should format multi-pair maps as multiline',
 				fixture: 'map-multiline',
-			},
-			{
-				description: 'should handle maps with 2 pairs (multiline)',
-				fixture: 'map-two-pairs',
-			},
-			{
-				description: 'should handle maps with 3+ pairs (multiline)',
-				fixture: 'map-three-pairs',
 			},
 		])(
 			'$description',

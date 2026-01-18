@@ -39,7 +39,6 @@ const ZERO_LENGTH_CONST = 0;
  * @example
  * extractCodeFromBlock('code block text', 0)
  */
-
 const extractCodeFromBlock = (
 	text: Readonly<string>,
 	startPos: number,
@@ -150,7 +149,6 @@ const shouldStartCodeBlock = (
  * @param codeBlockBraceCount - Current brace count before processing this line.
  * @returns Object with updated brace count, willEnd flag indicating if block closes, and processed line.
  */
-
 const processCodeContentLine = (
 	trimmedLine: string,
 	commentLine: string,
@@ -184,7 +182,6 @@ const processCodeContentLine = (
  * @param totalLines - Total number of lines being processed.
  * @returns Processed line string with prefix added.
  */
-
 const processRegularLine = (
 	trimmedLine: string,
 	commentLine: string,
@@ -242,7 +239,6 @@ const computeNewCodeBlockState = (
  * @param newBraceCount - Current brace count for the code block.
  * @returns Updated accumulator with processed code content line added and state updated.
  */
-
 const processLineAsCodeContent = (
 	accumulator: {
 		result: string[];
@@ -288,7 +284,6 @@ const processLineAsCodeContent = (
  * @param newBraceCount - New brace count after processing.
  * @returns Updated accumulator with processed regular line added to result array and code block state updated.
  */
-
 const processLineAsRegular = (
 	accumulator: {
 		result: string[];
@@ -334,7 +329,6 @@ const processLineAsRegular = (
  * @param totalLines - Total number of lines being processed.
  * @returns Updated accumulator with new state and processed line added.
  */
-
 const processLine = (
 	accumulator: {
 		result: string[];
@@ -528,7 +522,6 @@ function processCodeBlock(
  * @param formattedCode - Optional formatted code string (if code was already formatted by embed function).
  * @returns The ApexDocCodeBlock object.
  */
-
 const createDocCodeBlock = (
 	startPos: number,
 	endPos: number,

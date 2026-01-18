@@ -94,30 +94,45 @@ describe('apexdoc', () => {
 		});
 	});
 
-	describe('isEmbedFormatted branch coverage', () => {
+	describe('normalizeSingleApexDocComment', () => {
 		it.concurrent.each([
 			{
+				commentIndent: 0,
 				description:
-					'should handle isEmbedFormatted=true for code blocks',
+					'should handle commentIndent=0 with isEmbedFormatted=true',
 				isEmbedFormatted: true,
 			},
 			{
+				commentIndent: 0,
 				description:
-					'should handle isEmbedFormatted=false for code blocks',
+					'should handle commentIndent=0 with isEmbedFormatted=false',
+				isEmbedFormatted: false,
+			},
+			{
+				commentIndent: 4,
+				description:
+					'should handle commentIndent>0 with isEmbedFormatted=true',
+				isEmbedFormatted: true,
+			},
+			{
+				commentIndent: 4,
+				description:
+					'should handle commentIndent>0 with isEmbedFormatted=false',
 				isEmbedFormatted: false,
 			},
 		])(
 			'$description',
 			async ({
+				commentIndent,
 				isEmbedFormatted,
 			}: Readonly<{
+				commentIndent: number;
 				description: string;
 				isEmbedFormatted: boolean;
 				// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			}>) => {
-				// Test normalizeSingleApexDocComment with isEmbedFormatted parameter
-				const commentWithCode = `/**
- * Example method.
+				const comment = `/**
+ * Test comment.
  * {@code Integer x = 10; }
  */`;
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
@@ -127,92 +142,82 @@ describe('apexdoc', () => {
 				} as ParserOptions;
 
 				const normalizeResult = normalizeSingleApexDocComment(
-					commentWithCode,
-					0,
+					comment,
+					commentIndent,
 					options,
 					isEmbedFormatted,
 				);
 				expect(normalizeResult).toBeDefined();
-
-				// Test detectCodeBlockDocs with isEmbedFormatted parameter
-				const textDoc = createDocContent(
-					'text',
-					'Example with {@code Integer x = 10; } code block',
-					['Example with {@code Integer x = 10; } code block'],
-				);
-				const docs: ApexDocComment[] = [textDoc];
-
-				const detectResult = detectCodeBlockDocs(
-					docs,
-					'',
-					isEmbedFormatted,
-				);
-				expect(Array.isArray(detectResult)).toBe(true);
-				expect(detectResult.length).toBeGreaterThan(0);
 			},
 		);
-	});
 
-	describe('detectCodeBlockDocs', () => {
-		it.concurrent('should pass through non-text/non-paragraph docs', () => {
-			const codeDoc: ApexDocComment = {
-				code: 'test',
-				endPos: 10,
-				startPos: 0,
-				type: 'code',
-			};
-			const annotationDoc: ApexDocComment = {
-				content: 'test',
-				name: 'param',
-				type: 'annotation',
-			};
+		describe('detectCodeBlockDocs with isEmbedFormatted', () => {
+			it.concurrent.each([
+				{
+					description:
+						'should handle isEmbedFormatted=true for code blocks',
+					isEmbedFormatted: true,
+				},
+				{
+					description:
+						'should handle isEmbedFormatted=false for code blocks',
+					isEmbedFormatted: false,
+				},
+			])(
+				'$description',
+				({
+					isEmbedFormatted,
+				}: Readonly<{
+					description: string;
+					isEmbedFormatted: boolean;
+				}>) => {
+					// Test detectCodeBlockDocs with isEmbedFormatted parameter
+					const textDoc = createDocContent(
+						'text',
+						'Example with {@code Integer x = 10; } code block',
+						['Example with {@code Integer x = 10; } code block'],
+					);
+					const docs: ApexDocComment[] = [textDoc];
 
-			const result1 = detectCodeBlockDocs([codeDoc], '');
-			expect(result1).toEqual([codeDoc]);
-
-			const result2 = detectCodeBlockDocs([annotationDoc], '');
-			expect(result2).toEqual([annotationDoc]);
-
-			const result3 = detectCodeBlockDocs([codeDoc, annotationDoc], '');
-			expect(result3).toEqual([codeDoc, annotationDoc]);
+					const detectResult = detectCodeBlockDocs(
+						docs,
+						'',
+						isEmbedFormatted,
+					);
+					expect(Array.isArray(detectResult)).toBe(true);
+					expect(detectResult.length).toBeGreaterThan(0);
+				},
+			);
 		});
 	});
 
-	describe('calculatePrefixAndWidth with commentIndent', () => {
-		it.concurrent.each([
-			{
-				commentIndent: 0,
-				description: 'should handle commentIndent=0',
-			},
-			{
-				commentIndent: 4,
-				description: 'should handle commentIndent>0',
-			},
-		])(
-			'$description',
-			async ({
-				commentIndent,
-			}: Readonly<{
-				commentIndent: number;
-				description: string;
-				// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
-			}>) => {
-				const comment = `/**
- * Test comment.
- */`;
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
+	describe('detectCodeBlockDocs', () => {
+		it.concurrent(
+			'should pass through non-text/non-paragraph docs unchanged in detectCodeBlockDocs',
+			() => {
+				const codeDoc: ApexDocComment = {
+					code: 'test',
+					endPos: 10,
+					startPos: 0,
+					type: 'code',
+				};
+				const annotationDoc: ApexDocComment = {
+					content: 'test',
+					name: 'param',
+					type: 'annotation',
+				};
 
-				const result = normalizeSingleApexDocComment(
-					comment,
-					commentIndent,
-					options,
-					false,
+				const result1 = detectCodeBlockDocs([codeDoc], '');
+				expect(result1).toEqual([codeDoc]);
+
+				const result2 = detectCodeBlockDocs([annotationDoc], '');
+				expect(result2).toEqual([annotationDoc]);
+
+				const result3 = detectCodeBlockDocs(
+					[codeDoc, annotationDoc],
+					'',
 				);
-				expect(result).toBeDefined();
+				expect(result3).toEqual([codeDoc, annotationDoc]);
 			},
 		);
 	});

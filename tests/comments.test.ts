@@ -311,31 +311,6 @@ describe('comments', () => {
 				description: 'should handle mixed malformations',
 				fixture: 'block-comment-mixed-malformations',
 			},
-		])(
-			'$description',
-			({
-				fixture,
-			}: Readonly<{
-				description: string;
-				fixture: string;
-			}>) => {
-				const inputText = loadFixture(fixture, 'input');
-				const expectedText = loadFixture(fixture, 'output');
-				const inputComment = extractComment(inputText);
-				const expectedComment = extractComment(expectedText);
-				const commentIndent = extractCommentIndent(inputText);
-				const options = { tabWidth: 2, useTabs: false };
-
-				const result = normalizeBlockComment(
-					inputComment,
-					commentIndent,
-					options,
-				);
-				expect(result).toBe(expectedComment);
-			},
-		);
-
-		it.concurrent.each([
 			{
 				description:
 					'should normalize asterisks on lines containing {@code',
@@ -401,12 +376,35 @@ describe('comments', () => {
 	});
 
 	describe('comment attachment handlers', () => {
-		describe('handleOwnLineComment', () => {
-			it('should return false for invalid input', () => {
-				const result = handleOwnLineComment(null, '');
-				expect(result).toBe(false);
-			});
+		describe('invalid input handling', () => {
+			it.each([
+				{
+					handler: handleOwnLineComment,
+					handlerName: 'handleOwnLineComment',
+				},
+				{
+					handler: handleEndOfLineComment,
+					handlerName: 'handleEndOfLineComment',
+				},
+				{
+					handler: handleRemainingComment,
+					handlerName: 'handleRemainingComment',
+				},
+			])(
+				'$handlerName should return false for invalid input',
+				({
+					handler,
+				}: Readonly<{
+					handlerName: string;
+					handler: (comment: unknown, text: string) => boolean;
+				}>) => {
+					const result = handler(null, '');
+					expect(result).toBe(false);
+				},
+			);
+		});
 
+		describe('handleOwnLineComment', () => {
 			it('should handle comments that can be attached to own line', () => {
 				// Test with a comment that has an enclosing node that allows dangling comments
 				const comment = {
@@ -432,11 +430,6 @@ describe('comments', () => {
 		});
 
 		describe('handleEndOfLineComment', () => {
-			it('should return false for invalid input', () => {
-				const result = handleEndOfLineComment(null, '');
-				expect(result).toBe(false);
-			});
-
 			it('should handle end-of-line comments', () => {
 				// Test with a binary expression comment
 				const comment = {
@@ -463,11 +456,6 @@ describe('comments', () => {
 		});
 
 		describe('handleRemainingComment', () => {
-			it('should return false for invalid input', () => {
-				const result = handleRemainingComment(null, '');
-				expect(result).toBe(false);
-			});
-
 			it('should handle remaining comments', () => {
 				// Test with a block statement comment
 				const comment = {

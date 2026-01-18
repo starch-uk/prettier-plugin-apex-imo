@@ -159,7 +159,6 @@ type ReadonlyCodeBlock = Readonly<CodeBlock>;
  * @example
  * normalizeSingleApexDocComment('  * @param x The parameter', 2, { printWidth: 80, tabWidth: 2, useTabs: false })
  */
-
 const normalizeSingleApexDocComment = (
 	commentValue: Readonly<string>,
 	commentIndent: number,
@@ -407,7 +406,6 @@ const renderCodeBlock = (
  * @param options - Options including tabWidth and useTabs.
  * @returns The rendered content doc.
  */
-
 const renderTextOrParagraphDoc = (
 	doc: ApexDocContent,
 	commentPrefix: string,
@@ -458,7 +456,6 @@ const renderTextOrParagraphDoc = (
  * @param cachedPrefixAndWidth - Optional cached prefix and width calculations.
  * @returns The formatted ApexDoc comment string.
  */
-
 const docsToApexDocString = (
 	docs: readonly ApexDocComment[],
 	commentIndent: number,
@@ -567,7 +564,6 @@ const removeTrailingEmptyLines = (lines: readonly string[]): string[] => {
  * @param options - Options including tabWidth and useTabs.
  * @returns Array of wrapped lines (without comment prefix).
  */
-
 const wrapTextContent = (
 	content: string,
 	_originalLines: readonly string[],
@@ -594,7 +590,6 @@ const wrapTextContent = (
  * @param _options - Options including tabWidth and useTabs (unused but kept for API compatibility).
  * @returns Object with tokens and effective page width.
  */
-
 const parseApexDocs = (
 	normalizedComment: Readonly<string>,
 	commentIndent: number,
@@ -686,7 +681,6 @@ const createMergedDoc = (
  * @param startIndex - The starting index in the docs array.
  * @returns Object with merged doc and next index.
  */
-
 const mergeIncompleteCodeBlock = (
 	doc: ApexDocContent,
 	codeTagIndex: number,
@@ -897,7 +891,6 @@ const addTextDocIfNotEmpty = (
  * @param doc - The Doc content doc.
  * @param newDocs - Array to add new Doc docs to.
  */
-
 const processRemainingText = (
 	content: string,
 	currentPos: number,

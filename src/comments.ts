@@ -648,7 +648,6 @@ const getContentLines = (
  * @param isContinuation - Optional flag indicating if this is a continuation.
  * @returns The created ApexDocContent object.
  */
-
 const createDocContent = (
 	type: 'paragraph' | 'text',
 	content: Readonly<string>,
@@ -814,7 +813,6 @@ const parseCommentToDocs = (
  * @param options - Options including tabWidth and useTabs.
  * @returns The formatted comment string.
  */
-
 const tokensToCommentString = (
 	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- docs parameter needs array iteration
 	docs: readonly ApexDocComment[],
