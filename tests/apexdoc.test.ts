@@ -13,6 +13,7 @@ import {
 } from '../src/apexdoc.js';
 import type { ApexDocComment } from '../src/comments.js';
 import { createDocContent } from '../src/comments.js';
+import { expectDocsUnchanged } from './test-utils.js';
 
 describe('apexdoc', () => {
 	describe('filterNonEmptyLines', () => {
@@ -207,17 +208,13 @@ describe('apexdoc', () => {
 					type: 'annotation',
 				};
 
-				const result1 = detectCodeBlockDocs([codeDoc], '');
-				expect(result1).toEqual([codeDoc]);
-
-				const result2 = detectCodeBlockDocs([annotationDoc], '');
-				expect(result2).toEqual([annotationDoc]);
-
-				const result3 = detectCodeBlockDocs(
+				expectDocsUnchanged(detectCodeBlockDocs, [codeDoc], '');
+				expectDocsUnchanged(detectCodeBlockDocs, [annotationDoc], '');
+				expectDocsUnchanged(
+					detectCodeBlockDocs,
 					[codeDoc, annotationDoc],
 					'',
 				);
-				expect(result3).toEqual([codeDoc, annotationDoc]);
 			},
 		);
 	});

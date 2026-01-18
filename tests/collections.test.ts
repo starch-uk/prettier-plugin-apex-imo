@@ -98,6 +98,14 @@ describe('collections', () => {
 	});
 
 	describe('hasMultipleListEntries', () => {
+		const singleValue = [
+			{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+		];
+		const twoValues = [
+			...singleValue,
+			{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
+		];
+
 		it.concurrent.each([
 			{
 				desc: 'returns false for empty list',
@@ -114,9 +122,7 @@ describe('collections', () => {
 				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: [
-						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
-					],
+					values: singleValue,
 				} as Readonly<ApexListInitNode>,
 			},
 			{
@@ -125,10 +131,7 @@ describe('collections', () => {
 				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewListLiteral',
-					values: [
-						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
-						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
-					],
+					values: twoValues,
 				} as Readonly<ApexListInitNode>,
 			},
 			{
@@ -137,10 +140,7 @@ describe('collections', () => {
 				node: {
 					[nodeClassKey]:
 						'apex.jorje.data.ast.NewObject$NewSetLiteral',
-					values: [
-						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
-						{ [nodeClassKey]: 'apex.jorje.data.ast.LiteralExpr' },
-					],
+					values: twoValues,
 				} as Readonly<ApexListInitNode>,
 			},
 			{

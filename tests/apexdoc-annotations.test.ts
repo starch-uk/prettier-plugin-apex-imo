@@ -11,6 +11,7 @@ import {
 	normalizeAnnotations,
 } from '../src/apexdoc-annotations.js';
 import type { ApexDocAnnotation, ApexDocComment } from '../src/comments.js';
+import { expectDocsUnchanged } from './test-utils.js';
 
 describe('apexdoc-annotations', () => {
 	describe('renderAnnotation', () => {
@@ -208,12 +209,10 @@ describe('apexdoc-annotations', () => {
 					type: 'text',
 				};
 				const docs: ApexDocComment[] = [textDoc];
-				const result = wrapAnnotations(docs, 80, 0, 5, {
+				expectDocsUnchanged(wrapAnnotations, docs, 80, 0, 5, {
 					tabWidth: 2,
 					useTabs: false,
 				});
-				expect(result).toHaveLength(1);
-				expect(result[0]).toEqual(textDoc);
 			},
 		);
 	});
@@ -393,9 +392,7 @@ describe('apexdoc-annotations', () => {
 					type: 'code',
 				};
 				const docs: ApexDocComment[] = [codeDoc];
-				const result = detectAnnotationsInDocs(docs);
-				expect(result).toHaveLength(1);
-				expect(result[0]).toEqual(codeDoc);
+				expectDocsUnchanged(detectAnnotationsInDocs, docs);
 			},
 		);
 

@@ -8,8 +8,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as prettier from 'prettier';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import type { AstPath, Doc, ParserOptions } from 'prettier';
+import type { ApexDocComment } from '../src/comments.js';
 import type { ApexNode } from '../src/types.js';
 import plugin from '../src/index.js';
 
@@ -279,6 +280,25 @@ export function extractCodeBlockFromResult(result: string): string {
 		return codeLines.join('\n').trim();
 	}
 	throw new Error(`Code block content is empty in result: ${result}`);
+}
+
+/**
+ * Helper to test that transformation functions pass through certain doc types unchanged.
+ * @param transformFn - The transformation function to test.
+ * @param inputDocs - The input docs to transform.
+ * @param args - Additional arguments to pass to the transformation function.
+ * @example
+ * ```typescript
+ * expectDocsUnchanged(detectCodeBlockDocs, [codeDoc], '');
+ * ```
+ */
+export function expectDocsUnchanged(
+	transformFn: (...args: unknown[]) => readonly ApexDocComment[],
+	inputDocs: readonly ApexDocComment[],
+	...args: unknown[]
+): void {
+	const result = transformFn(inputDocs, ...args);
+	expect(result).toEqual(inputDocs);
 }
 
 // Re-export Prettier and prettier-plugin-apex mocks for convenience

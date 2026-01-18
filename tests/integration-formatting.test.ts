@@ -52,6 +52,44 @@ describe('prettier-plugin-apex-imo integration', () => {
 					'should format annotations and modifiers with corrected casing',
 				fixture: 'annotation-incorrect-casing',
 			},
+			{
+				description: 'should normalize annotation names to PascalCase',
+				fixture: 'annotation-normalize-names-pascalcase',
+			},
+			{
+				description:
+					'should normalize annotation names without parameters',
+				fixture: 'annotation-normalize-names-no-params',
+			},
+			{
+				description:
+					'should normalize annotation names with parameters',
+				fixture: 'annotation-normalize-names-with-params',
+			},
+			{
+				description:
+					'should normalize annotation option names to camelCase',
+				fixture: 'annotation-normalize-option-names',
+			},
+			{
+				description:
+					'should handle annotation names not in the mapping',
+				fixture: 'annotation-normalize-names-not-in-mapping',
+			},
+			{
+				description: 'should handle empty parameters',
+				fixture: 'annotation-normalize-empty-params',
+			},
+			{
+				description: 'should handle multiple annotations in text',
+				fixture: 'annotation-normalize-multiple',
+			},
+			{
+				description:
+					'should handle annotation with option name that matches preferred case',
+				fixture:
+					'annotation-normalize-option-name-matches-preferred-case',
+			},
 		])(
 			'$description',
 			async ({

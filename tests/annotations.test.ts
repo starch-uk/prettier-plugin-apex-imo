@@ -12,7 +12,7 @@ import type {
 	ApexAnnotationValue,
 	ApexAnnotationParameter,
 } from '../src/types.js';
-import { createMockPath, loadFixture, formatApex } from './test-utils.js';
+import { createMockPath } from './test-utils.js';
 
 const nodeClassKey = '@class';
 /** Minimum parameter length for multiline formatting. */
@@ -45,62 +45,6 @@ describe('annotations', () => {
 
 			expect(isAnnotation(node)).toBe(false);
 		});
-	});
-
-	describe('normalizeAnnotationNamesInText', () => {
-		it.concurrent.each([
-			{
-				description: 'should normalize annotation names to PascalCase',
-				fixture: 'annotation-normalize-names-pascalcase',
-			},
-			{
-				description:
-					'should normalize annotation names without parameters',
-				fixture: 'annotation-normalize-names-no-params',
-			},
-			{
-				description:
-					'should normalize annotation names with parameters',
-				fixture: 'annotation-normalize-names-with-params',
-			},
-			{
-				description:
-					'should normalize annotation option names to camelCase',
-				fixture: 'annotation-normalize-option-names',
-			},
-			{
-				description:
-					'should handle annotation names not in the mapping',
-				fixture: 'annotation-normalize-names-not-in-mapping',
-			},
-			{
-				description: 'should handle empty parameters',
-				fixture: 'annotation-normalize-empty-params',
-			},
-			{
-				description: 'should handle multiple annotations in text',
-				fixture: 'annotation-normalize-multiple',
-			},
-			{
-				description:
-					'should handle annotation with option name that matches preferred case',
-				fixture:
-					'annotation-normalize-option-name-matches-preferred-case',
-			},
-		])(
-			'$description',
-			async ({
-				fixture,
-			}: Readonly<{
-				description: string;
-				fixture: string;
-			}>) => {
-				const input = loadFixture(fixture, 'input');
-				const expected = loadFixture(fixture, 'output');
-				const result = await formatApex(input);
-				expect(result).toBe(expected);
-			},
-		);
 	});
 
 	describe('printAnnotation', () => {
@@ -239,34 +183,6 @@ describe('annotations', () => {
 					} as unknown as Readonly<ApexAnnotationParameter>,
 				],
 			},
-		])(
-			'$description',
-			// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
-			({
-				parameters,
-			}: Readonly<{
-				description: string;
-				parameters: readonly ApexAnnotationParameter[];
-			}>) => {
-				const mockNode = {
-					name: {
-						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
-						value: 'test',
-					},
-					[nodeClassKey]: 'apex.jorje.data.ast.Modifier$Annotation',
-					parameters,
-				} as Readonly<ApexAnnotationNode>;
-				const result = printAnnotation(
-					createMockPath(mockNode) as AstPath<ApexAnnotationNode>,
-				);
-				expect(result).toBeDefined();
-				expect(
-					Array.isArray(result) || typeof result === 'object',
-				).toBe(true);
-			},
-		);
-
-		it.concurrent.each([
 			{
 				description:
 					'should handle AnnotationKeyValue with non-string value (fallback to empty string)',
