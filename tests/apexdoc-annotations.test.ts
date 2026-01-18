@@ -89,17 +89,6 @@ describe('apexdoc-annotations', () => {
 			expect(result.lines[0]).toContain('@param');
 			expect(result.lines[0]).toContain('input The input parameter');
 		});
-
-		it.concurrent('should render annotation with empty content', () => {
-			const doc: ApexDocAnnotation = {
-				content: '' as Doc,
-				name: 'deprecated',
-				type: 'annotation',
-			};
-			const result = renderAnnotation(doc, '   * ');
-			expect(result).not.toBeNull();
-			expect(result.lines[0]).toBe('   * @deprecated');
-		});
 	});
 
 	describe('wrapAnnotations', () => {

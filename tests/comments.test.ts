@@ -346,18 +346,11 @@ describe('comments', () => {
 			},
 		);
 
-		it.concurrent(
-			'should handle comment with unskippable newline (skipNewline returns false)',
-			() => {
-				// When skipNewline returns false (e.g., with certain newline sequences)
-				// This tests afterNewline === false branch
-				// Using a comment that starts on a line and has a newline that can't be skipped
-				const text = '    /**\r     * Comment\n     */';
-				const indent = getCommentIndent(text, 4);
-				// The exact indent value depends on how prettier handles the newline
-				expect(indent).toBeGreaterThanOrEqual(0);
-			},
-		);
+		it.concurrent('should handle comment with unskippable newline', () => {
+			const text = '    /**\r     * Comment\n     */';
+			const indent = getCommentIndent(text, 4);
+			expect(indent).toBeGreaterThanOrEqual(0);
+		});
 	});
 
 	describe('normalizeBlockComment', () => {
@@ -455,20 +448,15 @@ describe('comments', () => {
 			},
 		);
 
-		it.concurrent(
-			'should normalize comment starting with /* (comments.ts line 282)',
-			() => {
-				// Test the branch when comment starts with /* instead of /**
-				// This covers line 282: if (comment.substring(start).startsWith('/*'))
-				const comment = '  /* Comment text */';
-				const expected = '  /** Comment text */';
-				const result = normalizeBlockComment(comment, 2, {
-					tabWidth: 2,
-					useTabs: false,
-				});
-				expect(result).toBe(expected);
-			},
-		);
+		it.concurrent('should normalize comment starting with /*', () => {
+			const comment = '  /* Comment text */';
+			const expected = '  /** Comment text */';
+			const result = normalizeBlockComment(comment, 2, {
+				tabWidth: 2,
+				useTabs: false,
+			});
+			expect(result).toBe(expected);
+		});
 
 		it.concurrent('should handle comment with leading whitespace', () => {
 			// Comment with leading whitespace before /*
@@ -500,13 +488,10 @@ describe('comments', () => {
 				expect(result).toBe(true);
 			});
 
-			it('should handle comments with undefined stmnts property (line 144)', () => {
-				// Test line 144: const stmntsLength = enclosingNodeWithMembers.stmnts?.length ?? NOT_FOUND_LENGTH;
-				// When stmnts is undefined, stmnts?.length is undefined, so ?? NOT_FOUND_LENGTH applies
+			it('should handle comments with undefined stmnts property', () => {
 				const comment = {
 					enclosingNode: {
 						'@class': 'apex.jorje.data.ast.InterfaceDeclaration',
-						// stmnts is undefined (not empty array)
 						members: [],
 					},
 				};
@@ -534,14 +519,11 @@ describe('comments', () => {
 				expect(result).toBe(true);
 			});
 
-			it('should return false when binaryExpr.right is missing (comments.ts line 219)', () => {
-				// Test the guard clause when binaryExpr.right is undefined/null
-				// This covers line 219: if (!binaryExpr.right) return false;
+			it('should return false when binaryExpr.right is missing', () => {
 				const comment = {
 					placement: 'endOfLine',
 					precedingNode: {
 						'@class': 'apex.jorje.data.ast.Expr$BinaryExpr',
-						// right is missing/undefined
 					},
 				};
 				const result = handleEndOfLineComment(comment, '');
@@ -567,18 +549,14 @@ describe('comments', () => {
 				expect(result).toBe(true);
 			});
 
-			it('should handle empty block statement with comment (comments.ts line 184)', () => {
-				// Test the else branch when block has no statements (stmnts is undefined or empty)
-				// This covers line 184: addDanglingComment(followingNode, comment, null)
+			it('should handle empty block statement with comment', () => {
 				const comment = {
 					followingNode: {
 						'@class': 'apex.jorje.data.ast.Stmnt$BlockStmnt',
-						// stmnts is undefined or empty array for empty block
 						stmnts: [],
 					},
 				};
 				const result = handleRemainingComment(comment, '');
-				// Should return true because handleBlockStatementLeadingComment handles it
 				expect(result).toBe(true);
 			});
 		});
@@ -586,22 +564,12 @@ describe('comments', () => {
 
 	describe('wrapTextToWidth', () => {
 		it.concurrent(
-			'should handle whitespace-only textContent longer than width (comments.ts line 818)',
+			'should handle whitespace-only textContent longer than width',
 			() => {
-				// Test the isEmpty(words) guard clause when textContent is only whitespace
-				// This covers line 818: if (isEmpty(words)) return [textContent]
-				// Need textContent.length > effectiveWidth to pass the first check (line 811)
-
-				/**
-				 * 90 spaces, longer than effectiveWidth.
-				 */
 				const whitespaceOnly = '   '.repeat(30);
-				const result = wrapTextToWidth(
-					whitespaceOnly,
-					10, // effectiveWidth - must be less than textContent.length
-					{ tabWidth: 2 },
-				);
-				// Should return original textContent when words array is empty (only whitespace)
+				const result = wrapTextToWidth(whitespaceOnly, 10, {
+					tabWidth: 2,
+				});
 				expect(result).toEqual([whitespaceOnly]);
 			},
 		);
@@ -609,162 +577,117 @@ describe('comments', () => {
 		it.concurrent.each([
 			{ label: 'null', options: { tabWidth: 2, useTabs: null } },
 			{ label: 'undefined', options: { tabWidth: 2 } },
+			{ label: 'true', options: { tabWidth: 2, useTabs: true } },
 		])(
-			'should handle useTabs $label (comments.ts line 823 else branch)',
+			'should handle useTabs $label',
 			(
 				row: Readonly<{
 					label: string;
-					options: Readonly<{ tabWidth: number; useTabs?: null }>;
+					options: Readonly<{
+						tabWidth: number;
+						useTabs?: boolean | null;
+					}>;
 				}>,
 			) => {
-				// Test the else branch when useTabs is null or undefined
-				// This covers line 823: else branch (empty object {})
 				const longText = 'word '.repeat(50);
 				const result = wrapTextToWidth(longText, 10, row.options);
-				expect(result.length).toBeGreaterThan(1);
-			},
-		);
-
-		it.concurrent(
-			'should handle useTabs true (comments.ts line 823 true branch)',
-			() => {
-				// Test the true branch when useTabs is explicitly true
-				// This covers line 823: true branch { useTabs: options.useTabs }
-
-				/**
-				 * Long text that needs wrapping.
-				 */
-				const longText = 'word '.repeat(50);
-				const result = wrapTextToWidth(
-					longText,
-					10, // effectiveWidth
-					{ tabWidth: 2, useTabs: true }, // useTabs is true
-				);
-				// Should wrap successfully with useTabs option
 				expect(result.length).toBeGreaterThan(1);
 			},
 		);
 	});
 
 	describe('tokensToCommentString', () => {
-		it.concurrent(
-			'should process text and paragraph type docs (comments.ts lines 772-779)',
-			() => {
-				// Test the loop body that processes text/paragraph type docs
-				// This covers lines 772-779: the loop that processes docLines and adds prefix
-				const textDoc: ApexDocComment = {
-					content: 'Some text content',
-					lines: ['Some text content'], // Lines for text doc
-					type: 'text',
-				};
-				const paragraphDoc: ApexDocComment = {
-					content: 'Paragraph content',
-					lines: ['Paragraph content'], // Lines for paragraph doc
-					type: 'paragraph',
-				};
-				const docs: ApexDocComment[] = [textDoc, paragraphDoc];
+		it.concurrent('should process text and paragraph type docs', () => {
+			const textDoc: ApexDocComment = {
+				content: 'Some text content',
+				lines: ['Some text content'],
+				type: 'text',
+			};
+			const paragraphDoc: ApexDocComment = {
+				content: 'Paragraph content',
+				lines: ['Paragraph content'],
+				type: 'paragraph',
+			};
+			const docs: ApexDocComment[] = [textDoc, paragraphDoc];
 
-				const result = tokensToCommentString(docs, 0, {
-					tabWidth: 2,
-					useTabs: false,
-				});
+			const result = tokensToCommentString(docs, 0, {
+				tabWidth: 2,
+				useTabs: false,
+			});
 
-				// Should produce a valid comment string with opening/closing markers
-				expect(result).toContain('/**');
-				expect(result).toContain('*/');
-				expect(result).toContain('Some text content');
-				expect(result).toContain('Paragraph content');
-			},
-		);
+			expect(result).toContain('/**');
+			expect(result).toContain('*/');
+			expect(result).toContain('Some text content');
+			expect(result).toContain('Paragraph content');
+		});
 
-		it.concurrent(
-			'should handle lines that already start with * (comments.ts line 779)',
-			() => {
-				// Test the ternary branch when line.trimStart().startsWith('*')
-				// This covers line 779: the true branch of the ternary
-				const paragraphDoc: ApexDocComment = {
-					content: 'Content with * prefix',
-					lines: ['   * Content with * prefix'], // Line that already has * prefix
-					type: 'paragraph',
-				};
-				const docs: ApexDocComment[] = [paragraphDoc];
+		it.concurrent('should handle lines that already start with *', () => {
+			const paragraphDoc: ApexDocComment = {
+				content: 'Content with * prefix',
+				lines: ['   * Content with * prefix'],
+				type: 'paragraph',
+			};
+			const docs: ApexDocComment[] = [paragraphDoc];
 
-				const result = tokensToCommentString(docs, 0, {
-					tabWidth: 2,
-					useTabs: false,
-				});
+			const result = tokensToCommentString(docs, 0, {
+				tabWidth: 2,
+				useTabs: false,
+			});
 
-				// Should preserve the existing * prefix
-				expect(result).toContain('* Content with * prefix');
-			},
-		);
+			expect(result).toContain('* Content with * prefix');
+		});
 
-		it.concurrent(
-			'should add prefix to lines without * (comments.ts line 781)',
-			() => {
-				// Test the ternary branch when line doesn't start with *
-				// This covers line 781: the false branch that adds commentPrefix
-				const paragraphDoc: ApexDocComment = {
-					content: 'Content without prefix',
-					lines: ['Content without prefix'], // Line without * prefix
-					type: 'paragraph',
-				};
-				const docs: ApexDocComment[] = [paragraphDoc];
+		it.concurrent('should add prefix to lines without *', () => {
+			const paragraphDoc: ApexDocComment = {
+				content: 'Content without prefix',
+				lines: ['Content without prefix'],
+				type: 'paragraph',
+			};
+			const docs: ApexDocComment[] = [paragraphDoc];
 
-				const result = tokensToCommentString(docs, 2, {
-					// commentIndent: 2, tabWidth: 2
-					tabWidth: 2,
-					useTabs: false,
-				});
+			const result = tokensToCommentString(docs, 2, {
+				tabWidth: 2,
+				useTabs: false,
+			});
 
-				// Should add the comment prefix (spaces + *)
-				expect(result).toContain('Content without prefix');
-				// Should have proper comment structure
-				expect(result).toContain('/**');
-				expect(result).toContain('*/');
-			},
-		);
+			expect(result).toContain('Content without prefix');
+			expect(result).toContain('/**');
+			expect(result).toContain('*/');
+		});
 
-		it.concurrent(
-			'should skip code and annotation type docs (comments.ts line 849)',
-			() => {
-				// Test line 849: continue when doc.type is 'code' or 'annotation'
-				const textDoc: ApexDocComment = {
-					content: 'Some text',
-					lines: ['Some text'],
-					type: 'text',
-				};
-				const codeDoc: ApexDocComment = {
-					content: 'System.debug("test");',
-					rawCode: 'System.debug("test");',
-					type: 'code',
-				};
-				const annotationDoc: ApexDocComment = {
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
-					content: 'param input The input' as unknown as Doc,
-					name: 'param',
-					type: 'annotation',
-				};
-				const docs: ApexDocComment[] = [
-					textDoc,
-					codeDoc,
-					annotationDoc,
-					textDoc,
-				];
+		it.concurrent('should skip code and annotation type docs', () => {
+			const textDoc: ApexDocComment = {
+				content: 'Some text',
+				lines: ['Some text'],
+				type: 'text',
+			};
+			const codeDoc: ApexDocComment = {
+				content: 'System.debug("test");',
+				rawCode: 'System.debug("test");',
+				type: 'code',
+			};
+			const annotationDoc: ApexDocComment = {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-type-assertion -- Doc type assertion for test
+				content: 'param input The input' as unknown as Doc,
+				name: 'param',
+				type: 'annotation',
+			};
+			const docs: ApexDocComment[] = [
+				textDoc,
+				codeDoc,
+				annotationDoc,
+				textDoc,
+			];
 
-				const result = tokensToCommentString(docs, 0, {
-					tabWidth: 2,
-					useTabs: false,
-				});
+			const result = tokensToCommentString(docs, 0, {
+				tabWidth: 2,
+				useTabs: false,
+			});
 
-				// Should process text docs but skip code and annotation docs
-				expect(result).toContain('/**');
-				expect(result).toContain('*/');
-				expect(result).toContain('Some text');
-				// Code and annotation docs should be skipped, so their content shouldn't appear
-				// (they're handled separately in the processing pipeline)
-			},
-		);
+			expect(result).toContain('/**');
+			expect(result).toContain('*/');
+			expect(result).toContain('Some text');
+		});
 	});
 
 	describe('normalizeBlockComment edge cases', () => {
@@ -826,8 +749,7 @@ describe('comments', () => {
 				},
 			},
 			{
-				description:
-					'should handle empty comment value (comments.ts line 868)',
+				description: 'should handle empty comment value',
 				formatCallbacks: {
 					getCommentId: (_key: string): undefined => undefined,
 					skipToLineEnd: (): string => '',
@@ -839,13 +761,10 @@ describe('comments', () => {
 					tabWidth: 2,
 				} as ParserOptions,
 				setupMockPath: (): AstPath<ApexNode> => {
-					// Test the guard clause when commentValue is empty string
-					// This covers line 868: if (commentValue === '') return ''
-					// Create a comment node with empty value
 					const emptyCommentNode = {
 						'@class':
 							'apex.jorje.parser.impl.HiddenTokens$BlockComment',
-						value: '', // Empty comment value
+						value: '',
 					};
 					return {
 						// eslint-disable-next-line @typescript-eslint/no-misused-spread -- Spread needed for mock path customization

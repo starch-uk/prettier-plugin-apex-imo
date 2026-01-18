@@ -94,7 +94,7 @@ describe('apexdoc', () => {
 		});
 	});
 
-	describe('normalizeSingleApexDocComment with isEmbedFormatted', () => {
+	describe('isEmbedFormatted branch coverage', () => {
 		it.concurrent.each([
 			{
 				description:
@@ -115,7 +115,7 @@ describe('apexdoc', () => {
 				isEmbedFormatted: boolean;
 				// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
 			}>) => {
-				// Test the isEmbedFormatted branch when code blocks are processed
+				// Test normalizeSingleApexDocComment with isEmbedFormatted parameter
 				const commentWithCode = `/**
  * Example method.
  * {@code Integer x = 10; }
@@ -126,39 +126,14 @@ describe('apexdoc', () => {
 					tabWidth: 2,
 				} as ParserOptions;
 
-				const result = normalizeSingleApexDocComment(
+				const normalizeResult = normalizeSingleApexDocComment(
 					commentWithCode,
 					0,
 					options,
 					isEmbedFormatted,
 				);
+				expect(normalizeResult).toBeDefined();
 
-				// Should process successfully - the isEmbedFormatted branch should execute
-				expect(result).toBeDefined();
-			},
-		);
-	});
-
-	describe('detectCodeBlockDocs', () => {
-		it.concurrent.each([
-			{
-				description:
-					'should handle isEmbedFormatted=true when processing code blocks',
-				isEmbedFormatted: true,
-			},
-			{
-				description:
-					'should handle isEmbedFormatted=false when processing code blocks',
-				isEmbedFormatted: false,
-			},
-		])(
-			'$description',
-			({
-				isEmbedFormatted,
-			}: Readonly<{
-				description: string;
-				isEmbedFormatted: boolean;
-			}>) => {
 				// Test detectCodeBlockDocs with isEmbedFormatted parameter
 				const textDoc = createDocContent(
 					'text',
@@ -167,12 +142,18 @@ describe('apexdoc', () => {
 				);
 				const docs: ApexDocComment[] = [textDoc];
 
-				const result = detectCodeBlockDocs(docs, '', isEmbedFormatted);
-				expect(Array.isArray(result)).toBe(true);
-				expect(result.length).toBeGreaterThan(0);
+				const detectResult = detectCodeBlockDocs(
+					docs,
+					'',
+					isEmbedFormatted,
+				);
+				expect(Array.isArray(detectResult)).toBe(true);
+				expect(detectResult.length).toBeGreaterThan(0);
 			},
 		);
+	});
 
+	describe('detectCodeBlockDocs', () => {
 		it.concurrent('should pass through non-text/non-paragraph docs', () => {
 			const codeDoc: ApexDocComment = {
 				code: 'test',

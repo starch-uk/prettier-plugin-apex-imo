@@ -56,31 +56,25 @@ describe('apexdoc-code', () => {
 			expect(result2[1]).toBe(' *   }');
 		});
 
-		it.concurrent('should handle code block ending within a line', () => {
-			// Test when inCodeBlock is true, line doesn't start with CODE_TAG, and willEndCodeBlock is true
-			// This exercises countBracesAndCheckEnd call and the willEndCodeBlock=true branch that sets inCodeBlock=false
-			const lines = [
-				' * {@code', // Starts code block, sets inCodeBlock=true, codeBlockBraceCount=1
-				' *   Integer x = 10;', // In code block, processes braces
-				' * }', // Decrements braceCount to 0, willEndCodeBlock=true
-				// Then enters if (inCodeBlock && !trimmedLine.startsWith(CODE_TAG))
-				// And sets inCodeBlock=false when willEndCodeBlock=true
-			];
-			const result = processCodeBlockLines(lines);
-			expect(result.length).toBe(3);
-			// Verify the closing brace was processed correctly
-			expect(result[2]).toContain('}');
-			// Verify subsequent processing after code block ends
-			const linesAfter = [
-				' * {@code',
-				' *   Integer x = 10;',
-				' * }',
-				' * More text',
-			];
-			const resultAfter = processCodeBlockLines(linesAfter);
-			// After ' * }', inCodeBlock should be false, so ' * More text' should be processed normally
-			expect(resultAfter[3]).toContain('More text');
-		});
+		it.concurrent(
+			'should handle code block ending on standalone closing brace line',
+			() => {
+				const lines = [' * {@code', ' *   Integer x = 10;', ' * }'];
+				const result = processCodeBlockLines(lines);
+				expect(result.length).toBe(3);
+				expect(result[2]).toContain('}');
+
+				// Verify subsequent processing after code block ends
+				const linesAfter = [
+					' * {@code',
+					' *   Integer x = 10;',
+					' * }',
+					' * More text',
+				];
+				const resultAfter = processCodeBlockLines(linesAfter);
+				expect(resultAfter[3]).toContain('More text');
+			},
+		);
 
 		it.concurrent('should handle empty lines array', () => {
 			const lines: readonly string[] = [];
@@ -97,18 +91,10 @@ describe('apexdoc-code', () => {
 		it.concurrent(
 			'should handle code block ending on line with content',
 			() => {
-				// Lines where code block ends with willEndCodeBlock = true
-				// First line starts code block (sets inCodeBlock = true, codeBlockBraceCount = 1)
-				// Second line has content + closing brace that ends the block
-				const lines = [
-					' * {@code',
-					' *   Integer x = 1; }', // This line decrements braceCount to 0 (willEndCodeBlock = true)
-				];
+				const lines = [' * {@code', ' *   Integer x = 1; }'];
 				const result = processCodeBlockLines(lines);
 				expect(result).toHaveLength(2);
 				expect(result[0]).toContain('{@code');
-				// Second line should be processed: inCodeBlock=true, !startsWith(CODE_TAG), willEndCodeBlock=true
-				// This should execute countBracesAndCheckEnd and willEndCodeBlock check
 				expect(result[1]).toContain('Integer x = 1;');
 				expect(result[1]).toContain('}');
 			},
@@ -117,21 +103,10 @@ describe('apexdoc-code', () => {
 		it.concurrent(
 			'should handle code block content line with willEnd=false',
 			() => {
-				// Test when inCodeBlock=true, !startsWith(CODE_TAG), willEnd=false
-				// This covers the ternary's false branch: willEnd ? {...} : nextState
-				// Also tests return processLineAsCodeContent when isCodeContent=true
-				// Lines should be: {@code, content line (willEnd=false), closing }
-				const lines = [
-					'{@code', // Starts code block, sets inCodeBlock=true, codeBlockBraceCount=1
-					'  Integer x = 10;', // In code block, processes braces, willEnd=false (braceCount still 1)
-					'}', // This line will set willEnd=true
-				];
+				const lines = ['{@code', '  Integer x = 10;', '}'];
 				const result = processCodeBlockLines(lines);
 				expect(result).toHaveLength(3);
 				expect(result[0]).toContain('{@code');
-				// Second line: isCodeContent=true (newInCodeBlock=true && !isCodeTagLine), willEnd=false
-				// This should trigger return processLineAsCodeContent(...)
-				// This exercises the false branch of the ternary
 				expect(result[1]).toContain('Integer x = 10;');
 				expect(result[1]).not.toContain('}');
 				expect(result[2]).toContain('}');
@@ -141,25 +116,18 @@ describe('apexdoc-code', () => {
 		it.concurrent(
 			'should handle code block content line with willEnd=true',
 			() => {
-				// Test when inCodeBlock=true, !startsWith(CODE_TAG), willEnd=true
-				// This covers the ternary's true branch: willEnd ? {...} : nextState
-				// Multi-line where the closing brace is on the content line
-				const lines = [
-					' * {@code',
-					' *   Integer x = 10; }', // Content line that ends the block (willEnd=true)
-				];
+				const lines = [' * {@code', ' *   Integer x = 10; }'];
 				const result = processCodeBlockLines(lines);
 				expect(result).toHaveLength(2);
 				expect(result[0]).toContain('{@code');
-				// Second line: isCodeContent=true, willEnd=true, should use ternary's true branch
-				// This exercises the true branch of the ternary (willEnd ? {...})
 				expect(result[1]).toContain('Integer x = 10;');
 				expect(result[1]).toContain('}');
+
 				// Verify that the next line (if any) would not be in code block
 				const linesWithMore = [
 					' * {@code',
-					' *   Integer x = 10; }', // Ends the block
-					' * More text', // Should not be processed as code content
+					' *   Integer x = 10; }',
+					' * More text',
 				];
 				const resultWithMore = processCodeBlockLines(linesWithMore);
 				expect(resultWithMore).toHaveLength(3);
