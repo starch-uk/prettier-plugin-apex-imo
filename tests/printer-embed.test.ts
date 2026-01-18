@@ -152,7 +152,7 @@ describe('printer embed function', () => {
 
 	it('should handle comment node with undefined value', () => {
 		// Test branch coverage: commentText?.includes() when commentText is undefined
-		// This tests the optional chaining branch on line 231 in printer.ts
+		// This tests the optional chaining branch when commentText is undefined
 		setCurrentPluginInstance({ default: {} });
 
 		const mockOriginalPrinter = {

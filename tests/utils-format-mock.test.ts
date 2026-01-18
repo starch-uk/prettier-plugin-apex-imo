@@ -22,7 +22,7 @@ describe('formatApexCodeWithFallback with mocked prettier.format', () => {
 		mockFormat.mockClear();
 	});
 
-	it('should return result from apex parser when apex-anonymous fails (line 180)', async () => {
+	it('should return result from apex parser when apex-anonymous fails', async () => {
 		const code = 'Integer x = 10;';
 
 		/**
@@ -40,7 +40,7 @@ describe('formatApexCodeWithFallback with mocked prettier.format', () => {
 			plugins: [],
 		});
 
-		// Should return result from second parser (line 180)
+		// Should return result from second parser
 		expect(result).toBe(formattedResult);
 		expect(mockFormat).toHaveBeenCalledTimes(2);
 		// First call with apex-anonymous

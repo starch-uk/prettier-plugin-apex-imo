@@ -66,7 +66,7 @@ describe('index', () => {
 		it.concurrent(
 			'should skip invalid parsers (missing parse method)',
 			() => {
-				// Create mock parsers object with invalid entries to test continue statement (line 127)
+				// Create mock parsers object with invalid entries to test skipping invalid parsers
 				const mockParsers = {
 					invalid1: undefined, // undefined entry
 					invalid2: {}, // missing parse method
@@ -90,7 +90,7 @@ describe('index', () => {
 				expect(
 					typeof (wrapped?.valid as { parse?: unknown }).parse,
 				).toBe('function');
-				// Invalid parsers should be skipped (line 127 continue statement)
+				// Invalid parsers should be skipped
 				expect(wrapped?.invalid1).toBeUndefined();
 				expect(wrapped?.invalid2).toBeUndefined();
 				expect(wrapped?.invalid3).toBeUndefined();

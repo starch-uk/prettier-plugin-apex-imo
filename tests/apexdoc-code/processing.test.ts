@@ -41,18 +41,17 @@ describe('apexdoc-code', () => {
 
 		it.concurrent('should handle standalone closing brace', () => {
 			// Test the standalone '}' case
-			// For first line (index 0), prefix is empty string (index > EMPTY ? ' ' : '')
+			// First line should have no leading space prefix
 			const lines = [' *   }'];
 			const result = processCodeBlockLines(lines);
 			expect(result[0]).toContain('}');
-			// Should return prefix + commentLine.trimStart()
-			// index 0: prefix = '', commentLine = ' *   }', trimStart() = '*   }', so result = '*   }'
+			// Should preserve the asterisk and whitespace structure
 			expect(result[0]).toBe('*   }');
 
-			// Test with second line to get prefix = ' '
+			// Test with multiple lines to verify spacing is preserved for subsequent lines
 			const lines2 = [' * Line 1', ' *   }'];
 			const result2 = processCodeBlockLines(lines2);
-			// index 1: prefix = ' ', commentLine = ' *   }', trimStart() = '*   }', so result = ' *   }'
+			// Second line should have leading space to align with first line
 			expect(result2[1]).toBe(' *   }');
 		});
 
@@ -395,10 +394,8 @@ describe('apexdoc-code', () => {
 		it.concurrent('should handle embedResult without code markers', () => {
 			// Use multiline codeBlock to avoid early return for single-line code
 			const codeBlock = '{@code\nInteger x = 10;\nString y = "test";\n}';
-			// Mock formatted embed result without {@code markers - should use slice fallback
-			// Also include lines without asterisk prefix
-			// Format: /**\n * line1\n * line2\n * line3\n */\n
-			// After removing first 2 lines (SKIP_FIRST_TWO_LINES), should have at least line3
+			// Mock formatted embed result without {@code markers - should use fallback extraction
+			// Embed result has ApexDoc comment structure with multiple lines
 			const embedResult = '/**\n * Line 1\n * Line 2\n * Line 3\n */\n';
 			const getFormattedCodeBlock = (key: string): string | undefined => {
 				if (key === 'test-key') return embedResult;
@@ -413,8 +410,8 @@ describe('apexdoc-code', () => {
 				'test-key',
 				options,
 			);
-			// Should fall back to slice(SKIP_FIRST_TWO_LINES) when code markers not found
-			// This wraps result in {@code ... }, so length should be at least 3: ['{@code', 'Line 3', '}']
+			// Should fall back to extracting content when code markers not found
+			// Result should be wrapped in {@code ... }, with at least 3 elements
 			expect(result.length).toBeGreaterThanOrEqual(3);
 			expect(result[0]).toBe('{@code');
 			expect(result[result.length - 1]).toBe('}');

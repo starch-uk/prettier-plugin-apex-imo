@@ -622,24 +622,21 @@ describe('comments', () => {
 	});
 
 	describe('normalizeBlockComment edge cases', () => {
-		it.concurrent(
-			'should handle comment without closing slash (comments.ts line 312)',
-			() => {
-				// Test the break condition when no / is found in normalizeCommentEnd
-				// This covers line 312: if (slashPos === -1) break;
-				// A comment without / would be malformed, but we should handle it gracefully
-				const malformedComment = '/** Comment text without closing';
-				// normalizeBlockComment should handle this - the normalizeCommentEnd will break
-				// when no / is found after searching through the string
-				const result = normalizeBlockComment(malformedComment, 0, {
-					tabWidth: 2,
-					useTabs: false,
-				});
-				// Should return normalized comment (start normalization happens first)
-				expect(typeof result).toBe('string');
-				expect(result).toContain('/**');
-			},
-		);
+		it.concurrent('should handle comment without closing slash', () => {
+			// Test the break condition when no / is found in normalizeCommentEnd
+			// This covers the case when no slash is found in the comment
+			// A comment without / would be malformed, but we should handle it gracefully
+			const malformedComment = '/** Comment text without closing';
+			// normalizeBlockComment should handle this - the normalizeCommentEnd will break
+			// when no / is found after searching through the string
+			const result = normalizeBlockComment(malformedComment, 0, {
+				tabWidth: 2,
+				useTabs: false,
+			});
+			// Should return normalized comment (start normalization happens first)
+			expect(typeof result).toBe('string');
+			expect(result).toContain('/**');
+		});
 	});
 
 	describe('printComment', () => {

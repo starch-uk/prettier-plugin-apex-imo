@@ -361,7 +361,7 @@ describe('utils', () => {
 					const sparseLines: (string | undefined)[] = ['  }'];
 					sparseLines[2] = '  @Test'; // Skip index 1
 					// Access with index 1 which is undefined
-					// This tests line 137: if (currentLine === undefined) return false;
+					// This tests the case when currentLine is undefined
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Testing sparse array with undefined elements
 					return sparseLines as readonly string[];
 				})(),

@@ -108,7 +108,7 @@ describe('apexdoc-annotations', () => {
 				};
 				const docs: ApexDocComment[] = [doc];
 				// Set effectiveWidth to 5, which is less than '@param '.length (7)
-				// This makes firstLineAvailableWidth = 5 - 7 = -2 <= 0
+				// This tests when there's no space for content on the first line
 				const effectiveWidth = 5;
 				const actualPrefixLength = 5;
 
@@ -181,8 +181,8 @@ describe('apexdoc-annotations', () => {
 		it.concurrent(
 			'should handle first word too long for first line',
 			() => {
-				// Test allLines ternary when firstLineContent is empty
-				// This happens when first word doesn't fit on first line (firstLineWords.length === 0)
+				// Test when first line content is empty
+				// This happens when the first word is too long to fit on the first line
 				const doc: ApexDocAnnotation = {
 					content:
 						'SuperLongWordThatDoesNotFitOnFirstLine more content here' as Doc,
@@ -288,9 +288,9 @@ describe('apexdoc-annotations', () => {
 		});
 
 		it.concurrent('should handle doc when docLinesToCheck is empty', () => {
-			// Test when docLinesToCheck.length === 0
+			// Test when there are no lines to check
 			// This happens when all lines are empty, start with @, or start with {@code}
-			// When docLinesToCheck.length === 0, we skip the check and push the doc
+			// In this case, we skip the check and push the doc directly
 			const textDoc: ApexDocComment = {
 				content: '   * \n   * ',
 				lines: ['   * ', '   * '],
@@ -298,7 +298,7 @@ describe('apexdoc-annotations', () => {
 			};
 			const docs: ApexDocComment[] = [textDoc];
 			const result = detectAnnotationsInDocs(docs);
-			// When docLinesToCheck.length === 0, we skip the consumed check and push doc
+			// When there are no lines to check, we skip the consumed check and push doc
 			expect(result.length).toBe(1);
 			expect(result[0]).toEqual(textDoc);
 		});
@@ -306,10 +306,10 @@ describe('apexdoc-annotations', () => {
 		it.concurrent(
 			'should skip doc when all processed lines filtered out',
 			() => {
-				// Test when trimmedLines.length === 0 after filtering
-				// This happens when hasAnnotations === true, processedLines.length > 0,
-				// but all processedLines are empty or consumed after filtering
-				// Create a doc with annotations and empty lines in processedLines
+				// Test when all lines are filtered out after processing
+				// This happens when the doc has annotations, but all processed lines
+				// are empty or consumed after filtering
+				// Create a doc with annotations and empty lines
 				const textDoc: ApexDocComment = {
 					content: '   * \n   * @param input The input\n   * ',
 					lines: ['   * ', '   * @param input The input', '   * '],
@@ -317,8 +317,8 @@ describe('apexdoc-annotations', () => {
 				};
 				const docs: ApexDocComment[] = [textDoc];
 				const result = detectAnnotationsInDocs(docs);
-				// processedLines contains empty lines, which get filtered out
-				// So trimmedLines.length === 0 and we don't push a new doc
+				// Empty lines get filtered out, leaving no content
+				// So we don't push a new doc when all lines are filtered out
 				const annotations = result.filter(
 					// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types -- Test parameters need mutable access
 					(d) => d.type === 'annotation',
