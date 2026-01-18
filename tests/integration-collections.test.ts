@@ -160,18 +160,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 				description: 'should handle empty maps',
 				fixture: 'map-empty',
 			},
-			{
-				description: 'should keep single-item lists inline',
-				fixture: 'list-single-item',
-			},
-			{
-				description: 'should keep single-item sets inline',
-				fixture: 'set-single-item',
-			},
-			{
-				description: 'should keep single-pair maps inline',
-				fixture: 'map-single-pair',
-			},
 		])(
 			'$description',
 			async ({
@@ -304,18 +292,6 @@ describe('prettier-plugin-apex-imo integration', () => {
 			{
 				description: 'should format variable assignments with sets',
 				fixture: 'variable-assignments-sets',
-			},
-			{
-				description: 'should format empty list initialization',
-				fixture: 'list-empty',
-			},
-			{
-				description: 'should format empty set initialization',
-				fixture: 'set-empty',
-			},
-			{
-				description: 'should format empty map initialization',
-				fixture: 'map-empty',
 			},
 			{
 				description:

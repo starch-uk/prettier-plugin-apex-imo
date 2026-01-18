@@ -199,11 +199,30 @@ describe('apexdoc', () => {
 	});
 
 	describe('detectCodeBlockDocs', () => {
-		it.concurrent(
-			'should handle isEmbedFormatted=true when processing code blocks (apexdoc.ts line 915)',
-			() => {
-				// Test detectCodeBlockDocs directly with isEmbedFormatted=true
-				// This should exercise processContentForCodeBlocks with isEmbedFormatted=true
+		it.concurrent.each([
+			{
+				description:
+					'should handle isEmbedFormatted=true when processing code blocks (apexdoc.ts line 915)',
+				isEmbedFormatted: true,
+				note: 'true branch: codeBlockResult.code',
+			},
+			{
+				description:
+					'should handle isEmbedFormatted=false when processing code blocks (apexdoc.ts line 915)',
+				isEmbedFormatted: false,
+				note: 'false branch: undefined',
+			},
+		])(
+			'$description',
+			({
+				isEmbedFormatted,
+			}: Readonly<{
+				description: string;
+				isEmbedFormatted: boolean;
+				note: string;
+			}>) => {
+				// Test detectCodeBlockDocs with isEmbedFormatted parameter
+				// This exercises processContentForCodeBlocks with both true/false values
 				// which triggers the ternary at line 915-917: isEmbedFormatted ? codeBlockResult.code : undefined
 				// Use text type to avoid removeCommentPrefix processing which might affect the format
 				const textDoc = createDocContent(
@@ -213,16 +232,9 @@ describe('apexdoc', () => {
 				);
 				const docs: ApexDocComment[] = [textDoc];
 
-				// Call detectCodeBlockDocs with isEmbedFormatted=true (true branch)
-				const resultTrue = detectCodeBlockDocs(docs, '', true);
-				expect(Array.isArray(resultTrue)).toBe(true);
-				expect(resultTrue.length).toBeGreaterThan(0);
-
-				// Call detectCodeBlockDocs with isEmbedFormatted=false (false branch)
-				const resultFalse = detectCodeBlockDocs(docs, '', false);
-				expect(Array.isArray(resultFalse)).toBe(true);
-				expect(resultFalse.length).toBeGreaterThan(0);
-				// Both branches of the ternary should be covered now
+				const result = detectCodeBlockDocs(docs, '', isEmbedFormatted);
+				expect(Array.isArray(result)).toBe(true);
+				expect(result.length).toBeGreaterThan(0);
 			},
 		);
 
@@ -251,38 +263,31 @@ describe('apexdoc', () => {
 	});
 
 	describe('calculatePrefixAndWidth with commentIndent', () => {
-		it.concurrent(
-			'should handle commentIndent=0 (apexdoc.ts line 123)',
-			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
-			async () => {
-				// Test the branch: commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT
-				// When commentIndent is 0, bodyIndent should be BODY_INDENT_WHEN_ZERO (2)
-				const comment = `/**
- * Test comment.
- */`;
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Mock options for test
-				const options = {
-					printWidth: 80,
-					tabWidth: 2,
-				} as ParserOptions;
-
-				// Call with commentIndent=0 to exercise line 123 true branch
-				const result = normalizeSingleApexDocComment(
-					comment,
-					0,
-					options,
-					false,
-				);
-				expect(result).toBeDefined();
+		it.concurrent.each([
+			{
+				commentIndent: 0,
+				description:
+					'should handle commentIndent=0 (apexdoc.ts line 123)',
+				note: 'true branch: bodyIndent should be BODY_INDENT_WHEN_ZERO (2)',
 			},
-		);
-
-		it.concurrent(
-			'should handle commentIndent>0 (apexdoc.ts line 123)',
-			// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
-			async () => {
+			{
+				commentIndent: 4,
+				description:
+					'should handle commentIndent>0 (apexdoc.ts line 123)',
+				note: 'false branch: bodyIndent should be ZERO_INDENT (0)',
+			},
+		])(
+			'$description',
+			async ({
+				commentIndent,
+				note: _note,
+			}: Readonly<{
+				commentIndent: number;
+				description: string;
+				note: string;
+				// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for test compatibility
+			}>) => {
 				// Test the branch: commentIndent === ZERO_INDENT ? BODY_INDENT_WHEN_ZERO : ZERO_INDENT
-				// When commentIndent > 0, bodyIndent should be ZERO_INDENT (0)
 				const comment = `/**
  * Test comment.
  */`;
@@ -292,10 +297,9 @@ describe('apexdoc', () => {
 					tabWidth: 2,
 				} as ParserOptions;
 
-				// Call with commentIndent>0 (e.g., 4) to exercise line 123 false branch
 				const result = normalizeSingleApexDocComment(
 					comment,
-					4,
+					commentIndent,
 					options,
 					false,
 				);

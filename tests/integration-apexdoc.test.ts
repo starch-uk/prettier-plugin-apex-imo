@@ -3,7 +3,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { loadFixture, formatApex } from './test-utils.js';
+import {
+	loadFixture,
+	formatApex,
+	extractCodeBlockFromResult,
+} from './test-utils.js';
 
 describe('prettier-plugin-apex-imo integration', () => {
 	describe('ApexDoc {@code} block formatting', () => {
@@ -133,101 +137,8 @@ describe('prettier-plugin-apex-imo integration', () => {
 }
 `;
 				const result = await formatApex(input);
-				// Extract the code block from the result
-				// Find the {@code tag and extract everything until the closing } on a line with just * }
-				const NOT_FOUND_INDEX = -1;
-				const CODE_TAG_LENGTH = 6;
-				const codeBlockStart = result.indexOf('{@code');
-				if (codeBlockStart === NOT_FOUND_INDEX) {
-					throw new Error(
-						`Could not find {@code} block in result: ${result}`,
-					);
-				}
-
-				/**
-				 * Find the content after {@code (skip whitespace and newline).
-				 */
-				let contentStart = codeBlockStart + CODE_TAG_LENGTH;
-				// Skip whitespace and newline after {@code
-				while (
-					contentStart < result.length &&
-					(result[contentStart] === ' ' ||
-						result[contentStart] === '\n')
-				) {
-					contentStart++;
-				}
-				// Check if this is a single-line code block: {@code ...} or {@code ...; }
-				// Look for the closing } on the same line or next line
-				const remainingText = result.slice(contentStart);
-				const lines = remainingText.split('\n');
-				let closingLineIndex = -1;
-				const EMPTY_LINE_LENGTH = 0;
-				const ARRAY_START_INDEX = 0;
-
-				// First, check if this is a single-line code block: {@code ...} or {@code ...; }
-				// Single-line format has the closing } on the same line as the content
-				const firstLine = lines[ARRAY_START_INDEX] ?? '';
-				// Match single-line format: content followed by optional space and }
-				// Handle both: "content}" and "content }" and "content; }"
-				// The pattern captures content up to (but not including) the closing }
-				// We need to handle: "content}" and "content }" and "content; }"
-				const singleLineMatch = /^(.+?)\s*\}\s*$/.exec(firstLine);
-				if (singleLineMatch && !firstLine.includes('\n')) {
-					// Single-line code block - extract content directly
-					// The content might have trailing space before }, so trim it
-					let codeBlockContent = singleLineMatch[1]?.trimEnd() ?? '';
-					const ZERO_LENGTH = 0;
-					if (codeBlockContent.length > ZERO_LENGTH) {
-						expect(codeBlockContent).toBe(expectedCode);
-					} else {
-						throw new Error(
-							`Code block content is empty in result: ${result}`,
-						);
-					}
-					return;
-				}
-
-				// Multiline format: find the closing } that's on a line with just whitespace, asterisk, space, and } (no semicolon)
-				// This distinguishes the closing } of {@code} from the }; in the code
-				// Look for pattern: \n   * } (newline, spaces, asterisk, space, }, but NOT };)
-				// Find the LAST occurrence, not the first, since there may be multiple } in the code
-				for (let i = lines.length - 1; i >= EMPTY_LINE_LENGTH; i--) {
-					const line = lines[i];
-					// Match line with just whitespace, asterisk, space, and } (not };)
-					if (/^\s*\*\s*\}$/.test(line)) {
-						closingLineIndex = i;
-						break;
-					}
-				}
-				if (closingLineIndex === NOT_FOUND_INDEX) {
-					throw new Error(
-						`Could not find closing } for {@code} block in result: ${result}`,
-					);
-				}
-				// Get all lines up to (but not including) the closing line
-				const codeBlockLines = lines.slice(
-					ARRAY_START_INDEX,
-					closingLineIndex,
-				);
-				const codeBlockContent = codeBlockLines.join('\n');
-				const ZERO_LENGTH = 0;
-				if (codeBlockContent.length > ZERO_LENGTH) {
-					// Remove comment prefixes (like "   * ") from each line
-					const codeLines = codeBlockContent
-						.split('\n')
-						.map((line) => line.replace(/^\s*\*\s?/, '').trimEnd())
-						.filter(
-							(line) =>
-								line.length > ZERO_LENGTH ||
-								codeBlockContent.includes('\n'),
-						);
-					const formattedCode = codeLines.join('\n').trim();
-					expect(formattedCode).toBe(expectedCode);
-				} else {
-					throw new Error(
-						`Code block content is empty in result: ${result}`,
-					);
-				}
+				const formattedCode = extractCodeBlockFromResult(result);
+				expect(formattedCode).toBe(expectedCode);
 			},
 		);
 	});

@@ -199,6 +199,88 @@ export function extractCommentIndent(text: string): number {
 	return startMatch[1].length;
 }
 
+/**
+ * Extracts the code block content from a formatted ApexDoc comment result.
+ * Handles both single-line and multi-line code blocks (using ApexDoc code block syntax).
+ * @param result - The formatted ApexDoc comment result containing code block.
+ * @returns The extracted code block content.
+ * @throws {Error} If the code block cannot be found or extracted.
+ * @example
+ * ```typescript
+ * const code = extractCodeBlockFromResult('...ApexDoc comment with code block...');
+ * ```
+ */
+export function extractCodeBlockFromResult(result: string): string {
+	const NOT_FOUND_INDEX = -1;
+	const CODE_TAG_LENGTH = 6;
+	const codeBlockStart = result.indexOf('{@code');
+	if (codeBlockStart === NOT_FOUND_INDEX) {
+		throw new Error(`Could not find {@code} block in result: ${result}`);
+	}
+
+	// Find the content after {@code (skip whitespace and newline)
+	let contentStart = codeBlockStart + CODE_TAG_LENGTH;
+	while (
+		contentStart < result.length &&
+		(result[contentStart] === ' ' || result[contentStart] === '\n')
+	) {
+		contentStart++;
+	}
+
+	// Check if this is a single-line code block: {@code ...} or {@code ...; }
+	const remainingText = result.slice(contentStart);
+	const lines = remainingText.split('\n');
+	const ARRAY_START_INDEX = 0;
+	const EMPTY_LINE_LENGTH = 0;
+
+	// First, check if this is a single-line code block
+	const firstLine = lines[ARRAY_START_INDEX] ?? '';
+	const singleLineMatch = /^(.+?)\s*\}\s*$/.exec(firstLine);
+	if (singleLineMatch && !firstLine.includes('\n')) {
+		// Single-line code block - extract content directly
+		const codeBlockContent = singleLineMatch[1]?.trimEnd() ?? '';
+		const ZERO_LENGTH = 0;
+		if (codeBlockContent.length > ZERO_LENGTH) {
+			return codeBlockContent;
+		}
+		throw new Error(`Code block content is empty in result: ${result}`);
+	}
+
+	// Multiline format: find the closing } that's on a line with just whitespace, asterisk, space, and }
+	let closingLineIndex = NOT_FOUND_INDEX;
+	for (let i = lines.length - 1; i >= EMPTY_LINE_LENGTH; i--) {
+		const line = lines[i];
+		// Match line with just whitespace, asterisk, space, and } (not };)
+		if (/^\s*\*\s*\}$/.test(line)) {
+			closingLineIndex = i;
+			break;
+		}
+	}
+	if (closingLineIndex === NOT_FOUND_INDEX) {
+		throw new Error(
+			`Could not find closing } for {@code} block in result: ${result}`,
+		);
+	}
+
+	// Get all lines up to (but not including) the closing line
+	const codeBlockLines = lines.slice(ARRAY_START_INDEX, closingLineIndex);
+	const codeBlockContent = codeBlockLines.join('\n');
+	const ZERO_LENGTH = 0;
+	if (codeBlockContent.length > ZERO_LENGTH) {
+		// Remove comment prefixes (like "   * ") from each line
+		const codeLines = codeBlockContent
+			.split('\n')
+			.map((line) => line.replace(/^\s*\*\s?/, '').trimEnd())
+			.filter(
+				(line) =>
+					line.length > ZERO_LENGTH ||
+					codeBlockContent.includes('\n'),
+			);
+		return codeLines.join('\n').trim();
+	}
+	throw new Error(`Code block content is empty in result: ${result}`);
+}
+
 // Re-export Prettier and prettier-plugin-apex mocks for convenience
 export {
 	PrettierMockSuite,
