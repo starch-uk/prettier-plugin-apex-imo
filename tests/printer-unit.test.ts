@@ -915,26 +915,6 @@ describe('printer', () => {
 									},
 								],
 							},
-							type: {
-								'@class': 'apex.jorje.data.ast.TypeRef',
-								names: [
-									{
-										'@class':
-											'apex.jorje.data.ast.Identifier',
-										value: 'Map',
-									},
-									{
-										'@class':
-											'apex.jorje.data.ast.Identifier',
-										value: 'String',
-									},
-									{
-										'@class':
-											'apex.jorje.data.ast.Identifier',
-										value: 'Map',
-									},
-								],
-							},
 						},
 					],
 					modifiers: [],

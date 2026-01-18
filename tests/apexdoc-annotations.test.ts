@@ -11,7 +11,54 @@ import {
 	normalizeAnnotations,
 } from '../src/apexdoc-annotations.js';
 import type { ApexDocAnnotation, ApexDocComment } from '../src/comments.js';
+import { APEXDOC_ANNOTATIONS } from '../src/refs/apexdoc-annotations.js';
 import { expectDocsUnchanged } from './test-utils.js';
+
+/**
+ * Generates case variations for a given string.
+ * @param str - The string to generate variations for.
+ * @returns Array of case variations: lowercase, UPPERCASE, PascalCase, camelCase, mixed case.
+ */
+function generateCaseVariations(str: string): readonly string[] {
+	if (str.length === 0) return [''];
+	const lower = str.toLowerCase();
+	const upper = str.toUpperCase();
+	const pascal = str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+	const camel =
+		str.length > 1
+			? str.charAt(0).toLowerCase() + str.slice(1)
+			: str.toLowerCase();
+	// Mixed case: alternate between upper and lower
+	const mixed = str
+		.split('')
+		.map((char, index) =>
+			index % 2 === 0 ? char.toUpperCase() : char.toLowerCase(),
+		)
+		.join('');
+	return [lower, upper, pascal, camel, mixed];
+}
+
+/**
+ * Generates test cases for ApexDoc annotations.
+ * @returns Array of test cases with input and expected output.
+ */
+function generateApexDocAnnotationTestCases(): readonly {
+	readonly expected: string;
+	readonly input: string;
+}[] {
+	const testCases: {
+		readonly expected: string;
+		readonly input: string;
+	}[] = [];
+	for (const annotation of APEXDOC_ANNOTATIONS) {
+		const expected = annotation.toLowerCase();
+		const variations = generateCaseVariations(annotation);
+		for (const variation of variations) {
+			testCases.push({ expected, input: variation });
+		}
+	}
+	return testCases;
+}
 
 describe('apexdoc-annotations', () => {
 	describe('renderAnnotation', () => {
@@ -417,19 +464,27 @@ describe('apexdoc-annotations', () => {
 	});
 
 	describe('normalizeAnnotations', () => {
-		it.concurrent('should normalize annotation names to lowercase', () => {
-			const doc: ApexDocAnnotation = {
-				content: 'input The input' as Doc,
-				name: 'PARAM',
-				type: 'annotation',
-			};
-			const docs: ApexDocComment[] = [doc];
-			const result = normalizeAnnotations(docs);
-			expect(result).toHaveLength(1);
-			expect(result[0]?.type).toBe('annotation');
-			if (result[0]?.type === 'annotation') {
-				expect(result[0].name).toBe('param');
-			}
+		describe('ApexDoc annotations', () => {
+			it.concurrent.each(generateApexDocAnnotationTestCases())(
+				'should normalize "@$input" to "@$expected"',
+				({
+					expected,
+					input,
+				}: Readonly<{ expected: string; input: string }>) => {
+					const doc: ApexDocAnnotation = {
+						content: 'test' as Doc,
+						name: input,
+						type: 'annotation',
+					};
+					const docs: ApexDocComment[] = [doc];
+					const result = normalizeAnnotations(docs);
+					expect(result).toHaveLength(1);
+					expect(result[0]?.type).toBe('annotation');
+					if (result[0]?.type === 'annotation') {
+						expect(result[0].name).toBe(expected);
+					}
+				},
+			);
 		});
 
 		it.concurrent(

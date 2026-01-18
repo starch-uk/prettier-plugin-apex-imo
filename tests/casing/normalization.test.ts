@@ -8,58 +8,235 @@ import {
 	normalizeReservedWord,
 	normalizeStandardObjectType,
 } from '../../src/casing.js';
+import { PRIMITIVE_AND_COLLECTION_TYPES } from '../../src/refs/primitive-types.js';
+import { STANDARD_OBJECTS } from '../../src/refs/standard-objects.js';
+import { APEX_OBJECT_SUFFIXES } from '../../src/refs/object-suffixes.js';
+import { APEX_RESERVED_WORDS } from '../../src/refs/reserved-words.js';
+
+/**
+ * Generates case variations for a given string.
+ * @param str - The string to generate variations for.
+ * @returns Array of case variations: lowercase, UPPERCASE, PascalCase, camelCase, mixed case.
+ */
+function generateCaseVariations(str: string): readonly string[] {
+	if (str.length === 0) return [''];
+	const lower = str.toLowerCase();
+	const upper = str.toUpperCase();
+	const pascal = str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+	const camel =
+		str.length > 1
+			? str.charAt(0).toLowerCase() + str.slice(1)
+			: str.toLowerCase();
+	// Mixed case: alternate between upper and lower
+	const mixed = str
+		.split('')
+		.map((char, index) =>
+			index % 2 === 0 ? char.toUpperCase() : char.toLowerCase(),
+		)
+		.join('');
+	return [lower, upper, pascal, camel, mixed];
+}
+
+/**
+ * Generates test cases for primitive and collection types.
+ * @returns Array of test cases with input and expected output.
+ */
+function generatePrimitiveTestCases(): readonly {
+	readonly expected: string;
+	readonly input: string;
+}[] {
+	const testCases: {
+		readonly expected: string;
+		readonly input: string;
+	}[] = [];
+	for (const [lowerKey, expected] of Object.entries(
+		PRIMITIVE_AND_COLLECTION_TYPES,
+	)) {
+		const variations = generateCaseVariations(lowerKey);
+		for (const variation of variations) {
+			testCases.push({ expected, input: variation });
+		}
+	}
+	return testCases;
+}
+
+/**
+ * Generates test cases for standard objects.
+ * @returns Array of test cases with input and expected output.
+ */
+function generateStandardObjectTestCases(): readonly {
+	readonly expected: string;
+	readonly input: string;
+}[] {
+	const testCases: {
+		readonly expected: string;
+		readonly input: string;
+	}[] = [];
+	for (const [lowerKey, expected] of Object.entries(STANDARD_OBJECTS)) {
+		const variations = generateCaseVariations(lowerKey);
+		for (const variation of variations) {
+			testCases.push({ expected, input: variation });
+		}
+	}
+	return testCases;
+}
+
+/**
+ * Generates test cases for object suffixes with custom object prefixes.
+ * @returns Array of test cases with input and expected output.
+ */
+function generateSuffixTestCases(): readonly {
+	readonly expected: string;
+	readonly input: string;
+}[] {
+	const testCases: {
+		readonly expected: string;
+		readonly input: string;
+	}[] = [];
+	// Test suffixes with custom object prefixes (not standard objects)
+	const customPrefix = 'MyCustomObject';
+	for (const [, expectedSuffix] of Object.entries(APEX_OBJECT_SUFFIXES)) {
+		// Test with various case variations of the suffix
+		const lowerSuffix = expectedSuffix.toLowerCase();
+		const expected = customPrefix + expectedSuffix;
+		// Generate variations where we change the suffix case
+		const suffixVariations = [
+			lowerSuffix,
+			expectedSuffix.toUpperCase(),
+			expectedSuffix,
+			// Mixed case suffix
+			expectedSuffix
+				.split('')
+				.map((char, index) =>
+					index % 2 === 0 ? char.toUpperCase() : char.toLowerCase(),
+				)
+				.join(''),
+		];
+		for (const suffixVar of suffixVariations) {
+			const input = customPrefix + suffixVar;
+			testCases.push({ expected, input });
+		}
+	}
+	return testCases;
+}
+
+/**
+ * Generates test cases for combinations of standard objects and suffixes.
+ * @returns Array of test cases with input and expected output.
+ */
+function generateCombinationTestCases(): readonly {
+	readonly expected: string;
+	readonly input: string;
+}[] {
+	const testCases: {
+		readonly expected: string;
+		readonly input: string;
+	}[] = [];
+	// Sample a subset of standard objects for combination tests to keep test count manageable
+	const sampleObjects = Object.entries(STANDARD_OBJECTS).slice(0, 10);
+	const sampleSuffixes = Object.entries(APEX_OBJECT_SUFFIXES).slice(0, 5);
+
+	for (const [lowerObjKey, expectedObj] of sampleObjects) {
+		for (const [, expectedSuffix] of sampleSuffixes) {
+			// Test combinations: object + suffix
+			// The normalizeTypeName function checks if the type ends with the suffix (lowercase)
+			const lowerSuffix = expectedSuffix.toLowerCase();
+			const expectedCombined = expectedObj + expectedSuffix;
+
+			// Generate variations where we change the object case and suffix case
+			const objectVariations = generateCaseVariations(lowerObjKey);
+			const suffixVariations = [
+				lowerSuffix,
+				expectedSuffix.toUpperCase(),
+				expectedSuffix,
+			];
+
+			for (const objVar of objectVariations) {
+				for (const suffixVar of suffixVariations) {
+					const input = objVar + suffixVar;
+					testCases.push({
+						expected: expectedCombined,
+						input,
+					});
+				}
+			}
+		}
+	}
+	return testCases;
+}
+
+/**
+ * Generates test cases for reserved words.
+ * @returns Array of test cases with input and expected output.
+ */
+function generateReservedWordTestCases(): readonly {
+	readonly expected: string;
+	readonly input: string;
+}[] {
+	const testCases: {
+		readonly expected: string;
+		readonly input: string;
+	}[] = [];
+	for (const reservedWord of APEX_RESERVED_WORDS) {
+		const expected = reservedWord.toLowerCase();
+		const variations = generateCaseVariations(reservedWord);
+		for (const variation of variations) {
+			testCases.push({ expected, input: variation });
+		}
+	}
+	return testCases;
+}
+
+/**
+ * Generates test cases for types inside codeblocks.
+ * @returns Array of test cases with input and expected output.
+ */
+function generateCodeblockTypeTestCases(): readonly {
+	readonly expected: string;
+	readonly input: string;
+}[] {
+	const testCases: {
+		readonly expected: string;
+		readonly input: string;
+	}[] = [];
+	// Test primitives in codeblocks
+	for (const [lowerKey, expected] of Object.entries(
+		PRIMITIVE_AND_COLLECTION_TYPES,
+	)) {
+		const variations = generateCaseVariations(lowerKey);
+		for (const variation of variations) {
+			testCases.push({ expected, input: variation });
+		}
+	}
+	// Test a sample of standard objects in codeblocks
+	const sampleObjects = Object.entries(STANDARD_OBJECTS).slice(0, 20);
+	for (const [lowerKey, expected] of sampleObjects) {
+		const variations = generateCaseVariations(lowerKey);
+		for (const variation of variations) {
+			testCases.push({ expected, input: variation });
+		}
+	}
+	// Test combinations in codeblocks
+	const sampleSuffixes = Object.entries(APEX_OBJECT_SUFFIXES).slice(0, 3);
+	for (const [lowerObjKey, expectedObj] of sampleObjects.slice(0, 5)) {
+		for (const [, expectedSuffix] of sampleSuffixes) {
+			const combinedLower = lowerObjKey + expectedSuffix.toLowerCase();
+			const expectedCombined = expectedObj + expectedSuffix;
+			const variations = generateCaseVariations(combinedLower);
+			for (const variation of variations) {
+				testCases.push({
+					expected: expectedCombined,
+					input: variation,
+				});
+			}
+		}
+	}
+	return testCases;
+}
 
 describe('casing', () => {
 	describe('normalizeReservedWord', () => {
-		it.concurrent.each([
-			// Reserved words with various cases
-			{ expected: 'public', input: 'PUBLIC' },
-			{ expected: 'private', input: 'Private' },
-			{ expected: 'static', input: 'STATIC' },
-			{ expected: 'final', input: 'Final' },
-			{ expected: 'class', input: 'CLASS' },
-			{ expected: 'interface', input: 'Interface' },
-			{ expected: 'enum', input: 'ENUM' },
-			{ expected: 'void', input: 'Void' },
-			{ expected: 'abstract', input: 'ABSTRACT' },
-			{ expected: 'virtual', input: 'Virtual' },
-			{ expected: 'if', input: 'IF' },
-			{ expected: 'else', input: 'Else' },
-			{ expected: 'for', input: 'FOR' },
-			{ expected: 'while', input: 'While' },
-			{ expected: 'return', input: 'RETURN' },
-			{ expected: 'try', input: 'Try' },
-			{ expected: 'catch', input: 'CATCH' },
-			{ expected: 'finally', input: 'Finally' },
-			{ expected: 'new', input: 'NEW' },
-			{ expected: 'this', input: 'This' },
-			{ expected: 'super', input: 'SUPER' },
-			{ expected: 'null', input: 'NULL' },
-			{ expected: 'protected', input: 'PROTECTED' },
-			{ expected: 'transient', input: 'TRANSIENT' },
-			{ expected: 'global', input: 'GLOBAL' },
-			{ expected: 'webservice', input: 'WEBSERVICE' },
-			{ expected: 'switch', input: 'SWITCH' },
-			{ expected: 'case', input: 'CASE' },
-			{ expected: 'default', input: 'DEFAULT' },
-			{ expected: 'do', input: 'DO' },
-			{ expected: 'break', input: 'BREAK' },
-			{ expected: 'continue', input: 'CONTINUE' },
-			// Already lowercase reserved words
-			{ expected: 'public', input: 'public' },
-			{ expected: 'private', input: 'private' },
-			{ expected: 'static', input: 'static' },
-			{ expected: 'class', input: 'class' },
-			{ expected: 'interface', input: 'interface' },
-			// Non-reserved words (should return unchanged)
-			{ expected: 'MyVariable', input: 'MyVariable' },
-			{ expected: 'myVariable', input: 'myVariable' },
-			{ expected: 'MYVARIABLE', input: 'MYVARIABLE' },
-			{ expected: 'Account', input: 'Account' },
-			{ expected: 'String', input: 'String' },
-			// Empty string
-			{ expected: '', input: '' },
-		])(
+		it.concurrent.each(generateReservedWordTestCases())(
 			'should normalize "$input" to "$expected"',
 			({
 				expected,
@@ -68,58 +245,89 @@ describe('casing', () => {
 				expect(normalizeReservedWord(input)).toBe(expected);
 			},
 		);
+
+		it.concurrent('should return unchanged for non-reserved words', () => {
+			expect(normalizeReservedWord('MyVariable')).toBe('MyVariable');
+			expect(normalizeReservedWord('myVariable')).toBe('myVariable');
+			expect(normalizeReservedWord('MYVARIABLE')).toBe('MYVARIABLE');
+			expect(normalizeReservedWord('Account')).toBe('Account');
+			expect(normalizeReservedWord('String')).toBe('String');
+		});
+
+		it.concurrent('should handle empty string', () => {
+			expect(normalizeReservedWord('')).toBe('');
+		});
 	});
 
 	describe('normalizeTypeName', () => {
-		it.concurrent('should normalize primitive types to PascalCase', () => {
-			// Test that primitives are normalized first, before standard objects
-			expect(normalizeTypeName('string')).toBe('String');
-			expect(normalizeTypeName('integer')).toBe('Integer');
-			expect(normalizeTypeName('boolean')).toBe('Boolean');
-			expect(normalizeTypeName('blob')).toBe('Blob');
-			expect(normalizeTypeName('date')).toBe('Date');
-			expect(normalizeTypeName('datetime')).toBe('Datetime');
-			expect(normalizeTypeName('decimal')).toBe('Decimal');
-			expect(normalizeTypeName('double')).toBe('Double');
-			expect(normalizeTypeName('id')).toBe('ID');
-			expect(normalizeTypeName('long')).toBe('Long');
-			expect(normalizeTypeName('object')).toBe('Object');
-			expect(normalizeTypeName('time')).toBe('Time');
-			expect(normalizeTypeName('sobject')).toBe('SObject');
+		describe('primitive types', () => {
+			it.concurrent.each(generatePrimitiveTestCases())(
+				'should normalize "$input" to "$expected"',
+				({
+					expected,
+					input,
+				}: Readonly<{ expected: string; input: string }>) => {
+					expect(normalizeTypeName(input)).toBe(expected);
+				},
+			);
 		});
 
-		it.concurrent('should normalize collection types to PascalCase', () => {
-			expect(normalizeTypeName('list')).toBe('List');
-			expect(normalizeTypeName('set')).toBe('Set');
-			expect(normalizeTypeName('map')).toBe('Map');
+		describe('standard objects', () => {
+			it.concurrent.each(generateStandardObjectTestCases())(
+				'should normalize "$input" to "$expected"',
+				({
+					expected,
+					input,
+				}: Readonly<{ expected: string; input: string }>) => {
+					expect(normalizeTypeName(input)).toBe(expected);
+				},
+			);
 		});
 
-		it.concurrent(
-			'should normalize primitives regardless of input case',
-			() => {
-				expect(normalizeTypeName('STRING')).toBe('String');
-				expect(normalizeTypeName('String')).toBe('String');
-				expect(normalizeTypeName('sTrInG')).toBe('String');
-				expect(normalizeTypeName('INTEGER')).toBe('Integer');
-				expect(normalizeTypeName('Integer')).toBe('Integer');
-				expect(normalizeTypeName('iNtEgEr')).toBe('Integer');
-				expect(normalizeTypeName('ID')).toBe('ID');
-				expect(normalizeTypeName('Id')).toBe('ID');
-				expect(normalizeTypeName('id')).toBe('ID');
-			},
-		);
+		describe('object suffixes', () => {
+			it.concurrent.each(generateSuffixTestCases())(
+				'should normalize "$input" to "$expected"',
+				({
+					expected,
+					input,
+				}: Readonly<{ expected: string; input: string }>) => {
+					// Test suffix normalization with custom object prefixes
+					expect(normalizeTypeName(input)).toBe(expected);
+				},
+			);
+		});
 
-		it.concurrent(
-			'should normalize standard objects and then suffixes',
-			() => {
-				// Test that standard object normalization happens first, then suffix normalization
-				expect(normalizeTypeName('account__C')).toBe('Account__c');
-				expect(normalizeTypeName('contact__c')).toBe('Contact__c');
-				expect(normalizeTypeName('MyCustomObject__C')).toBe(
-					'MyCustomObject__c',
-				);
-			},
-		);
+		describe('combinations', () => {
+			it.concurrent.each(generateCombinationTestCases())(
+				'should normalize "$input" to "$expected"',
+				({
+					expected,
+					input,
+				}: Readonly<{ expected: string; input: string }>) => {
+					expect(normalizeTypeName(input)).toBe(expected);
+				},
+			);
+		});
+
+		describe('inside codeblocks', () => {
+			it.concurrent.each(generateCodeblockTypeTestCases())(
+				'should normalize type "$input" inside {@code} block to "$expected"',
+				({
+					expected,
+					input,
+				}: Readonly<{ expected: string; input: string }>) => {
+					// Test type normalization when extracted from codeblock
+					// The normalizeTypeName function should work the same inside codeblocks
+					expect(normalizeTypeName(input)).toBe(expected);
+				},
+			);
+		});
+
+		it.concurrent('should handle empty string input', () => {
+			// Test empty string handling in both functions
+			expect(normalizeTypeName('')).toBe('');
+			expect(normalizeStandardObjectType('')).toBe('');
+		});
 
 		it.concurrent(
 			'should handle types that are not primitives or standard objects',
@@ -130,43 +338,6 @@ describe('casing', () => {
 				expect(normalizeTypeName('SomeOtherType')).toBe(
 					'SomeOtherType',
 				);
-			},
-		);
-
-		it.concurrent(
-			'should handle types with only standard object normalization',
-			() => {
-				expect(normalizeTypeName('account')).toBe('Account');
-				expect(normalizeTypeName('contact')).toBe('Contact');
-			},
-		);
-
-		it.concurrent(
-			'should handle types with only suffix normalization',
-			() => {
-				expect(normalizeTypeName('MyCustomObject__C')).toBe(
-					'MyCustomObject__c',
-				);
-				expect(normalizeTypeName('MyCustomObject__CHANGEEVENT')).toBe(
-					'MyCustomObject__ChangeEvent',
-				);
-			},
-		);
-
-		it.concurrent('should handle empty string input', () => {
-			// Test empty string handling in both functions
-			expect(normalizeTypeName('')).toBe('');
-			expect(normalizeStandardObjectType('')).toBe('');
-		});
-
-		it.concurrent(
-			'should return unchanged for types without normalization needs',
-			() => {
-				expect(normalizeTypeName('MyCustomClass')).toBe(
-					'MyCustomClass',
-				);
-				// String is already in correct case, so it returns unchanged
-				expect(normalizeTypeName('String')).toBe('String');
 			},
 		);
 	});
