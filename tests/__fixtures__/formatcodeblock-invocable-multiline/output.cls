@@ -3,6 +3,5 @@ class FormatCodeBlockInvocableMultiline {
     Label='Test'
     Description='Test description'
   )
-  public void test() {
-  }
+  public void test() {}
 }

@@ -1,3 +1,2 @@
 @CustomAnnotation(UnknownOption="value")
-public class CustomClass {
-}
+public class CustomClass {}

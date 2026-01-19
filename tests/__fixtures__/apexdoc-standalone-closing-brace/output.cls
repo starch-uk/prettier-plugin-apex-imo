@@ -4,6 +4,5 @@ public class Test {
    * }
    * More text.
    */
-  public void method() {
-  }
+  public void method() {}
 }

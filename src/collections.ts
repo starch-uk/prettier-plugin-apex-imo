@@ -134,7 +134,6 @@ const printList = ({
 	if (!hasMultipleListEntries(node)) {
 		return originalPrint();
 	}
-
 	const typeDoc = createTypeDoc(
 		isSet ? 'Set' : 'List',
 		printedTypes,
@@ -174,7 +173,6 @@ const printMap = ({
 	if (!hasMultipleMapEntries(node)) {
 		return originalPrint();
 	}
-
 	const typeDoc: Doc = group([
 		'Map<',
 		join([', ', softline], [...printedTypes]),

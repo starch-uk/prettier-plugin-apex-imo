@@ -19,8 +19,7 @@ public class Test {
    * }
    * }
    */
-  public void method() {
-  }
+  public void method() {}
 
   /**
    * Test method with various annotations.
@@ -37,15 +36,13 @@ public class Test {
    * Interface documentation.
    * @group Interface
    */
-  public interface TestInterface {
-  }
+  public interface TestInterface {}
 
   /**
    * Enum documentation.
    * @group Enum
    */
-  public enum TestEnum {
-  }
+  public enum TestEnum {}
 
   /**
    * Property documentation.
@@ -63,6 +60,5 @@ public class Test {
    * Unknown group name should not be changed.
    * @group CustomGroup
    */
-  public void customMethod() {
-  }
+  public void customMethod() {}
 }

@@ -4,13 +4,11 @@
  * {@code
  * public class TestClass {
  *   @AuraEnabled(Cacheable=true)
- *   public static void myMethod() {
- *   }
+ *   public static void myMethod() {}
  * }
  * }
  */
 public class TestClass {
   @AuraEnabled(Cacheable=true)
-  public static void myMethod() {
-  }
+  public static void myMethod() {}
 }

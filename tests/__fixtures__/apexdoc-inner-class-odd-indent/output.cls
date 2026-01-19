@@ -9,7 +9,6 @@ public class Test {
        * };
        * }
        */
-      public void method() {
-      }
+      public void method() {}
    }
 }

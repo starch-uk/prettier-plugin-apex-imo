@@ -122,6 +122,5 @@ public class DocumentationExample {
    * }
    * }
    */
-  public void exampleMethod() {
-  }
+  public void exampleMethod() {}
 }

@@ -3,6 +3,5 @@ public class TestClass {
     Label='Test Label'
     Description='Test Description'
   )
-  public static void myMethod() {
-  }
+  public static void myMethod() {}
 }

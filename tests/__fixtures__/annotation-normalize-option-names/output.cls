@@ -3,6 +3,5 @@ public class TestClass {
     Label='Test'
     Description='Desc'
   )
-  public static void invocableMethod() {
-  }
+  public static void invocableMethod() {}
 }

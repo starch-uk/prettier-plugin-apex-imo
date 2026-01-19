@@ -6,6 +6,5 @@ public class Test {
    * List<Account> accounts = new List<Account>();
    * }
    */
-  public void example() {
-  }
+  public void example() {}
 }

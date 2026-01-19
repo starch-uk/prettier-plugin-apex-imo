@@ -6,8 +6,7 @@ public class ComprehensiveTest {
    * @version 2.0
    * @see RelatedClass
    */
-  public void multipleOnSameLine() {
-  }
+  public void multipleOnSameLine() {}
 
   /**
    * Test with inconsistent spacing.
@@ -28,8 +27,7 @@ public class ComprehensiveTest {
    * @version 2.0
    * @see ExampleClass
    */
-  public void codeBlocksBetweenAnnotations() {
-  }
+  public void codeBlocksBetweenAnnotations() {}
 
   /**
    * Comprehensive casing test for each annotation type.
@@ -45,8 +43,7 @@ public class ComprehensiveTest {
    * @example
    * {@code Test t = new Test(); }
    */
-  public void comprehensiveCasing() {
-  }
+  public void comprehensiveCasing() {}
 
   /**
    * Test with mixed case annotations.
@@ -61,8 +58,7 @@ public class ComprehensiveTest {
    * @group Method
    * @example Example usage
    */
-  public void mixedCase() {
-  }
+  public void mixedCase() {}
 
   /**
    * Test with annotations and code blocks mixed.
@@ -91,8 +87,7 @@ public class ComprehensiveTest {
    * @group Property
    * @group Variable
    */
-  public void groupNameCasing() {
-  }
+  public void groupNameCasing() {}
 
   /**
    * Test with annotations at start of line without leading space.
@@ -100,8 +95,7 @@ public class ComprehensiveTest {
    * @since 1.0
    * @version 2.0
    */
-  public void noLeadingSpace() {
-  }
+  public void noLeadingSpace() {}
 
   /**
    * Test with extra whitespace around annotations.
@@ -109,8 +103,7 @@ public class ComprehensiveTest {
    * @since 1.0
    * @version 2.0
    */
-  public void extraWhitespace() {
-  }
+  public void extraWhitespace() {}
 
   /**
    * Test with annotations followed by content on same line.
@@ -125,6 +118,5 @@ public class ComprehensiveTest {
    * @group Method Description here
    * @example Description here
    */
-  public void annotationsWithContent() {
-  }
+  public void annotationsWithContent() {}
 }

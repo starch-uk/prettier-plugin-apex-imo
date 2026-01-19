@@ -647,7 +647,6 @@ const processAllCodeBlocksInComment = async ({
 		});
 
 		// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
-
 		// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
 		// This preserves the structure from original code (blank lines after } before annotations/methods)
 		const formattedLines = formattedCode.trim().split('\n');

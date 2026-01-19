@@ -20,8 +20,7 @@ public class PrintWidthTest {
    * @example This is a long example annotation description that provides usage
    * information.
    */
-  public void longAnnotations() {
-  }
+  public void longAnnotations() {}
 
   /**
    * Test with shorter annotations that should not wrap.
@@ -29,6 +28,5 @@ public class PrintWidthTest {
    * @return Result
    * @throws Exception If error
    */
-  public void shortAnnotations() {
-  }
+  public void shortAnnotations() {}
 }

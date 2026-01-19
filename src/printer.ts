@@ -14,7 +14,7 @@ import type {
 	ApexAnnotationNode,
 } from './types.js';
 
-const { group, indent, softline, ifBreak, line } = doc.builders;
+const { group, indent, softline, ifBreak, line, join } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
 	createTypeNormalizingPrint,
@@ -41,6 +41,84 @@ const isTypeRef = createNodeClassGuard<ApexNode>(
 	(cls) =>
 		cls !== undefined && (cls === TYPEREF_CLASS || cls.includes('TypeRef')),
 );
+
+const APEX_CLASS_DECL = 'apex.jorje.data.ast.ClassDecl';
+const APEX_INTERFACE_DECL = 'apex.jorje.data.ast.InterfaceDecl';
+const APEX_ENUM_DECL = 'apex.jorje.data.ast.EnumDecl';
+const APEX_METHOD_DECL = 'apex.jorje.data.ast.MethodDecl';
+const APEX_BLOCK_STMNT = 'apex.jorje.data.ast.Stmnt$BlockStmnt';
+
+const ZERO_LENGTH = 0;
+
+const hasAnyComments = (node: unknown): boolean => {
+	const maybe = node as { comments?: unknown } | null | undefined;
+	const comments = maybe?.comments;
+	return Array.isArray(comments) && comments.length > ZERO_LENGTH;
+};
+
+const isEmptyBlockStmntNode = (node: unknown): boolean => {
+	const unwrapped =
+		isObject(node) && 'value' in node
+			? (node as { value?: unknown }).value
+			: node;
+	const maybe = unwrapped as { ['@class']?: unknown; stmnts?: unknown };
+	if (maybe['@class'] !== APEX_BLOCK_STMNT) return false;
+	return !Array.isArray(maybe.stmnts) || maybe.stmnts.length === ZERO_LENGTH;
+};
+
+const blockSliceHasCommentMarkers = (
+	blockNode: unknown,
+	originalText: string | undefined,
+): boolean => {
+	if (typeof originalText !== 'string') return false;
+	const unwrapped =
+		isObject(blockNode) && 'value' in blockNode
+			? (blockNode as { value?: unknown }).value
+			: blockNode;
+	const { loc } = unwrapped as {
+		loc?: { startIndex?: number; endIndex?: number };
+	};
+	const startIndex =
+		typeof loc?.startIndex === 'number' ? loc.startIndex : undefined;
+	const endIndex =
+		typeof loc?.endIndex === 'number' ? loc.endIndex : undefined;
+	if (startIndex === undefined || endIndex === undefined) return false;
+	const slice = originalText.slice(startIndex, endIndex);
+	// Treat any inline or block comment markers as "has comments" for safety.
+	return slice.includes('/*') || slice.includes('//');
+};
+
+const buildEmptyClassInheritanceDocs = (
+	path: Readonly<AstPath<ApexNode>>,
+	typeNormalizingPrint: (path: Readonly<AstPath<ApexNode>>) => Doc,
+): Doc[] => {
+	const parts: Doc[] = [];
+
+	const superClassDoc = path.call(
+		typeNormalizingPrint,
+		'superClass' as never,
+		'value' as never,
+	);
+	// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- superClassDoc may be any Doc shape (string, array, object)
+	if (superClassDoc) {
+		parts.push(' ', 'extends', ' ', superClassDoc);
+	}
+
+	const interfaces = path.map(typeNormalizingPrint, 'interfaces' as never);
+	if (interfaces.length > ZERO_LENGTH) {
+		parts.push(' ', 'implements', ' ', join(', ', interfaces));
+	}
+
+	return parts;
+};
+
+// Internal helpers exported for unit testing and full coverage
+const __TEST_ONLY__ = {
+	blockSliceHasCommentMarkers,
+	buildEmptyClassInheritanceDocs,
+	hasAnyComments,
+	isEmptyBlockStmntNode,
+};
 
 /**
  * Processes type parameters array to make first comma breakable.
@@ -258,8 +336,9 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			if (!pluginInstance) {
 				return undefined;
 			}
+			// Ensure our plugin instance is LAST and not duplicated (Prettier may pass plugins as strings/paths).
 			const plugins: (prettier.Plugin<ApexNode> | URL | string)[] = [
-				...basePlugins.filter((p) => p !== pluginInstance.default),
+				...basePlugins,
 				pluginInstance.default as prettier.Plugin<ApexNode>,
 			];
 
@@ -293,8 +372,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 
 			// Return formatted comment as Doc (split into lines)
 			const lines = formattedComment.split('\n');
-			const { join, hardline } = doc.builders;
-			return join(hardline, lines) as Doc;
+			return join(line, lines) as Doc;
 		};
 	};
 
@@ -324,7 +402,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 	): Doc | null => {
 		if (!isTypeRef(node)) return null;
 		const namesField = (node as { names?: unknown }).names;
-		const ZERO_LENGTH = 0;
 		if (!Array.isArray(namesField) || namesField.length === ZERO_LENGTH)
 			return null;
 
@@ -435,7 +512,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				'decls' as never,
 			) as unknown as Doc[];
 
-			const ZERO_LENGTH = 0;
 			const SINGLE_DECL = 1;
 			if (nameDocs.length === ZERO_LENGTH) return null;
 
@@ -505,7 +581,6 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		}, 'decls' as never) as unknown as Doc[];
 
 		const resultParts: Doc[] = [];
-		const ZERO_LENGTH = 0;
 		if (modifierDocs.length > ZERO_LENGTH) {
 			resultParts.push(...modifierDocs);
 		}
@@ -720,6 +795,118 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		});
 		if (assignmentResult !== null) return assignmentResult;
 
+		// Inline empty class/interface/enum bodies as `{}` (upstream decl nodes are not BlockStmnt).
+		if (
+			nodeClass === APEX_CLASS_DECL ||
+			nodeClass === APEX_INTERFACE_DECL ||
+			nodeClass === APEX_ENUM_DECL
+		) {
+			const decl = node as unknown as { members?: unknown[] };
+			const hasMembers =
+				Array.isArray(decl.members) &&
+				decl.members.length > ZERO_LENGTH;
+			if (!hasMembers && !hasAnyComments(node)) {
+				const parts: Doc[] = [];
+				const modifierDocs = path.map(
+					typeNormalizingPrint,
+					'modifiers' as never,
+				) as unknown as Doc[];
+				if (modifierDocs.length > ZERO_LENGTH) parts.push(modifierDocs);
+
+				parts.push(
+					nodeClass === APEX_CLASS_DECL
+						? 'class'
+						: nodeClass === APEX_INTERFACE_DECL
+							? 'interface'
+							: 'enum',
+				);
+				parts.push(' ');
+				parts.push(path.call(typeNormalizingPrint, 'name' as never));
+
+				const typeArgs = (
+					node as { typeArguments?: { value?: unknown[] } }
+				).typeArguments?.value;
+				if (Array.isArray(typeArgs) && typeArgs.length > ZERO_LENGTH) {
+					const typeArgDocs = path.map(
+						typeNormalizingPrint,
+						'typeArguments' as never,
+						'value' as never,
+					);
+					parts.push('<', join(', ', typeArgDocs), '>');
+				}
+
+				if (nodeClass === APEX_CLASS_DECL) {
+					parts.push(
+						...buildEmptyClassInheritanceDocs(
+							path,
+							typeNormalizingPrint,
+						),
+					);
+				}
+
+				parts.push(' ', '{}');
+				return parts;
+			}
+		}
+
+		// Inline empty method bodies as `{}` (stmnt is a wrapped BlockStmnt in practice).
+		if (nodeClass === APEX_METHOD_DECL) {
+			const method = node as unknown as { stmnt?: unknown };
+			const currentOriginalText = getCurrentOriginalText();
+			const stmntHasCommentMarkers = blockSliceHasCommentMarkers(
+				method.stmnt,
+				currentOriginalText,
+			);
+			const hasEmptyBlock =
+				method.stmnt !== undefined &&
+				isEmptyBlockStmntNode(method.stmnt);
+			const hasNodeComments = hasAnyComments(node);
+			const hasBlockComments =
+				method.stmnt !== undefined &&
+				hasAnyComments(method.stmnt as ApexNode);
+			if (
+				hasEmptyBlock &&
+				!hasNodeComments &&
+				!hasBlockComments &&
+				!stmntHasCommentMarkers
+			) {
+				const modifierDocs = path.map(
+					typeNormalizingPrint,
+					'modifiers' as never,
+				);
+				const parameterDocs = path.map(
+					typeNormalizingPrint,
+					'parameters' as never,
+				);
+				const parts: Doc[] = [];
+				if (modifierDocs.length > ZERO_LENGTH) parts.push(modifierDocs);
+
+				const typeDoc = path.call(
+					typeNormalizingPrint,
+					'type' as never,
+					'value' as never,
+				);
+				// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- typeDoc may be falsy for void methods
+				if (typeDoc) parts.push(typeDoc, ' ');
+				parts.push(path.call(typeNormalizingPrint, 'name' as never));
+				parts.push('(');
+				if (parameterDocs.length > ZERO_LENGTH) {
+					parts.push(
+						group(
+							indent([
+								softline,
+								join([',', line], parameterDocs),
+								softline,
+							]),
+						),
+					);
+				}
+				parts.push(')');
+				parts.push(' ', '{}');
+				return parts;
+			}
+		}
+
 		return fallback();
 	};
 
@@ -736,6 +923,7 @@ const createWrappedPrinter = (originalPrinter: any): any => {
  * @returns Promise resolving to processed comment.
  */
 export {
+	__TEST_ONLY__,
 	canAttachComment,
 	createWrappedPrinter,
 	getCurrentOriginalText,

@@ -6,12 +6,10 @@ public class CodeBlockDeprecatedTest {
    * @example
    * {@code
    * @Deprecated
-   * public void oldMethod() {
-   * }
+   * public void oldMethod() {}
    * }
    */
-  public void methodWithDeprecatedInCode(String input) {
-  }
+  public void methodWithDeprecatedInCode(String input) {}
 
   /**
    * Test with multiple deprecated annotations.
@@ -19,28 +17,23 @@ public class CodeBlockDeprecatedTest {
    * @example
    * {@code
    * @Deprecated
-   * public class OldClass {
-   * }
+   * public class OldClass {}
    * }
    */
-  public void multipleDeprecatedInCode() {
-  }
+  public void multipleDeprecatedInCode() {}
 
   /**
    * Test with deprecated in nested code blocks.
    * @example
    * {@code
    * @Deprecated
-   * public void method1() {
-   * }
+   * public void method1() {}
    * }
    * Some text between code blocks.
    * {@code
    * @Deprecated
-   * public void method2() {
-   * }
+   * public void method2() {}
    * }
    */
-  public void nestedCodeBlocks() {
-  }
+  public void nestedCodeBlocks() {}
 }

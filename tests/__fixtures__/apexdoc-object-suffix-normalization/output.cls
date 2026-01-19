@@ -10,6 +10,5 @@ public class Test {
    *   new Knowledge__DataCategorySelection();
    * }
    */
-  public void example() {
-  }
+  public void example() {}
 }

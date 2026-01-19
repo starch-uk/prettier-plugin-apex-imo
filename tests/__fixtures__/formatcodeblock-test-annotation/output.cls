@@ -1,3 +1,2 @@
 @IsTest
-public class TestAnnotation {
-}
+public class TestAnnotation {}

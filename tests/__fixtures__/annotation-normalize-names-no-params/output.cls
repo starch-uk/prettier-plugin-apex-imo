@@ -1,3 +1,2 @@
 @Deprecated
-public class DeprecatedClass {
-}
+public class DeprecatedClass {}

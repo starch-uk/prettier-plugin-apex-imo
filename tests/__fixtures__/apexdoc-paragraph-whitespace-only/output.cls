@@ -5,6 +5,5 @@ public class Test {
    *
    *   description
    */
-  public void method(Integer x) {
-  }
+  public void method(Integer x) {}
 }

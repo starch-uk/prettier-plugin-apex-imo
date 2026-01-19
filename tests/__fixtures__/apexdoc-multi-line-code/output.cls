@@ -10,6 +10,5 @@ public class Test {
    * System.debug(items);
    * }
    */
-  public void method() {
-  }
+  public void method() {}
 }

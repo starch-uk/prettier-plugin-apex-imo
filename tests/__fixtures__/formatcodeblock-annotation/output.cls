@@ -1,3 +1,2 @@
 @AuraEnabled(Cacheable=true)
-public class TestAnnotation {
-}
+public class TestAnnotation {}

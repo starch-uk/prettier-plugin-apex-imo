@@ -25,7 +25,6 @@ public class MyClass {
   }
 
   abstract class InnerClass implements SomeInterface {
-    virtual Void overrideMethod() {
-    }
+    virtual Void overrideMethod() {}
   }
 }

@@ -1,9 +1,7 @@
 @Test
 public class TestClass {
   @AuraEnabled
-  public void auraMethod() {
-  }
+  public void auraMethod() {}
   @Future(Callout=true)
-  public static void futureMethod() {
-  }
+  public static void futureMethod() {}
 }

@@ -8,8 +8,7 @@ public class Test {
    * };
    * }
    */
-  public void method1() {
-  }
+  public void method1() {}
 
   /**
    * Second example.
@@ -20,6 +19,5 @@ public class Test {
    * };
    * }
    */
-  public void method2() {
-  }
+  public void method2() {}
 }

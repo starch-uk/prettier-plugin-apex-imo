@@ -11,6 +11,7 @@ import type { AstPath } from 'prettier';
 import { createWrappedPrinter } from '../src/printer.js';
 import type { ApexNode } from '../src/types.js';
 import {
+	__TEST_ONLY__,
 	getCurrentPrintOptions,
 	getCurrentOriginalText,
 } from '../src/printer.js';
@@ -299,6 +300,123 @@ describe('printer', () => {
 			},
 		);
 	});
+
+	/* eslint-disable sort-keys/sort-keys-fix */
+	describe('internal helpers', () => {
+		it('hasAnyComments should detect comments array', () => {
+			const nodeWithComments = { comments: [{}] } as unknown;
+			const nodeWithoutComments = {} as unknown;
+
+			expect(__TEST_ONLY__.hasAnyComments(nodeWithComments)).toBe(true);
+			expect(__TEST_ONLY__.hasAnyComments(nodeWithoutComments)).toBe(
+				false,
+			);
+		});
+
+		it('isEmptyBlockStmntNode should detect empty and non-empty BlockStmnt', () => {
+			const emptyBlock = {
+				value: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Stmnt$BlockStmnt',
+					loc: { startIndex: 0, endIndex: 2 },
+					stmnts: [],
+				},
+			} as unknown;
+			const nonEmptyBlock = {
+				value: {
+					[nodeClassKey]: 'apex.jorje.data.ast.Stmnt$BlockStmnt',
+					loc: { startIndex: 0, endIndex: 10 },
+					stmnts: [{}],
+				},
+			} as unknown;
+			const nonBlock = {
+				value: { [nodeClassKey]: 'apex.jorje.data.ast.Other' },
+			} as unknown;
+
+			expect(__TEST_ONLY__.isEmptyBlockStmntNode(emptyBlock)).toBe(true);
+			expect(__TEST_ONLY__.isEmptyBlockStmntNode(nonEmptyBlock)).toBe(
+				false,
+			);
+			expect(__TEST_ONLY__.isEmptyBlockStmntNode(nonBlock)).toBe(false);
+			expect(__TEST_ONLY__.isEmptyBlockStmntNode({} as unknown)).toBe(
+				false,
+			);
+		});
+
+		it('blockSliceHasCommentMarkers should detect inline and block comments and handle missing loc/originalText', () => {
+			const baseValue = {
+				[nodeClassKey]: 'apex.jorje.data.ast.Stmnt$BlockStmnt',
+				loc: { startIndex: 0, endIndex: 20 },
+				stmnts: [],
+			};
+			const blockNode = { value: baseValue } as unknown;
+			const blockNodeNoLoc = {
+				value: { ...baseValue, loc: undefined },
+			} as unknown;
+			const originalWithInline = '{ // inline\n}';
+			const originalWithBlock = '{ /* block */ }';
+
+			expect(
+				__TEST_ONLY__.blockSliceHasCommentMarkers(
+					blockNode,
+					originalWithInline,
+				),
+			).toBe(true);
+			expect(
+				__TEST_ONLY__.blockSliceHasCommentMarkers(
+					blockNode,
+					originalWithBlock,
+				),
+			).toBe(true);
+			expect(
+				__TEST_ONLY__.blockSliceHasCommentMarkers(
+					blockNode,
+					'{ no comments }',
+				),
+			).toBe(false);
+			expect(
+				__TEST_ONLY__.blockSliceHasCommentMarkers(blockNode, undefined),
+			).toBe(false);
+			expect(
+				__TEST_ONLY__.blockSliceHasCommentMarkers(
+					blockNodeNoLoc,
+					'{ // }',
+				),
+			).toBe(false);
+			const blockNodeNoWrapper = {
+				loc: { startIndex: 0, endIndex: originalWithInline.length },
+				stmnts: [],
+			} as unknown;
+			expect(
+				__TEST_ONLY__.blockSliceHasCommentMarkers(
+					blockNodeNoWrapper,
+					originalWithInline,
+				),
+			).toBe(true);
+		});
+
+		it('buildEmptyClassInheritanceDocs should include extends and implements segments', () => {
+			const superAndInterfaces: Doc[] = [];
+
+			const stubPath = {
+				call: () => 'BaseService',
+				map: () => ['IFace1', 'IFace2'],
+			} as unknown as Readonly<AstPath<ApexNode>>;
+
+			const parts = __TEST_ONLY__.buildEmptyClassInheritanceDocs(
+				stubPath,
+				() => 'Ignored',
+			);
+
+			superAndInterfaces.push(...parts);
+
+			expect(superAndInterfaces.join('')).toContain('extends');
+			expect(superAndInterfaces.join('')).toContain('BaseService');
+			expect(superAndInterfaces.join('')).toContain('implements');
+			expect(superAndInterfaces.join('')).toContain('IFace1');
+			expect(superAndInterfaces.join('')).toContain('IFace2');
+		});
+	});
+	/* eslint-enable sort-keys/sort-keys-fix */
 
 	describe('annotation normalization', () => {
 		it.concurrent('should normalize annotation names to PascalCase', () => {
@@ -744,6 +862,153 @@ describe('printer', () => {
 				expect(result).toBe('original output');
 			},
 		);
+
+		it.concurrent(
+			'should inline empty class body without superClass or interfaces',
+			() => {
+				const mockNode = {
+					members: [],
+					modifiers: [],
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'MyService',
+					},
+					[nodeClassKey]: 'apex.jorje.data.ast.ClassDecl',
+				} as ApexNode;
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = createMockOriginalPrinter();
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				expect(mockOriginalPrinter.print).not.toHaveBeenCalled();
+				expect(result).toBeDefined();
+			},
+		);
+
+		/* eslint-disable sort-keys/sort-keys-fix */
+		it.concurrent(
+			'should inline empty generic class body with superClass and interfaces',
+			() => {
+				const mockNode = {
+					members: [],
+					modifiers: [],
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'MyGenericService',
+					},
+					typeArguments: {
+						value: [
+							{
+								[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
+								names: [
+									{
+										value: 'T',
+										[nodeClassKey]:
+											'apex.jorje.data.ast.Identifier',
+									},
+								],
+							},
+						],
+					},
+					superClass: {
+						value: {
+							[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
+							names: [
+								{
+									value: 'BaseService',
+									[nodeClassKey]:
+										'apex.jorje.data.ast.Identifier',
+								},
+							],
+						},
+					},
+					interfaces: [
+						{
+							[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
+							names: [
+								{
+									value: 'IDescribable',
+									[nodeClassKey]:
+										'apex.jorje.data.ast.Identifier',
+								},
+							],
+						},
+					],
+					[nodeClassKey]: 'apex.jorje.data.ast.ClassDecl',
+				} as ApexNode;
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = createMockOriginalPrinter();
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				expect(mockOriginalPrinter.print).not.toHaveBeenCalled();
+				expect(result).toBeDefined();
+			},
+		);
+
+		it.concurrent(
+			'should inline empty method body without comments',
+			() => {
+				const mockNode = {
+					modifiers: [],
+					name: {
+						[nodeClassKey]: 'apex.jorje.data.ast.Identifier',
+						value: 'doWork',
+					},
+					parameters: [],
+					stmnt: {
+						value: {
+							loc: {
+								endIndex: 2,
+								startIndex: 0,
+							},
+							[nodeClassKey]:
+								'apex.jorje.data.ast.Stmnt$BlockStmnt',
+							stmnts: [],
+						},
+					},
+					type: {
+						value: {
+							[nodeClassKey]: 'apex.jorje.data.ast.TypeRef',
+							names: [
+								{
+									value: 'void',
+									[nodeClassKey]:
+										'apex.jorje.data.ast.Identifier',
+								},
+							],
+						},
+					},
+					[nodeClassKey]: 'apex.jorje.data.ast.MethodDecl',
+				} as ApexNode;
+
+				const mockPath = createMockPath(mockNode);
+				const mockOriginalPrinter = createMockOriginalPrinter();
+				const wrapped = createWrappedPrinter(mockOriginalPrinter);
+
+				const result = wrapped.print(
+					mockPath,
+					createMockOptions(),
+					createMockPrint(),
+				);
+
+				expect(mockOriginalPrinter.print).not.toHaveBeenCalled();
+				expect(result).toBeDefined();
+			},
+		);
+		/* eslint-enable sort-keys/sort-keys-fix */
 
 		it.concurrent(
 			'should handle variable declarations with object typeDoc (line 106)',

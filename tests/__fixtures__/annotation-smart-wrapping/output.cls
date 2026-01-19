@@ -4,6 +4,5 @@ public class TestClass {
     Description='Test Description'
     Category='Custom'
   )
-  public static void myMethod() {
-  }
+  public static void myMethod() {}
 }

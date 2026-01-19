@@ -3,6 +3,5 @@ public class TestClass {
     Cacheable=true
     Continuation=false
   )
-  public static void myMethod() {
-  }
+  public static void myMethod() {}
 }
