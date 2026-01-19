@@ -1,0 +1,2 @@
+@CustomAnnotation
+public class CustomClass {}

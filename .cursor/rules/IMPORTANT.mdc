@@ -2,6 +2,36 @@
 alwaysApply: true
 ---
 
+# Code Optimization - MANDATORY REFERENCE
+
+**CRITICAL - READ THIS FIRST**: When the user requests optimization (using words like "optimise", "optimize", "refactor", "improve performance", "reduce code size", "clean up code", or any similar request), you MUST:
+
+1. **IMMEDIATELY** read the file `.cursor/plans/OPTIMISE.md` in full before proceeding
+2. **STRICTLY** follow all guidelines, strategies, and best practices outlined in that file
+3. **USE** that file as your primary and authoritative reference for all optimization work
+4. **DO NOT** proceed with optimization work without first reading and understanding the OPTIMISE.md plan
+
+The file `.cursor/plans/OPTIMISE.md` contains comprehensive guidelines, strategies, and best practices for optimizing the codebase while maintaining functionality and code quality. It is the single source of truth for all optimization tasks.
+
+**Trigger keywords/phrases** that require reading OPTIMISE.md:
+- "optimise" / "optimize"
+- "refactor"
+- "improve performance"
+- "reduce code size"
+- "clean up code"
+- "make code more efficient"
+- Any request to improve, streamline, or optimize the codebase
+
+# Processing Architecture Requirements
+
+**CRITICAL - ARCHITECTURAL CONSTRAINT**: All code in this project MUST follow asynchronous processing patterns. You MUST **NEVER** introduce:
+
+- **Preprocessing** - No preprocessing steps or transformations before main processing
+- **Postprocessing** - No postprocessing steps or transformations after main processing
+- **Synchronous processing** - All processing MUST be asynchronous with no exceptions
+
+This ensures the codebase maintains its asynchronous-first architecture and prevents the introduction of blocking operations that could impact performance and scalability.
+
 # Documentation Update Requirement
 
 **CRITICAL**: When making any changes to the project (including but not limited to):
@@ -19,6 +49,160 @@ You MUST update both:
 This ensures documentation stays in sync with the actual codebase and prevents confusion for contributors and users.
 
 Refer to documentation files in `docs/*.md`:
+- `docs/APEXDOC.md` - ApexDoc quick reference for AI agents
 - `docs/ESLINT.md` - ESLint reference and configuration
-- `docs/HUSKY9.md` - Husky v9 reference and setup
+- `docs/HUSKY.md` - Husky reference and setup
+- `docs/JORJE.md` - Jorje AST library reference (technical, style, philosophy) for AI agents
 - `docs/PNPM.md` - pnpm reference and usage
+- `docs/PRETTIER.md` - Prettier architecture, APIs, and usage patterns reference
+- `docs/PRETTIERAPEX.md` - Prettier Plugin Apex reference implementation documentation
+- `docs/VITEST.md` - Vitest reference and configuration
+
+## External Code Inspection
+
+For reference implementation inspection, the following repositories can be checked out to environmental temporary folders:
+- **prettier**: https://github.com/prettier/prettier.git
+- **prettier-plugin-apex**: https://github.com/dangmai/prettier-plugin-apex.git
+
+This can be cloned to temporary directories for code inspection and reference when implementing features or debugging issues.
+
+# pnpm Command Permissions
+
+**CRITICAL**: When running any `pnpm` commands (including but not limited to `pnpm install`, `pnpm run`, `pnpm test`, `pnpm build`, `pnpm lint`, etc.), you MUST:
+
+1. **ALWAYS** request `required_permissions: ["all"]` to avoid sandbox restrictions
+2. **NEVER** run pnpm commands without full permissions as they require file system access, network access, and may need to modify node_modules and other project files
+3. pnpm commands should be run with full permissions from the start to prevent sandbox errors and retries
+
+This applies to ALL pnpm commands, not just install commands.
+
+# Running Specific Tests
+
+**CRITICAL**: When running specific tests, you MUST follow the patterns documented in `docs/VITEST.md`:
+
+1. **Always use `pnpm test` for running tests**:
+   - `pnpm test` - run all tests
+   - `pnpm test -- [filters]` - run tests with specific filters
+   - All test commands should use the `pnpm test` script instead of direct `vitest` commands
+
+2. **Run specific test files** using file paths or patterns:
+   - `pnpm test -- tests/apexdoc.test.ts` - run a specific test file
+   - `pnpm test -- tests/apexdoc` - run tests matching pattern (finds `apexdoc.test.ts`)
+   - `pnpm test -- apexdoc` - run tests matching pattern from any location
+   - Patterns use tinyglobby and are relative to the project root
+
+3. **Run specific test suites or tests**:
+   - Using `.only` modifier in code:
+     - Use `test.only()` or `describe.only()` to run only specific tests
+     - Remember to remove `.only` before committing
+   - Using `-t` flag to filter by test name:
+     - **CRITICAL**: When test names contain spaces, escape them with `\s` instead of using quotes
+     - **DO NOT** use: `pnpm test -- tests/integration.test.ts -t "should wrap field"`
+     - **DO THIS**: `pnpm test -- tests/integration.test.ts -t "should\swrap\sfield"`
+     - The `-t` flag accepts a regex pattern, so spaces must be escaped as `\s`
+
+4. **Common test commands**:
+   - All tests: `pnpm test`
+   - Specific file: `pnpm test -- tests/apexdoc.test.ts`
+   - Pattern match: `pnpm test -- apexdoc`
+   - With coverage: `pnpm run test:coverage -- [filters]`
+   - Watch mode: `pnpm run test:watch -- [filters]`
+   - Note: Pass filters after `--` to avoid pnpm interpreting them as script arguments
+
+5. **Important notes**:
+   - Always use `pnpm test` instead of direct `vitest` commands to ensure correct environment
+   - Use single run mode when debugging or running specific tests to avoid watch mode complications
+   - Test filters support glob patterns and are case-sensitive
+   - Multiple filters can be provided: `pnpm test -- tests/apexdoc tests/casing`
+
+6. **When debugging specific tests**:
+   - Clear debug logs first using `delete_file` tool - **NEVER** use shell commands like `> .cursor/debug.log` or `rm .cursor/debug.log`
+   - Run specific test: `pnpm test -- tests/apexdoc.test.ts`
+   - Use `--no-file-parallelism` if needed: `pnpm test -- --no-file-parallelism tests/apexdoc.test.ts`
+   - Use `--reporter=verbose` for detailed output: `pnpm test -- --reporter=verbose tests/apexdoc.test.ts`
+
+**Reference**: See `docs/VITEST.md` for complete Vitest CLI documentation and all available options.
+
+# Test Files Must Use Fixtures
+
+**CRITICAL**: When creating or modifying test files in `tests/*.test.ts`, you MUST:
+
+1. **ALWAYS** use fixtures from `tests/__fixtures__/` for test data instead of inline strings or hardcoded values
+2. **ALWAYS** import and use the shared `loadFixture` function from `tests/test-utils.ts` - **NEVER** duplicate the fixture loading code
+3. **AVOID** inline test data like `const text = \`/** ... */\`;` - instead create fixture files in `__fixtures__/`
+4. **ONLY** use inline test data for:
+   - Edge cases that are difficult to represent in fixture files
+   - Unit tests that test internal function behavior with mocks (e.g., `annotations.test.ts`, `casing.test.ts`)
+   - Tests that require dynamic test data generation
+
+**Fixture Loading Pattern**:
+```typescript
+import { loadFixture } from './test-utils.js';
+
+// In your test:
+const input = loadFixture('apexdoc-single-line-code', 'input');
+const expected = loadFixture('apexdoc-single-line-code', 'output');
+```
+
+**Test Assertions - Use Exact String Comparisons**:
+- **ALWAYS** use `.toBe()` for exact string comparisons instead of `.toContain()` or `.toMatch()`
+- **NEVER** use `.toContain()` or `.toMatch()` unless testing for partial matches is absolutely necessary
+- Use exact expected values from fixtures or string literals
+- Example: `expect(result).toBe(expected)` instead of `expect(result).toContain('some text')`
+
+**Secure File Handling**:
+- The shared `loadFixture` function in `tests/test-utils.ts` includes:
+  - Fixture name validation (alphanumeric and hyphens only) to prevent directory traversal
+  - File parameter validation (only 'input' or 'output')
+  - Path resolution checks to ensure paths stay within the test directory
+  - Proper error handling with descriptive error messages
+- **NEVER** bypass these security checks or create custom fixture loading functions
+
+**When creating new tests**:
+- If testing formatting behavior, create fixture files in `tests/__fixtures__/`
+- Each fixture should have an `input.cls` and `output.cls` file
+- Use descriptive fixture directory names (e.g., `apexdoc-single-line-code`, `annotation-multiple-params`)
+- Use exact string comparisons with `.toBe()` for all assertions
+
+This ensures:
+- Test data is reusable and maintainable
+- Tests are consistent across the codebase
+- Test data can be easily inspected and modified
+- Integration tests and unit tests follow the same patterns
+- Tests are secure and protected against path traversal attacks
+- Tests are precise and catch exact formatting differences
+
+# Debugging Guidelines
+
+**CRITICAL**: When debugging issues:
+
+1. **ALWAYS** clear the `.cursor/debug.log` file before each test run to ensure clean logs
+   - Use the `delete_file` tool to clear the log file - **NEVER** use shell commands like `rm`, `touch`, `>`, etc.
+   - This prevents log pollution from previous test runs and makes debugging easier
+
+2. **AUTONOMOUS OPERATIONS - DO NOT ASK USER TO DO THESE**:
+   - **YOU MUST** run tests yourself using `run_terminal_cmd` - never ask the user to run tests
+   - **YOU MUST** read log files yourself using `read_file` - never ask the user to check logs
+   - **YOU MUST** check test output yourself - never ask the user to verify output
+   - **YOU MUST** clear debug logs yourself using `delete_file` - never ask the user to clear logs
+   - **YOU MUST** verify structure/data yourself - never ask the user to verify
+   - **YOU MUST** review debug logs yourself - never ask the user to review logs
+   - **YOU MUST** check test results yourself - never ask the user to check results
+   - Tests can be run without requiring user input or approval
+   - Log files (like `.cursor/debug.log`) can be read directly to analyze issues
+   - No need to wait for user confirmation before running tests or reading logs during debugging sessions
+   - This enables efficient iterative debugging cycles
+
+3. **When to use `<reproduction_steps>` blocks**:
+   - **ONLY** include steps that require user interaction (e.g., restarting a server, clicking UI elements, providing input, manually editing files outside the workspace)
+   - **NEVER** include steps you can do autonomously (running tests, reading logs, checking output, clearing logs, reviewing debug logs, checking test results)
+   - If all debugging can be done autonomously, **DO NOT** include a `<reproduction_steps>` block
+   - The `<reproduction_steps>` block is for user actions, not agent actions
+
+4. **Examples of things you should NEVER ask the user to do**:
+   - Clear the debug log: `> .cursor/debug.log` or `rm .cursor/debug.log` - **YOU DO THIS** using `delete_file`
+   - Run the failing test: `pnpm test -- tests/integration.test.ts -t "..."` - **YOU DO THIS** using `run_terminal_cmd`
+   - Check the output - it should show X instead of Y - **YOU DO THIS** by reading the test output yourself
+   - Review the debug logs to see if something is being used - **YOU DO THIS** by reading `.cursor/debug.log` yourself
+   - Check test results - **YOU DO THIS** by running tests and reading the output yourself
+   - Verify structure/data - **YOU DO THIS** by reading files and inspecting data yourself

@@ -1,0 +1,2 @@
+@Deprecated
+public class DeprecatedClass {}

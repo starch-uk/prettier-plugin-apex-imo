@@ -6,7 +6,7 @@
 **Package Name:** `prettier-plugin-apex-imo`  
 **Description:** An opinionated enhancement plugin for `prettier-plugin-apex`
 that enforces multiline formatting for Apex Lists and Maps with multiple
-entries.
+entries, and formats code inside ApexDoc `{@code}` blocks.
 
 ### The Problem
 
@@ -35,6 +35,9 @@ This plugin wraps `prettier-plugin-apex` and modifies the printing behavior for:
 - **List literals** with 2+ entries → Always multiline
 - **Set literals** with 2+ entries → Always multiline
 - **Map literals** with 2+ entries → Always multiline
+- **ApexDoc `{@code}` blocks** → Code inside is formatted using Prettier
+- **Enhanced comment handling** → Better comment placement and attachment using
+  Prettier's comment system
 
 **Important:** This is non-configurable behavior. Once installed, it just works.
 
@@ -87,7 +90,7 @@ prettier-plugin-apex-imo/
 │   └── PULL_REQUEST_TEMPLATE.md # Pull request template
 ├── docs/                     # Additional documentation
 │   ├── ESLINT.md            # ESLint reference
-│   ├── HUSKY9.md            # Husky v9 reference
+│   ├── HUSKY.md             # Husky reference
 │   └── PNPM.md              # pnpm reference
 ├── package.json
 ├── tsconfig.json
@@ -161,8 +164,8 @@ Update `package.json`:
 		"test": "vitest",
 		"test:coverage": "vitest --coverage",
 		"test:ci": "vitest run --coverage",
-		"lint": "eslint src tests",
-		"lint:fix": "eslint src tests --fix",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "pnpm run build",
 		"format": "prettier --write .",
@@ -259,10 +262,10 @@ export default defineConfig({
 			include: ['src/**/*.ts'],
 			exclude: ['src/types.ts'],
 			thresholds: {
-				lines: 80,
-				functions: 80,
-				branches: 80,
-				statements: 80,
+				lines: 100,
+				functions: 100,
+				branches: 100,
+				statements: 100,
 			},
 		},
 	},
@@ -1576,54 +1579,78 @@ Create `eslint.config.js`:
 import parser from '@typescript-eslint/parser';
 import plugin from '@typescript-eslint/eslint-plugin';
 
+// Get all available configs from the plugin
+const recommendedConfig = plugin.configs.recommended || {};
+const strictConfig = plugin.configs.strict || {};
+const stylisticConfig = plugin.configs.stylistic || {};
+const recommendedTypeCheckedConfig =
+	plugin.configs['recommended-type-checked'] ||
+	plugin.configs.recommendedTypeChecked ||
+	{};
+const strictTypeCheckedConfig =
+	plugin.configs['strict-type-checked'] ||
+	plugin.configs.strictTypeChecked ||
+	{};
+
+// Enable all rules from all configs
+const configRules = {
+	// Enable all TypeScript ESLint recommended rules
+	...(recommendedConfig.rules || {}),
+	// Enable all TypeScript ESLint strict rules
+	...(strictConfig.rules || {}),
+	// Enable all TypeScript ESLint stylistic rules
+	...(stylisticConfig.rules || {}),
+	// Enable all TypeScript ESLint type-checked rules
+	...(recommendedTypeCheckedConfig.rules || {}),
+	...(strictTypeCheckedConfig.rules || {}),
+};
+
+// Enable all individual rules from the plugin that aren't in configs
+// This ensures every rule is enabled, not just those in presets
+const allPluginRules = {};
+if (plugin.rules) {
+	for (const [ruleName, rule] of Object.entries(plugin.rules)) {
+		const fullRuleName = `@typescript-eslint/${ruleName}`;
+		// Only enable if not already set by a config (configs take precedence)
+		if (!(fullRuleName in configRules)) {
+			// Enable the rule (use 'error' as default, can be overridden)
+			allPluginRules[fullRuleName] = 'error';
+		}
+	}
+}
+
+// Combine all rules
+const allRules = {
+	// Disable base ESLint rules that conflict with TypeScript versions
+	'no-unused-vars': 'off',
+	'no-redeclare': 'off',
+	'no-undef': 'off',
+	// All rules from configs
+	...configRules,
+	// All individual plugin rules not in configs
+	...allPluginRules,
+	// Customize specific rules (these override any config defaults)
+	'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+};
+
 export default [
 	{
-		files: ['src/**/*.ts'],
+		files: ['**/*.ts'],
 		languageOptions: {
 			parser,
 			parserOptions: {
 				ecmaVersion: 2022,
 				sourceType: 'module',
-				project: './tsconfig.json',
+				projectService: true,
 			},
 		},
 		plugins: {
 			'@typescript-eslint': plugin,
 		},
-		rules: {
-			...plugin.configs.recommended.rules,
-			'@typescript-eslint/no-explicit-any': 'warn',
-			'@typescript-eslint/explicit-function-return-type': 'off',
-			'@typescript-eslint/no-unused-vars': [
-				'error',
-				{ argsIgnorePattern: '^_' },
-			],
-		},
+		rules: allRules,
 	},
 	{
-		files: ['tests/**/*.ts'],
-		languageOptions: {
-			parser,
-			parserOptions: {
-				ecmaVersion: 2022,
-				sourceType: 'module',
-			},
-		},
-		plugins: {
-			'@typescript-eslint': plugin,
-		},
-		rules: {
-			...plugin.configs.recommended.rules,
-			'@typescript-eslint/no-explicit-any': 'warn',
-			'@typescript-eslint/explicit-function-return-type': 'off',
-			'@typescript-eslint/no-unused-vars': [
-				'error',
-				{ argsIgnorePattern: '^_' },
-			],
-		},
-	},
-	{
-		ignores: ['dist/**', 'node_modules/**'],
+		ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
 	},
 ];
 ```
@@ -1824,6 +1851,57 @@ npx stop-apex-server
 ```
 
 ---
+
+## ApexDoc {@code} Block Formatting
+
+The plugin includes support for formatting code inside ApexDoc `{@code}` blocks.
+This feature uses a preprocessor to format code snippets before the main parsing
+and printing phase.
+
+### Implementation Details
+
+1. **Preprocessing**: The `preprocess` function in `src/index.ts` scans the
+   original text for `{@code}` blocks within ApexDoc comments (`/** ... */`)
+
+2. **Code Extraction**: Utility functions in `src/utils.ts`:
+    - `findApexDocCodeBlocks()` - Locates all `{@code}` blocks in comments
+    - `extractCodeFromBlock()` - Extracts code content, matching opening and
+      closing braces
+    - `formatCodeBlock()` - Formats extracted code using Prettier
+    - `applyCommentIndentation()` - Applies proper indentation aligned with
+      comment structure
+
+3. **Indentation**: Code is indented to align with the opening bracket of
+   `{@code` and maintains the `*` vertical alignment of the comment block
+
+4. **Error Handling**: Invalid blocks (unmatched brackets or invalid Apex code)
+   are preserved unchanged
+
+### Example
+
+**Before:**
+
+```apex
+/**
+ * Example method.
+ * {@code List<String> items = new List<String>{'a','b','c'}; }
+ */
+```
+
+**After:**
+
+```apex
+/**
+ * Example method.
+ * {@code
+ *   List<String> items = new List<String>{
+ *     'a',
+ *     'b',
+ *     'c'
+ *   };
+ * }
+ */
+```
 
 ## Appendix C: Future Enhancement Ideas
 

@@ -1,74 +1,150 @@
-import { describe, it, expect } from 'vitest';
+/**
+ * @file Tests for the main plugin entry point.
+ */
+
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Test file needs type assertions for testing edge cases */
+import { describe, it, expect, vi } from 'vitest';
+import type { Plugin } from 'prettier';
+import type { ApexNode } from '../src/types.js';
 import plugin, {
 	languages,
 	parsers,
 	printers,
 	options,
 	defaultOptions,
+	isApexParser,
+	wrapParsers,
 } from '../src/index.js';
+import { createMockPrettierPluginApex } from './mocks/prettier.js';
 
 describe('index', () => {
 	describe('plugin structure', () => {
-		it('should export a plugin object', () => {
+		it.concurrent('exports plugin object with correct type', () => {
 			expect(plugin).toBeDefined();
 			expect(typeof plugin).toBe('object');
 		});
 
-		it('should have languages property', () => {
-			expect(plugin.languages).toBeDefined();
-			expect(languages).toBeDefined();
-			expect(plugin.languages).toBe(languages);
-		});
+		it.concurrent.each([
+			['languages', languages],
+			['parsers', parsers],
+			['printers', printers],
+			['options', options],
+			['defaultOptions', defaultOptions],
+		])(
+			'exports %s property that matches plugin.%s',
+			(propName: string, namedExport: unknown) => {
+				const pluginProp = plugin[propName as keyof typeof plugin];
+				expect(pluginProp).toBeDefined();
+				expect(namedExport).toBeDefined();
+				expect(pluginProp).toBe(namedExport);
+			},
+		);
 
-		it('should have parsers property', () => {
-			expect(plugin.parsers).toBeDefined();
-			expect(parsers).toBeDefined();
-			expect(plugin.parsers).toBe(parsers);
-		});
-
-		it('should have printers property', () => {
-			expect(plugin.printers).toBeDefined();
-			expect(printers).toBeDefined();
-			expect(plugin.printers).toBe(printers);
-		});
-
-		it('should have options property', () => {
-			expect(plugin.options).toBeDefined();
-			expect(options).toBeDefined();
-			expect(plugin.options).toBe(options);
-		});
-
-		it('should have defaultOptions property', () => {
-			expect(plugin.defaultOptions).toBeDefined();
-			expect(defaultOptions).toBeDefined();
-			expect(plugin.defaultOptions).toBe(defaultOptions);
-		});
-
-		it('should have apex printer', () => {
-			expect(plugin.printers.apex).toBeDefined();
-			expect(typeof plugin.printers.apex.print).toBe('function');
+		it.concurrent('exports apex printer with print method', () => {
+			expect(plugin.printers?.apex).toBeDefined();
+			expect(typeof plugin.printers?.apex?.print).toBe('function');
 		});
 	});
 
-	describe('named exports', () => {
-		it('should export languages as named export', () => {
-			expect(languages).toBe(plugin.languages);
-		});
+	describe('error handling', () => {
+		it('should throw error when prettier-plugin-apex printer is missing', async () => {
+			vi.doMock('prettier-plugin-apex', () =>
+				createMockPrettierPluginApex({ printers: undefined }),
+			);
 
-		it('should export parsers as named export', () => {
-			expect(parsers).toBe(plugin.parsers);
-		});
+			vi.resetModules();
 
-		it('should export printers as named export', () => {
-			expect(printers).toBe(plugin.printers);
+			await expect(async () => {
+				await import('../src/index.js');
+			}).rejects.toThrow(
+				'prettier-plugin-apex-imo requires prettier-plugin-apex to be installed',
+			);
 		});
+	});
 
-		it('should export options as named export', () => {
-			expect(options).toBe(plugin.options);
-		});
+	describe('wrappedParsers', () => {
+		it.concurrent(
+			'should skip invalid parsers (missing parse method)',
+			() => {
+				// Create mock parsers object with invalid entries to test skipping invalid parsers
+				const mockParsers = {
+					invalid1: undefined, // undefined entry
+					invalid2: {}, // missing parse method
+					invalid3: {
+						parse: 'not a function', // parse is not a function
+					},
+					valid: {
+						// eslint-disable-next-line @typescript-eslint/require-await -- Async signature required for mock compatibility
+						parse: async () => ({}),
+					},
+				} as unknown as Readonly<Plugin<ApexNode>['parsers']>;
 
-		it('should export defaultOptions as named export', () => {
-			expect(defaultOptions).toBe(plugin.defaultOptions);
+				const wrapped = wrapParsers(
+					mockParsers,
+					{} as Plugin<ApexNode>,
+				);
+
+				// Should only wrap valid parsers
+				expect(wrapped).toBeDefined();
+				expect(wrapped?.valid).toBeDefined();
+				expect(
+					typeof (wrapped?.valid as { parse?: unknown }).parse,
+				).toBe('function');
+				// Invalid parsers should be skipped
+				expect(wrapped?.invalid1).toBeUndefined();
+				expect(wrapped?.invalid2).toBeUndefined();
+				expect(wrapped?.invalid3).toBeUndefined();
+			},
+		);
+
+		it.concurrent('should handle null/undefined parsers', () => {
+			// Test with null/undefined parsers
+			expect(wrapParsers(null, {} as Plugin<ApexNode>)).toBeNull();
+			expect(
+				wrapParsers(undefined, {} as Plugin<ApexNode>),
+			).toBeUndefined();
 		});
+	});
+
+	describe('isApexParser', () => {
+		it.concurrent.each([
+			{
+				description: 'should return true for apex parser',
+				expected: true,
+				parser: 'apex',
+			},
+			{
+				description: 'should return true for apex-anonymous parser',
+				expected: true,
+				parser: 'apex-anonymous',
+			},
+			{
+				description: 'should return false for non-apex parser',
+				expected: false,
+				parser: 'typescript',
+			},
+			{
+				description: 'should return false for undefined parser',
+				expected: false,
+				parser: undefined,
+			},
+			{
+				description: 'should return false for non-string parser',
+				expected: false,
+				parser: 123 as unknown as string,
+			},
+		])(
+			'$description',
+			({
+				expected,
+				parser,
+			}: Readonly<{
+				description: string;
+				expected: boolean;
+				parser: string | undefined;
+			}>) => {
+				expect(isApexParser(parser)).toBe(expected);
+			},
+		);
 	});
 });

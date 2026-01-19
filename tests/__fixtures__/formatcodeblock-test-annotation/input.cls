@@ -1,0 +1,2 @@
+@iStEsT
+public class TestAnnotation {}

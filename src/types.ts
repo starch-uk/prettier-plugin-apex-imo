@@ -1,50 +1,72 @@
-import type { AstPath, Doc, ParserOptions, Plugin, Printer } from 'prettier';
-
 /**
- * Apex AST node types we care about for multiline formatting
+ * @file Type definitions for Apex AST nodes.
  */
-export interface ApexListInitNode {
+
+interface ApexNode {
+	[key: string]: unknown;
+	'@class': string;
+}
+
+interface ApexListInitNode extends ApexNode {
 	'@class':
 		| 'apex.jorje.data.ast.NewObject$NewListLiteral'
 		| 'apex.jorje.data.ast.NewObject$NewSetLiteral';
 	values: ApexNode[];
-	[key: string]: unknown;
 }
 
-export interface ApexMapInitNode {
+interface ApexMapInitNode extends ApexNode {
 	'@class': 'apex.jorje.data.ast.NewObject$NewMapLiteral';
 	pairs: ApexMapPair[];
-	[key: string]: unknown;
 }
 
-export interface ApexMapPair {
+interface ApexMapPair {
+	[key: string]: unknown;
 	'@class': 'apex.jorje.data.ast.MapLiteralKeyValue';
 	key: ApexNode;
 	value: ApexNode;
-	[key: string]: unknown;
 }
 
-export interface ApexNode {
+interface ApexAnnotationNode extends ApexNode {
+	'@class': 'apex.jorje.data.ast.Modifier$Annotation';
+	name: ApexIdentifier;
+	parameters: ApexAnnotationParameter[];
+}
+
+interface ApexAnnotationParameter {
+	[key: string]: unknown;
+	'@class':
+		| 'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue'
+		| 'apex.jorje.data.ast.AnnotationParameter$AnnotationString';
+}
+
+interface ApexAnnotationKeyValue extends ApexAnnotationParameter {
+	'@class': 'apex.jorje.data.ast.AnnotationParameter$AnnotationKeyValue';
+	key: ApexIdentifier;
+	value: ApexAnnotationValue;
+}
+
+interface ApexAnnotationValue {
+	[key: string]: unknown;
+	'@class':
+		| 'apex.jorje.data.ast.AnnotationValue$FalseAnnotationValue'
+		| 'apex.jorje.data.ast.AnnotationValue$StringAnnotationValue'
+		| 'apex.jorje.data.ast.AnnotationValue$TrueAnnotationValue';
+}
+
+interface ApexIdentifier {
+	[key: string]: unknown;
 	'@class': string;
-	[key: string]: unknown;
+	value: string;
 }
 
-export type ApexAst = ApexNode;
-
-export interface ApexPrinterOptions extends ParserOptions {
-	originalText: string;
-}
-
-export type ApexPath = AstPath<ApexNode>;
-
-export type PrintFn = (path: AstPath) => Doc;
-
-export interface ApexPrinter extends Printer<ApexNode> {
-	print: (path: ApexPath, options: ApexPrinterOptions, print: PrintFn) => Doc;
-}
-
-export interface ApexPlugin extends Plugin<ApexNode> {
-	printers: {
-		apex: ApexPrinter;
-	};
-}
+export type {
+	ApexNode,
+	ApexListInitNode,
+	ApexMapInitNode,
+	ApexMapPair,
+	ApexAnnotationNode,
+	ApexAnnotationParameter,
+	ApexAnnotationKeyValue,
+	ApexAnnotationValue,
+	ApexIdentifier,
+};

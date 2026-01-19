@@ -27,3 +27,6 @@ npm-debug.log*
 
 # Salesforce
 .sfdx
+
+# Cursor temporary files
+.cursor/*.md

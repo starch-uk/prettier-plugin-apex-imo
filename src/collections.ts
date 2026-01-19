@@ -1,0 +1,269 @@
+/**
+ * @file Functions for formatting Apex List and Map collection literals.
+ */
+
+/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
+import { doc, type AstPath, type Doc } from 'prettier';
+import type { ApexNode, ApexListInitNode, ApexMapInitNode } from './types.js';
+import { createTypeNormalizingPrint } from './casing.js';
+import {
+	getNodeClass,
+	getNodeClassOptional,
+	isEmpty,
+	isObject,
+	isApexNodeLike,
+} from './utils.js';
+
+const MIN_ENTRIES_FOR_MULTILINE = 2;
+const LIST_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewListLiteral';
+const SET_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewSetLiteral';
+const MAP_LITERAL_CLASS = 'apex.jorje.data.ast.NewObject$NewMapLiteral';
+const isListInit = (
+	node: Readonly<ApexNode>,
+): node is Readonly<ApexListInitNode> => {
+	const cls = getNodeClass(node);
+	return cls === LIST_LITERAL_CLASS || cls === SET_LITERAL_CLASS;
+};
+
+const ZERO_LENGTH = 0;
+const isMapInit = (
+	node: Readonly<ApexNode>,
+): node is Readonly<ApexMapInitNode> =>
+	getNodeClass(node) === MAP_LITERAL_CLASS;
+
+const hasMultipleListEntries = (node: Readonly<ApexListInitNode>): boolean =>
+	Array.isArray(node.values) &&
+	node.values.length >= MIN_ENTRIES_FOR_MULTILINE;
+
+const hasMultipleMapEntries = (node: Readonly<ApexMapInitNode>): boolean =>
+	Array.isArray(node.pairs) && node.pairs.length >= MIN_ENTRIES_FOR_MULTILINE;
+
+const { group, indent, hardline, join, softline } = doc.builders;
+
+const isNestedInCollection = (
+	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
+): boolean => {
+	const { stack } = path;
+	if (!Array.isArray(stack) || stack.length === ZERO_LENGTH) return false;
+
+	return stack.some((parent: unknown) => {
+		if (!isObject(parent) || !('@class' in parent)) {
+			return false;
+		}
+		const parentClass = getNodeClass(parent as ApexNode);
+		return (
+			parentClass === LIST_LITERAL_CLASS ||
+			parentClass === SET_LITERAL_CLASS ||
+			parentClass === MAP_LITERAL_CLASS
+		);
+	});
+};
+
+/**
+ * Creates type document for collections.
+ * @param typeName - The name of the collection type.
+ * @param printedTypes - Array of printed type documents.
+ * @param typeSeparator - The separator document between types.
+ * @param isNested - Whether this is a nested collection type.
+ * @returns The created type document.
+ */
+
+const createTypeDoc = (
+	typeName: string,
+	printedTypes: readonly Doc[],
+	typeSeparator: Doc,
+	isNested: boolean,
+	// eslint-disable-next-line @typescript-eslint/max-params -- Arrow function signature line
+): Doc => {
+	const baseTypeDoc: Doc = [
+		typeName,
+		'<',
+		join(typeSeparator, [...printedTypes]),
+		'>',
+	];
+	return isNested ? group(baseTypeDoc) : baseTypeDoc;
+};
+
+const printEmptyList = (
+	printedTypes: readonly Doc[],
+	isSet: boolean,
+	isNested: boolean,
+): Doc => [
+	createTypeDoc(
+		isSet ? 'Set' : 'List',
+		printedTypes,
+		isSet ? [',', softline] : '.',
+		isNested,
+	),
+	'{}',
+];
+
+const printEmptyMap = (printedTypes: readonly Doc[]): Doc => {
+	const typeDoc: Doc = group([
+		'Map<',
+		join([', ', softline], [...printedTypes]),
+		'>',
+	]);
+	return [typeDoc, '{}'];
+};
+
+const printList = ({
+	path,
+	print,
+	originalPrint,
+	printedTypes,
+	isNested,
+	nodeClass,
+}: {
+	readonly path: Readonly<AstPath<ApexListInitNode>>;
+	readonly print: (path: Readonly<AstPath<ApexNode>>) => Doc;
+	readonly originalPrint: () => Doc;
+	readonly printedTypes: readonly Doc[];
+	readonly isNested: boolean;
+	readonly nodeClass: string;
+}): Doc => {
+	const { node } = path;
+	const isSet = nodeClass === SET_LITERAL_CLASS;
+	const isEmptyValues = !Array.isArray(node.values) || isEmpty(node.values);
+
+	if (isEmptyValues) {
+		return printEmptyList(printedTypes, isSet, isNested);
+	}
+
+	if (!hasMultipleListEntries(node)) {
+		return originalPrint();
+	}
+	const typeDoc = createTypeDoc(
+		isSet ? 'Set' : 'List',
+		printedTypes,
+		isSet ? [',', softline] : '.',
+		isNested,
+	);
+	return [
+		typeDoc,
+		'{',
+		indent([
+			hardline,
+			join([',', hardline], path.map(print, 'values' as never)),
+		]),
+		hardline,
+		'}',
+	];
+};
+
+const printMap = ({
+	path,
+	print,
+	originalPrint,
+	printedTypes,
+}: {
+	readonly path: Readonly<AstPath<ApexMapInitNode>>;
+	readonly print: (path: Readonly<AstPath<ApexNode>>) => Doc;
+	readonly originalPrint: () => Doc;
+	readonly printedTypes: readonly Doc[];
+}): Doc => {
+	const { node } = path;
+	const isEmptyPairs = !Array.isArray(node.pairs) || isEmpty(node.pairs);
+
+	if (isEmptyPairs) {
+		return printEmptyMap(printedTypes);
+	}
+
+	if (!hasMultipleMapEntries(node)) {
+		return originalPrint();
+	}
+	const typeDoc: Doc = group([
+		'Map<',
+		join([', ', softline], [...printedTypes]),
+		'>',
+	]);
+	return [
+		typeDoc,
+		'{',
+		indent([
+			hardline,
+			join(
+				[',', hardline],
+				path.map(
+					(pairPath: Readonly<AstPath<ApexNode>>) => [
+						pairPath.call(print, 'key' as never),
+						' => ',
+						pairPath.call(print, 'value' as never),
+					],
+					'pairs' as never,
+				),
+			),
+		]),
+		hardline,
+		'}',
+	];
+};
+
+const printCollection = (
+	path: Readonly<AstPath<ApexListInitNode | ApexMapInitNode>>,
+	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+	originalPrint: () => Doc,
+): Doc => {
+	const { node } = path;
+	const nodeClass = getNodeClass(node);
+	const isList =
+		nodeClass === LIST_LITERAL_CLASS || nodeClass === SET_LITERAL_CLASS;
+
+	const typeNormalizingPrint = createTypeNormalizingPrint(print, {
+		forceTypeContext: true,
+		parentKey: 'types',
+	});
+	const printedTypes = path.map(typeNormalizingPrint, 'types' as never);
+	const isNested = isNestedInCollection(path);
+
+	if (isList) {
+		return printList({
+			isNested,
+			nodeClass,
+			originalPrint,
+			path: path as Readonly<AstPath<ApexListInitNode>>,
+			print,
+			printedTypes,
+		});
+	}
+	return printMap({
+		originalPrint,
+		path: path as Readonly<AstPath<ApexMapInitNode>>,
+		print,
+		printedTypes,
+	});
+};
+
+/**
+ * Checks if an assignment expression is a collection literal (List, Set, or Map).
+ * @param assignment - The assignment node to check.
+ * @returns True if the assignment is a collection literal.
+ */
+const isCollectionAssignment = (assignment: unknown): boolean => {
+	if (!isObject(assignment) || !('value' in assignment)) return false;
+	const { value } = assignment as { value?: unknown };
+	if (!isApexNodeLike(value)) return false;
+	const valueClass = getNodeClassOptional(value as ApexNode);
+	if (valueClass !== 'apex.jorje.data.ast.Expr$NewExpr') return false;
+	const { creator } = value as { creator?: unknown };
+	if (!isApexNodeLike(creator)) return false;
+	const creatorClass = getNodeClassOptional(creator as ApexNode);
+	return (
+		creatorClass === LIST_LITERAL_CLASS ||
+		creatorClass === SET_LITERAL_CLASS ||
+		creatorClass === MAP_LITERAL_CLASS
+	);
+};
+
+export {
+	isListInit,
+	isMapInit,
+	hasMultipleListEntries,
+	hasMultipleMapEntries,
+	printCollection,
+	isCollectionAssignment,
+	LIST_LITERAL_CLASS,
+	SET_LITERAL_CLASS,
+	MAP_LITERAL_CLASS,
+};

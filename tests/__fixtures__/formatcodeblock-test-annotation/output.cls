@@ -1,0 +1,2 @@
+@IsTest
+public class TestAnnotation {}

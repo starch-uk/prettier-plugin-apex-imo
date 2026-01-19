@@ -1,421 +1,1308 @@
+/**
+ * @file Integration tests for the plugin.
+ */
+
 import { describe, it, expect } from 'vitest';
-import * as prettier from 'prettier';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Import our plugin
-import plugin from '../src/index.js';
-
-async function formatApex(code: string): Promise<string> {
-	return prettier.format(code, {
-		parser: 'apex',
-		// Only include our plugin - it re-exports everything from prettier-plugin-apex
-		plugins: [plugin],
-		tabWidth: 2,
-	});
-}
-
-function loadFixture(name: string, file: 'input' | 'output'): string {
-	const fixturePath = path.join(
-		__dirname,
-		'__fixtures__',
-		name,
-		`${file}.cls`,
-	);
-	return fs.readFileSync(fixturePath, 'utf-8');
-}
+import { loadFixture, formatApex } from './test-utils.js';
 
 describe('prettier-plugin-apex-imo integration', () => {
 	describe('List formatting', () => {
-		it('should keep single-item lists inline', async () => {
-			const input = loadFixture('list-single', 'input');
-			const expected = loadFixture('list-single', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
-
-		it('should format multi-item lists as multiline', async () => {
-			const input = loadFixture('list-multiline', 'input');
-			const expected = loadFixture('list-multiline', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
-
-		it('should handle lists with various item counts', async () => {
-			// 2 items - should be multiline
-			const input2 = `public class Test { List<String> two = new List<String>{ 'a', 'b' }; }`;
-			const result2 = await formatApex(input2);
-			expect(result2).toContain("'a',");
-			expect(result2).toContain("'b'");
-			expect(result2).toMatch(/\n\s+'a',/);
-			expect(result2).toMatch(/\n\s+'b'/);
-
-			// 3+ items - should be multiline
-			const input3 = `public class Test { List<String> three = new List<String>{ 'a', 'b', 'c' }; }`;
-			const result3 = await formatApex(input3);
-			expect(result3).toMatch(/\n\s+'a',/);
-			expect(result3).toMatch(/\n\s+'b',/);
-			expect(result3).toMatch(/\n\s+'c'/);
-		});
+		it.concurrent.each([
+			{
+				description: 'should keep single-item lists inline',
+				fixture: 'list-single',
+			},
+			{
+				description: 'should format multi-item lists as multiline',
+				fixture: 'list-multiline',
+			},
+			{
+				description: 'should handle lists with 2 items (multiline)',
+				fixture: 'list-two-items',
+			},
+			{
+				description: 'should handle lists with 3+ items (multiline)',
+				fixture: 'list-three-items',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('Set formatting', () => {
-		it('should keep single-item sets inline', async () => {
-			const input = loadFixture('set-single', 'input');
-			const expected = loadFixture('set-single', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
-
-		it('should format multi-item sets as multiline', async () => {
-			const input = loadFixture('set-multiline', 'input');
-			const expected = loadFixture('set-multiline', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
-
-		it('should handle sets with various item counts', async () => {
-			// 2 items - should be multiline
-			const input2 = `public class Test { Set<String> two = new Set<String>{ 'a', 'b' }; }`;
-			const result2 = await formatApex(input2);
-			expect(result2).toContain("'a',");
-			expect(result2).toContain("'b'");
-			expect(result2).toMatch(/\n\s+'a',/);
-			expect(result2).toMatch(/\n\s+'b'/);
-
-			// 3+ items - should be multiline
-			const input3 = `public class Test { Set<Integer> three = new Set<Integer>{ 1, 2, 3 }; }`;
-			const result3 = await formatApex(input3);
-			expect(result3).toMatch(/\n\s+1,/);
-			expect(result3).toMatch(/\n\s+2,/);
-			expect(result3).toMatch(/\n\s+3/);
-		});
-
-		it('should format Set types correctly with type parameters', async () => {
-			const input = `public class Test { Set<String> tags = new Set<String>{ 'reading', 'coding' }; }`;
-			const result = await formatApex(input);
-			expect(result).toContain('Set<String>');
-			expect(result).toMatch(/\n\s+'reading',/);
-			expect(result).toMatch(/\n\s+'coding'/);
-		});
-
-		it('should format List with multiple entries using List type name', async () => {
-			const input = `public class Test { List<Integer> nums = new List<Integer>{ 1, 2, 3 }; }`;
-			const result = await formatApex(input);
-			// Should use 'List' as type name, not 'Set'
-			expect(result).toContain('List<Integer>');
-			expect(result).not.toContain('Set<Integer>');
-			expect(result).toMatch(/List<Integer>\{\s*\n/);
-		});
-
-		it('should format Set with multiple entries using Set type name', async () => {
-			const input = `public class Test { Set<Integer> nums = new Set<Integer>{ 1, 2, 3 }; }`;
-			const result = await formatApex(input);
-			// Should use 'Set' as type name, not 'List'
-			expect(result).toContain('Set<Integer>');
-			expect(result).not.toContain('List<Integer>');
-			expect(result).toMatch(/Set<Integer>\{\s*\n/);
-		});
-
-		it('should format Set correctly', async () => {
-			const input = `public class Test { Set<MyClass> items = new Set<MyClass>{ new MyClass(), new MyClass() }; }`;
-			const result = await formatApex(input);
-			// Should format as multiline
-			expect(result).toContain('Set<MyClass>');
-			expect(result).toMatch(/Set<MyClass>\{\s*\n/);
-		});
-
-		it('should format List correctly', async () => {
-			const input = `public class Test { List<MyClass> items = new List<MyClass>{ new MyClass(), new MyClass() }; }`;
-			const result = await formatApex(input);
-			// Should format as multiline
-			expect(result).toContain('List<MyClass>');
-			expect(result).toMatch(/List<MyClass>\{\s*\n/);
-		});
+		it.concurrent.each([
+			{
+				description: 'should keep single-item sets inline',
+				fixture: 'set-single',
+			},
+			{
+				description: 'should format multi-item sets as multiline',
+				fixture: 'set-multiline',
+			},
+			{
+				description: 'should handle sets with 2 items (multiline)',
+				fixture: 'set-two-items',
+			},
+			{
+				description: 'should handle sets with 3+ items (multiline)',
+				fixture: 'set-three-items',
+			},
+			{
+				description:
+					'should format Set types correctly with type parameters',
+				fixture: 'set-type-parameters',
+			},
+			{
+				description:
+					'should format List with multiple entries using List type name',
+				fixture: 'list-multiple-entries',
+			},
+			{
+				description:
+					'should format Set with multiple entries using Set type name',
+				fixture: 'set-multiple-entries',
+			},
+			{
+				description: 'should format Set correctly',
+				fixture: 'set-generic-types',
+			},
+			{
+				description: 'should format List correctly',
+				fixture: 'list-generic-types',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('Map formatting', () => {
-		it('should keep single-pair maps inline', async () => {
-			const input = loadFixture('map-single', 'input');
-			const expected = loadFixture('map-single', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
-
-		it('should format multi-pair maps as multiline', async () => {
-			const input = loadFixture('map-multiline', 'input');
-			const expected = loadFixture('map-multiline', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
-
-		it('should handle maps with various pair counts', async () => {
-			// 2 pairs - should be multiline
-			const input2 = `public class Test { Map<String, String> two = new Map<String, String>{ 'a' => '1', 'b' => '2' }; }`;
-			const result2 = await formatApex(input2);
-			expect(result2).toMatch(/\n\s+'a' => '1',/);
-			expect(result2).toMatch(/\n\s+'b' => '2'/);
-
-			// 3+ pairs - should be multiline
-			const input3 = `public class Test { Map<String, Integer> three = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3 }; }`;
-			const result3 = await formatApex(input3);
-			expect(result3).toMatch(/\n\s+'a' => 1,/);
-			expect(result3).toMatch(/\n\s+'b' => 2,/);
-			expect(result3).toMatch(/\n\s+'c' => 3/);
-		});
+		it.concurrent.each([
+			{
+				description: 'should keep single-pair maps inline',
+				fixture: 'map-single',
+			},
+			{
+				description: 'should format multi-pair maps as multiline',
+				fixture: 'map-multiline',
+			},
+			{
+				description: 'should handle maps with 2 pairs (multiline)',
+				fixture: 'map-two-pairs',
+			},
+			{
+				description: 'should handle maps with 3+ pairs (multiline)',
+				fixture: 'map-three-pairs',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
-	describe('Nested structures', () => {
-		it('should handle Map with List values (nested lists)', async () => {
-			const input = loadFixture('nested', 'input');
-			const expected = loadFixture('nested', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
-	});
-
-	describe('Mixed scenarios', () => {
-		it('should handle mixed list/map scenarios correctly', async () => {
-			const input = loadFixture('mixed', 'input');
-			const expected = loadFixture('mixed', 'output');
-			const result = await formatApex(input);
-			expect(result).toBe(expected);
-		});
+	describe('Nested and mixed structures', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should handle Map with List values (nested lists)',
+				fixture: 'nested',
+			},
+			{
+				description: 'should handle mixed list/map scenarios correctly',
+				fixture: 'mixed',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('Edge cases', () => {
-		it('should handle empty lists', async () => {
-			const input = `public class Test { List<String> empty = new List<String>{}; }`;
-			const result = await formatApex(input);
-			expect(result).toContain('new List<String>{}');
-			// Empty lists should stay on one line
-			expect(result).not.toMatch(/List<String>\{\s*\n/);
-		});
-
-		it('should handle empty sets', async () => {
-			const input = `public class Test { Set<String> empty = new Set<String>{}; }`;
-			const result = await formatApex(input);
-			expect(result).toContain('new Set<String>{}');
-			// Empty sets should stay on one line
-			expect(result).not.toMatch(/Set<String>\{\s*\n/);
-		});
-
-		it('should handle empty maps', async () => {
-			const input = `public class Test { Map<String,String> empty = new Map<String,String>{}; }`;
-			const result = await formatApex(input);
-			expect(result).toContain('new Map<String, String>{}');
-			// Empty maps should stay on one line
-			expect(result).not.toMatch(/Map<String, String>\{\s*\n/);
-		});
-
-		it('should keep single-item lists inline', async () => {
-			const input = `public class Test { List<String> single = new List<String>{ 'only' }; }`;
-			const result = await formatApex(input);
-			expect(result).toContain("new List<String>{ 'only' }");
-			// Single item should stay on one line
-			expect(result).not.toMatch(/List<String>\{\s*\n\s+'only'/);
-		});
-
-		it('should keep single-item sets inline', async () => {
-			const input = `public class Test { Set<String> single = new Set<String>{ 'only' }; }`;
-			const result = await formatApex(input);
-			expect(result).toContain("new Set<String>{ 'only' }");
-			// Single item should stay on one line
-			expect(result).not.toMatch(/Set<String>\{\s*\n\s+'only'/);
-		});
-
-		it('should keep single-pair maps inline', async () => {
-			const input = `public class Test { Map<String, String> single = new Map<String, String>{ 'key' => 'value' }; }`;
-			const result = await formatApex(input);
-			expect(result).toContain(
-				"new Map<String, String>{ 'key' => 'value' }",
-			);
-			// Single pair should stay on one line
-			expect(result).not.toMatch(/Map<String, String>\{\s*\n\s+'key'/);
-		});
+		it.concurrent.each([
+			{
+				description: 'should handle empty lists',
+				fixture: 'list-empty',
+			},
+			{
+				description: 'should handle empty sets',
+				fixture: 'set-empty',
+			},
+			{
+				description: 'should handle empty maps',
+				fixture: 'map-empty',
+			},
+			{
+				description: 'should keep single-item lists inline',
+				fixture: 'list-single-item',
+			},
+			{
+				description: 'should keep single-item sets inline',
+				fixture: 'set-single-item',
+			},
+			{
+				description: 'should keep single-pair maps inline',
+				fixture: 'map-single-pair',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('Complex scenarios', () => {
-		it('should handle lists with different data types', async () => {
-			const input = `public class Test { List<Object> mixed = new List<Object>{ 1, 'two', true, null }; }`;
-			const result = await formatApex(input);
-			expect(result).toMatch(/\n\s+1,/);
-			expect(result).toMatch(/\n\s+'two',/);
-			expect(result).toMatch(/\n\s+true,/);
-			expect(result).toMatch(/\n\s+null/);
-		});
+		it.concurrent.each([
+			{
+				description: 'should handle lists with different data types',
+				fixture: 'list-mixed-types',
+			},
+			{
+				description: 'should handle maps with complex values',
+				fixture: 'map-complex-values',
+			},
+			{
+				description: 'should handle nested lists within lists',
+				fixture: 'list-nested',
+			},
+			{
+				description: 'should handle lists with many items',
+				fixture: 'list-many-items',
+			},
+			{
+				description: 'should handle maps with many pairs',
+				fixture: 'map-many-pairs',
+			},
+			{
+				description: 'should handle Set with generic types',
+				fixture: 'set-generic-types',
+			},
+			{
+				description: 'should handle List with generic types',
+				fixture: 'list-generic-types',
+			},
+			{
+				description: 'should handle Map with complex key types',
+				fixture: 'map-complex-keys',
+			},
+			{
+				description: 'should handle Map with type parameters',
+				fixture: 'map-type-parameters',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
 
-		it('should handle maps with complex values', async () => {
-			const input = `public class Test { Map<String, Object> complex = new Map<String, Object>{ 'a' => 1, 'b' => 'two', 'c' => true }; }`;
-			const result = await formatApex(input);
-			expect(result).toMatch(/\n\s+'a' => 1,/);
-			expect(result).toMatch(/\n\s+'b' => 'two',/);
-			expect(result).toMatch(/\n\s+'c' => true/);
-		});
-
-		it('should handle nested lists within lists', async () => {
-			const input = `public class Test { List<List<String>> nested = new List<List<String>>{ new List<String>{ 'a', 'b' }, new List<String>{ 'c', 'd' } }; }`;
-			const result = await formatApex(input);
-			// Outer list should be multiline
-			expect(result).toMatch(/List<List<String>>\{\s*\n/);
-			// Inner lists should also be multiline (2+ items)
-			expect(result).toMatch(/\n\s+new List<String>\{\s*\n/);
-		});
-
-		it('should handle lists with many items', async () => {
-			const input = `public class Test { List<String> many = new List<String>{ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' }; }`;
-			const result = await formatApex(input);
-			// Should be multiline
-			expect(result).toMatch(/List<String>\{\s*\n/);
-			// Should contain all items
-			expect(result).toContain("'a',");
-			expect(result).toContain("'h'");
-		});
-
-		it('should handle maps with many pairs', async () => {
-			const input = `public class Test { Map<String, Integer> many = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3, 'd' => 4, 'e' => 5 }; }`;
-			const result = await formatApex(input);
-			// Should be multiline
-			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
-			// Should contain all pairs
-			expect(result).toContain("'a' => 1,");
-			expect(result).toContain("'e' => 5");
-		});
-
-		it('should handle Set with generic types', async () => {
-			const input = `public class Test { Set<MyClass> items = new Set<MyClass>{ new MyClass(), new MyClass() }; }`;
-			const result = await formatApex(input);
-			// Should be multiline for 2+ items
-			expect(result).toMatch(/Set<MyClass>\{\s*\n/);
-		});
-
-		it('should handle List with generic types', async () => {
-			const input = `public class Test { List<MyClass> items = new List<MyClass>{ new MyClass(), new MyClass() }; }`;
-			const result = await formatApex(input);
-			// Should be multiline for 2+ items
-			expect(result).toMatch(/List<MyClass>\{\s*\n/);
-		});
-
-		it('should handle Map with complex key types', async () => {
-			const input = `public class Test { Map<MyClass, String> items = new Map<MyClass, String>{ new MyClass() => 'a', new MyClass() => 'b' }; }`;
-			const result = await formatApex(input);
-			// Should be multiline for 2+ pairs
-			expect(result).toMatch(/Map<MyClass, String>\{\s*\n/);
-		});
-
-		it('should handle Map with type parameters', async () => {
-			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2 }; }`;
-			const result = await formatApex(input);
-			// Map types should be joined with ', ' (comma space)
-			expect(result).toContain('Map<String, Integer>');
-			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
-		});
+	describe('PageWidth wrapping for nested collections', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should break Map assignment when exceeding pageWidth',
+				fixture: 'map-assignment-pagewidth',
+			},
+			{
+				description:
+					'should wrap nested Map collections when exceeding pageWidth',
+				fixture: 'nested-collection-pagewidth',
+			},
+			{
+				description:
+					'should wrap nested List collections when exceeding pageWidth',
+				fixture: 'nested-list-pagewidth',
+			},
+			{
+				description:
+					'should wrap nested Set collections when exceeding pageWidth',
+				fixture: 'nested-set-pagewidth',
+			},
+			{
+				description:
+					'should wrap List containing Map when exceeding pageWidth',
+				fixture: 'list-map-pagewidth',
+			},
+			{
+				description:
+					'should wrap Set containing Map when exceeding pageWidth',
+				fixture: 'set-map-pagewidth',
+			},
+			{
+				description:
+					'should wrap List containing List when exceeding pageWidth',
+				fixture: 'list-list-pagewidth',
+			},
+			{
+				description:
+					'should wrap Set containing List when exceeding pageWidth',
+				fixture: 'set-list-pagewidth',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input, { printWidth: 80 });
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('Real-world scenarios', () => {
-		it('should format method parameters with lists', async () => {
-			const input = `public class Test { public void method() { processItems(new List<String>{ 'a', 'b', 'c' }); } }`;
-			const result = await formatApex(input);
-			expect(result).toMatch(/new List<String>\{\s*\n/);
-		});
-
-		it('should format return statements with maps', async () => {
-			const input = `public class Test { public Map<String, Integer> getData() { return new Map<String, Integer>{ 'x' => 1, 'y' => 2 }; } }`;
-			const result = await formatApex(input);
-			expect(result).toMatch(/new Map<String, Integer>\{\s*\n/);
-		});
-
-		it('should format variable assignments with sets', async () => {
-			const input = `public class Test { public void method() { Set<String> tags = new Set<String>{ 'tag1', 'tag2', 'tag3' }; } }`;
-			const result = await formatApex(input);
-			expect(result).toMatch(/new Set<String>\{\s*\n/);
-		});
-
-		it('should format empty list initialization', async () => {
-			const input = `public class Test { List<String> empty = new List<String>{}; }`;
-			const result = await formatApex(input);
-			expect(result).toContain('new List<String>{}');
-			expect(result).not.toMatch(/List<String>\{\s*\n/);
-		});
-
-		it('should format empty set initialization', async () => {
-			const input = `public class Test { Set<String> empty = new Set<String>{}; }`;
-			const result = await formatApex(input);
-			expect(result).toContain('new Set<String>{}');
-			expect(result).not.toMatch(/Set<String>\{\s*\n/);
-		});
-
-		it('should format empty map initialization', async () => {
-			const input = `public class Test { Map<String, Integer> empty = new Map<String, Integer>{}; }`;
-			const result = await formatApex(input);
-			expect(result).toContain('new Map<String, Integer>{}');
-			expect(result).not.toMatch(/Map<String, Integer>\{\s*\n/);
-		});
+		it.concurrent.each([
+			{
+				description: 'should format method parameters with lists',
+				fixture: 'method-params-lists',
+			},
+			{
+				description: 'should format return statements with maps',
+				fixture: 'return-statements-maps',
+			},
+			{
+				description: 'should format variable assignments with sets',
+				fixture: 'variable-assignments-sets',
+			},
+			{
+				description: 'should format empty list initialization',
+				fixture: 'list-empty',
+			},
+			{
+				description: 'should format empty set initialization',
+				fixture: 'set-empty',
+			},
+			{
+				description: 'should format empty map initialization',
+				fixture: 'map-empty',
+			},
+			{
+				description:
+					'should format single variable with complex Map type',
+				fixture: 'variable-single-map-complex',
+			},
+			{
+				description:
+					'should format single variable with nested Map type',
+				fixture: 'variable-single-map-nested-type',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
 	describe('Type formatting differences', () => {
-		it('should format List with qualified type names using dot separator', async () => {
-			// Test with a qualified type name like MyNamespace.MyClass
-			// The types array would contain [MyNamespace, MyClass] which should be joined with '.'
-			const input = `public class Test { List<String> items = new List<String>{ 'a', 'b' }; }`;
-			const result = await formatApex(input);
-			// Should format as multiline
-			expect(result).toMatch(/List<String>\{\s*\n/);
-			expect(result).toContain('List<String>');
-		});
-
-		it('should format Set with qualified type names using comma-space separator', async () => {
-			// Test Set formatting - types should be joined with ', ' for Set
-			const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
-			const result = await formatApex(input);
-			// Should format as multiline
-			expect(result).toMatch(/Set<String>\{\s*\n/);
-			expect(result).toContain('Set<String>');
-		});
-
-		it('should format Map types with comma-space separator', async () => {
-			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2 }; }`;
-			const result = await formatApex(input);
-			// Map types should be joined with ', '
-			expect(result).toContain('Map<String, Integer>');
-		});
+		it.concurrent.each([
+			{
+				description:
+					'should format List with qualified type names using dot separator',
+				fixture: 'list-qualified-types',
+			},
+			{
+				description:
+					'should format Set with qualified type names using comma-space separator',
+				fixture: 'set-qualified-types',
+			},
+			{
+				description:
+					'should format Map types with comma-space separator',
+				fixture: 'map-qualified-types',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
 	});
 
-	describe('Printer branch coverage', () => {
-		it('should use List type name and dot separator for List literals', async () => {
-			const input = `public class Test { List<String> items = new List<String>{ 'a', 'b' }; }`;
-			const result = await formatApex(input);
-			// Verify it uses 'List' (not 'Set') and formats correctly
-			expect(result).toContain('List<String>');
-			expect(result).not.toContain('Set<String>');
-			expect(result).toMatch(
-				/List<String>\{\s*\n\s+'a',\s*\n\s+'b'\s*\n\s*\}/,
+	describe('Collection type name formatting', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should use List type name and dot separator for List literals',
+				fixture: 'list-type-name',
+			},
+			{
+				description:
+					'should use Set type name and comma-space separator for Set literals',
+				fixture: 'set-type-name',
+			},
+			{
+				description:
+					'should format Map with multiple pairs using multiline format',
+				fixture: 'map-multiple-pairs',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('ApexDoc {@code} block formatting', () => {
+		it.concurrent.each([
+			{
+				description: 'should format single-line {@code} blocks',
+				fixture: 'apexdoc-single-line-code',
+			},
+			{
+				description: 'should format multi-line {@code} blocks',
+				fixture: 'apexdoc-multi-line-code',
+			},
+			{
+				description:
+					'should preserve invalid {@code} blocks with unmatched brackets',
+				fixture: 'apexdoc-invalid-brackets',
+			},
+			{
+				description:
+					'should preserve {@code} blocks with invalid Apex code',
+				fixture: 'apexdoc-invalid-apex',
+			},
+			{
+				description:
+					'should format @AuraEnabled annotation in {@code} blocks',
+				fixture: 'apexdoc-code-block-annotation',
+			},
+			{
+				description:
+					'should handle multiple {@code} blocks in one file',
+				fixture: 'apexdoc-multiple-blocks',
+			},
+			{
+				description: 'should handle nested braces in {@code} blocks',
+				fixture: 'apexdoc-nested-braces',
+			},
+			{
+				description: 'should maintain comment indentation alignment',
+				fixture: 'apexdoc-comment-indentation',
+			},
+			{
+				description: 'should handle empty {@code} blocks',
+				fixture: 'apexdoc-empty-blocks',
+			},
+			{
+				description: 'should only process {@code} in ApexDoc comments',
+				fixture: 'apexdoc-regular-comment',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it('should handle {@code} blocks in inner class methods with odd indentation (3 spaces)', async () => {
+			const input = loadFixture(
+				'apexdoc-inner-class-odd-indent',
+				'input',
 			);
+			const expected = loadFixture(
+				'apexdoc-inner-class-odd-indent',
+				'output',
+			);
+			// Use tabWidth: 3 to preserve the 3-space indentation
+			const result = await formatApex(input, { tabWidth: 3 });
+			// Should correctly indent {@code} blocks when the inner class has 3 spaces of indentation
+			expect(result).toBe(expected);
 		});
 
-		it('should use Set type name and comma-space separator for Set literals', async () => {
-			const input = `public class Test { Set<String> items = new Set<String>{ 'a', 'b' }; }`;
+		it.concurrent.each([
+			{
+				description:
+					'should format simple integer assignment in {@code} blocks',
+				fixture: 'formatcodeblock-simple-integer',
+			},
+			{
+				description:
+					'should format @Deprecated annotation in {@code} blocks',
+				fixture: 'formatcodeblock-deprecated',
+			},
+			{
+				description: 'should preserve invalid code in {@code} blocks',
+				fixture: 'formatcodeblock-invalid-apex',
+			},
+			{
+				description:
+					'should preserve multiline @InvocableMethod in {@code} blocks',
+				fixture: 'formatcodeblock-invocable-multiline',
+			},
+			{
+				description: 'should format multi-line code in {@code} blocks',
+				fixture: 'formatcodeblock-multi-line-code',
+			},
+			{
+				description: 'should format single-line code in {@code} blocks',
+				fixture: 'formatcodeblock-single-line-code',
+			},
+			{
+				description: 'should format @TestAnnotation in {@code} blocks',
+				fixture: 'formatcodeblock-test-annotation',
+			},
+			{
+				description:
+					'should preserve @TestAnnotation with value in {@code} blocks',
+				fixture: 'formatcodeblock-test-annotation-value',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const codeContent = loadFixture(fixture, 'input').trim();
+				const expectedCode = loadFixture(fixture, 'output').trim();
+				// Wrap the code content in an ApexDoc comment
+				const input = `public class Test {
+  /**
+   * Example method.
+   * {@code ${codeContent} }
+   */
+  public void method() {}
+}
+`;
+				const result = await formatApex(input);
+				// Extract the code block from the result
+				// Find the {@code tag and extract everything until the closing } on a line with just * }
+				const NOT_FOUND_INDEX = -1;
+				const CODE_TAG_LENGTH = 6;
+				const codeBlockStart = result.indexOf('{@code');
+				if (codeBlockStart === NOT_FOUND_INDEX) {
+					throw new Error(
+						`Could not find {@code} block in result: ${result}`,
+					);
+				}
+
+				/**
+				 * Find the content after {@code (skip whitespace and newline).
+				 */
+				let contentStart = codeBlockStart + CODE_TAG_LENGTH;
+				// Skip whitespace and newline after {@code
+				while (
+					contentStart < result.length &&
+					(result[contentStart] === ' ' ||
+						result[contentStart] === '\n')
+				) {
+					contentStart++;
+				}
+				// Check if this is a single-line code block: {@code ...} or {@code ...; }
+				// Look for the closing } on the same line or next line
+				const remainingText = result.slice(contentStart);
+				const lines = remainingText.split('\n');
+				let closingLineIndex = -1;
+				const EMPTY_LINE_LENGTH = 0;
+				const ARRAY_START_INDEX = 0;
+
+				// First, check if this is a single-line code block: {@code ...} or {@code ...; }
+				// Single-line format has the closing } on the same line as the content
+				const firstLine = lines[ARRAY_START_INDEX] ?? '';
+				// Match single-line format: content followed by optional space and }
+				// Handle both: "content}" and "content }" and "content; }"
+				// The pattern captures content up to (but not including) the closing }
+				// We need to handle: "content}" and "content }" and "content; }"
+				const singleLineMatch = /^(.+?)\s*\}\s*$/.exec(firstLine);
+				if (singleLineMatch && !firstLine.includes('\n')) {
+					// Single-line code block - extract content directly
+					// The content might have trailing space before }, so trim it
+					let codeBlockContent = singleLineMatch[1]?.trimEnd() ?? '';
+					const ZERO_LENGTH = 0;
+					if (codeBlockContent.length > ZERO_LENGTH) {
+						expect(codeBlockContent).toBe(expectedCode);
+					} else {
+						throw new Error(
+							`Code block content is empty in result: ${result}`,
+						);
+					}
+					return;
+				}
+
+				// Multiline format: find the closing } that's on a line with just whitespace, asterisk, space, and } (no semicolon)
+				// This distinguishes the closing } of {@code} from the }; in the code
+				// Look for pattern: \n   * } (newline, spaces, asterisk, space, }, but NOT };)
+				// Find the LAST occurrence, not the first, since there may be multiple } in the code
+				for (let i = lines.length - 1; i >= EMPTY_LINE_LENGTH; i--) {
+					const line = lines[i];
+					// Match line with just whitespace, asterisk, space, and } (not };)
+					if (/^\s*\*\s*\}$/.test(line)) {
+						closingLineIndex = i;
+						break;
+					}
+				}
+				if (closingLineIndex === NOT_FOUND_INDEX) {
+					throw new Error(
+						`Could not find closing } for {@code} block in result: ${result}`,
+					);
+				}
+				// Get all lines up to (but not including) the closing line
+				const codeBlockLines = lines.slice(
+					ARRAY_START_INDEX,
+					closingLineIndex,
+				);
+				const codeBlockContent = codeBlockLines.join('\n');
+				const ZERO_LENGTH = 0;
+				if (codeBlockContent.length > ZERO_LENGTH) {
+					// Remove comment prefixes (like "   * ") from each line
+					const codeLines = codeBlockContent
+						.split('\n')
+						.map((line) => line.replace(/^\s*\*\s?/, '').trimEnd())
+						.filter(
+							(line) =>
+								line.length > ZERO_LENGTH ||
+								codeBlockContent.includes('\n'),
+						);
+					const formattedCode = codeLines.join('\n').trim();
+					expect(formattedCode).toBe(expectedCode);
+				} else {
+					throw new Error(
+						`Code block content is empty in result: ${result}`,
+					);
+				}
+			},
+		);
+	});
+
+	describe('ApexDoc edge cases', () => {
+		it.concurrent(
+			'should handle empty block statement with leading comment (comments.ts line 181)',
+			async () => {
+				const input = loadFixture('comment-empty-block', 'input');
+				const expected = loadFixture('comment-empty-block', 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle end-of-line comment after non-binary expression (comments.ts line 212)',
+			async () => {
+				const input = loadFixture(
+					'comment-end-of-line-after-literal',
+					'input',
+				);
+				const expected = loadFixture(
+					'comment-end-of-line-after-literal',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle standalone brace (apexdoc-code.ts line 146)',
+			async () => {
+				const input = loadFixture('apexdoc-standalone-brace', 'input');
+				const expected = loadFixture(
+					'apexdoc-standalone-brace',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle incomplete code block that cannot be merged (apexdoc.ts line 731)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-incomplete-code-block-merge',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-incomplete-code-block-merge',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle code block that ends inline (apexdoc-code.ts lines 138-142)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-code-block-ends-inline',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-code-block-ends-inline',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle text with newline before code block (comments.ts lines 882-887)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-code-with-newline-trailing',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-code-with-newline-trailing',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle text with trailing newline before code block (comments.ts lines 882-887)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-text-trailing-newline-code-block',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-text-trailing-newline-code-block',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should skip empty line before code block (comments.ts line 896)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-empty-line-before-code',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-empty-line-before-code',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle no remaining text after code block (apexdoc.ts line 929)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-no-remaining-text-after-code',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-no-remaining-text-after-code',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('ApexDoc annotation normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize ApexDoc annotations to lowercase and group names to proper case',
+				fixture: 'apexdoc-annotation-normalization',
+			},
+			{
+				description:
+					'should handle multiple annotations on same line, inconsistent spacing, code blocks between annotations, and comprehensive casing',
+				fixture: 'apexdoc-annotation-comprehensive',
+			},
+			{
+				description:
+					'should wrap long ApexDoc annotation lines based on printWidth setting',
+				fixture: 'apexdoc-printwidth-wrapping',
+			},
+			{
+				description:
+					'should normalize @deprecated to @Deprecated inside {@code} blocks but keep @deprecated lowercase in ApexDoc annotations',
+				fixture: 'apexdoc-code-block-deprecated',
+			},
+			{
+				description:
+					'should handle complex test class inside {@code} block with @IsTest, inner classes, helper methods, @example annotation with long description, and printWidth wrapping',
+				fixture: 'apexdoc-complex-test-class',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('ApexDoc malformed comment blocks', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize ApexDoc comments with missing asterisks on some lines',
+				fixture: 'apexdoc-malformed-no-asterisks',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with missing asterisks and code blocks',
+				fixture: 'apexdoc-malformed-no-asterisks-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent indentation',
+				fixture: 'apexdoc-malformed-inconsistent-indent',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent indentation and code blocks',
+				fixture: 'apexdoc-malformed-inconsistent-indent-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks on lines',
+				fixture: 'apexdoc-malformed-extra-asterisks-start',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks and code blocks',
+				fixture: 'apexdoc-malformed-extra-asterisks-start-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks before closing',
+				fixture: 'apexdoc-malformed-extra-asterisks-end',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with extra asterisks before closing and code blocks',
+				fixture: 'apexdoc-malformed-extra-asterisks-end-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with multiple asterisks at line start',
+				fixture: 'apexdoc-malformed-multiple-asterisks',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with multiple asterisks and code blocks',
+				fixture: 'apexdoc-malformed-multiple-asterisks-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent asterisk spacing',
+				fixture: 'apexdoc-malformed-asterisk-spacing',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with inconsistent asterisk spacing and code blocks',
+				fixture: 'apexdoc-malformed-asterisk-spacing-code',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with mixed malformations',
+				fixture: 'apexdoc-malformed-mixed',
+			},
+			{
+				description:
+					'should normalize ApexDoc comments with mixed malformations and code blocks',
+				fixture: 'apexdoc-malformed-mixed-code',
+			},
+			{
+				description:
+					'should handle malformed code block where extraction fails (apexdoc.ts lines 1021-1022)',
+				fixture: 'apexdoc-malformed-code-extraction-fails',
+			},
+			{
+				description:
+					'should handle code block with no text before it (apexdoc.ts line 956)',
+				fixture: 'apexdoc-code-no-text-before',
+			},
+			{
+				description:
+					'should handle consecutive code blocks (apexdoc.ts line 954)',
+				fixture: 'apexdoc-consecutive-code-blocks',
+			},
+			{
+				description:
+					'should handle code block ending with only whitespace (apexdoc.ts line 929)',
+				fixture: 'apexdoc-code-block-ending-inline',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('ApexDoc code block edge cases', () => {
+		it.concurrent(
+			'should handle code block ending on separate line after nested braces (apexdoc-code.ts lines 138-142)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-code-block-multi-line-ending',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-code-block-multi-line-ending',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle standalone closing brace line (apexdoc-code.ts line 146)',
+			async () => {
+				const input = loadFixture(
+					'apexdoc-standalone-closing-brace',
+					'input',
+				);
+				const expected = loadFixture(
+					'apexdoc-standalone-closing-brace',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Non-ApexDoc block comments', () => {
+		it.concurrent(
+			'should normalize annotations in non-ApexDoc block comments (comments.ts lines 1051-1065)',
+			async () => {
+				const input = loadFixture('block-comment-non-apexdoc', 'input');
+				const expected = loadFixture(
+					'block-comment-non-apexdoc',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should handle empty block comment (comments.ts lines 828-834)',
+			async () => {
+				const input = loadFixture(
+					'block-comment-empty-content',
+					'input',
+				);
+				const expected = loadFixture(
+					'block-comment-empty-content',
+					'output',
+				);
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Annotation formatting', () => {
+		it.concurrent.each([
+			{
+				description: 'should normalize annotation names to PascalCase',
+				fixture: 'annotation-single-param',
+			},
+			{
+				description:
+					'should normalize annotation option names to camelCase',
+				fixture: 'annotation-multiple-params',
+			},
+			{
+				description:
+					'should format InvocableMethod with multiple parameters on multiple lines',
+				fixture: 'annotation-invocable-multiline',
+			},
+			{
+				description:
+					'should format SuppressWarnings with comma-separated string',
+				fixture: 'annotation-suppress-warnings',
+			},
+			{
+				description:
+					'should format annotations in ApexDoc {@code} blocks',
+				fixture: 'annotation-apexdoc-code',
+			},
+			{
+				description: 'should handle alternative spacing in annotations',
+				fixture: 'annotation-alternative-spacing',
+			},
+			{
+				description:
+					'should use smart wrapping for InvocableMethod with multiple parameters',
+				fixture: 'annotation-smart-wrapping',
+			},
+			{
+				description:
+					'should use page-width wrapping for long annotations',
+				fixture: 'annotation-page-width-wrapping',
+			},
+			{
+				description:
+					'should normalize incorrect casing in annotations and modifiers',
+				fixture: 'annotation-incorrect-casing',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Standard object type normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize standard object types to correct casing',
+				fixture: 'standard-object-type-normalization',
+			},
+			{
+				description:
+					'should not convert variable names that match standard object names',
+				fixture: 'variable-name-not-type',
+			},
+			{
+				description:
+					'should normalize standard object types in ApexDoc {@code} blocks',
+				fixture: 'apexdoc-standard-object-type',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Primitive type normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize primitive types to PascalCase in variables, parameters, generics, and attributes',
+				fixture: 'primitive-type-normalization',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Object suffix normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize object type suffixes to correct casing',
+				fixture: 'object-suffix-normalization',
+			},
+			{
+				description:
+					'should normalize object type suffixes in ApexDoc {@code} blocks',
+				fixture: 'apexdoc-object-suffix-normalization',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Field and variable declaration wrapping', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should wrap long field and variable declarations across multiple lines',
+				fixture: 'wrapping-tests',
+			},
+			{
+				description:
+					'should wrap field and variable declarations with assignments across multiple lines',
+				fixture: 'wrapping-assignments',
+			},
+			{
+				description:
+					'should handle multiple variable declarations on same line',
+				fixture: 'variable-multiple-declarations',
+			},
+			{
+				description:
+					'should handle multiple variable declarations without assignments',
+				fixture: 'variable-multiple-no-assignment',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Reserved word normalization', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should normalize all reserved words to lowercase (modifiers, keywords, control flow)',
+				fixture: 'reserved-word-normalization',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Inline comment normalization', () => {
+		it.concurrent(
+			'should normalize inline comment with no space after //',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    Integer x = 1; //comment
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should normalize inline comment with multiple spaces after //',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    Integer x = 1; //  comment
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should preserve inline comment with single space after //',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent('should normalize multiple inline comments', async () => {
+			const input = `public class Test {
+  public void test() {
+    Integer x = 1; //comment1
+    Integer y = 2; //comment2
+  }
+}`;
+			const expected = `public class Test {
+  public void test() {
+    Integer x = 1; // comment1
+    Integer y = 2; // comment2
+  }
+}
+`;
 			const result = await formatApex(input);
-			// Verify it uses 'Set' (not 'List') and formats correctly
-			expect(result).toContain('Set<String>');
-			expect(result).not.toContain('List<String>');
-			expect(result).toMatch(
-				/Set<String>\{\s*\n\s+'a',\s*\n\s+'b'\s*\n\s*\}/,
-			);
+			expect(result).toBe(expected);
 		});
 
-		it('should format Map with multiple pairs using multiline format', async () => {
-			const input = `public class Test { Map<String, Integer> items = new Map<String, Integer>{ 'a' => 1, 'b' => 2, 'c' => 3 }; }`;
-			const result = await formatApex(input);
-			// Verify multiline format with proper key-value pairs
-			expect(result).toContain('Map<String, Integer>');
-			expect(result).toMatch(/Map<String, Integer>\{\s*\n/);
-			expect(result).toMatch(/\n\s+'a' => 1,/);
-			expect(result).toMatch(/\n\s+'b' => 2,/);
-			expect(result).toMatch(/\n\s+'c' => 3/);
-		});
+		it.concurrent(
+			'should normalize inline comment at start of line',
+			async () => {
+				const input = `public class Test {
+  public void test() {
+    //comment at start
+    Integer x = 1;
+  }
+}`;
+				const expected = `public class Test {
+  public void test() {
+    // comment at start
+    Integer x = 1;
+  }
+}
+`;
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+
+		it.concurrent(
+			'should normalize inline comments in {@code} blocks',
+			async () => {
+				const input = `public class Test {
+  /**
+   * Example code block
+   * {@code
+   *   Integer x = 1; //comment
+   *   Integer y = 2; //  another comment
+   * }
+   */
+  public void method() {}
+}`;
+				const result = await formatApex(input);
+				// Verify that inline comments are normalized (check for "// comment" pattern)
+				expect(result).toContain('// comment');
+				expect(result).toContain('// another comment');
+				expect(result).not.toContain('//comment');
+				expect(result).not.toContain('//  another comment');
+			},
+		);
+
+		it.concurrent(
+			'should normalize inline comments in complex {@code} blocks',
+			async () => {
+				const input = `public class Test {
+  /**
+   * Example with code
+   * {@code
+   *   @TestSetup
+   *   static void setup() {
+   *     //Setup code here
+   *     Integer x = 1; //comment
+   *   }
+   * }
+   */
+  public void method() {}
+}`;
+				const result = await formatApex(input);
+				// Verify that inline comments are normalized (check for "// comment" pattern)
+				expect(result).toContain('// Setup code here');
+				expect(result).toContain('// comment');
+				expect(result).not.toContain('//Setup code here');
+				expect(result).not.toContain('//comment');
+			},
+		);
 	});
 });

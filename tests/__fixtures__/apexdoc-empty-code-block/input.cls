@@ -1,0 +1,7 @@
+/**
+ * {@code
+ * 
+ * }
+ */
+public class Test {}
+

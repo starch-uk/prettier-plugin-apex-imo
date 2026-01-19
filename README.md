@@ -8,8 +8,9 @@
 
 An opinionated enhancement for
 [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) that
-enforces multiline formatting for Apex Lists, Sets, and Maps with multiple
-entries.
+provides comprehensive Apex code formatting including multiline collection
+formatting, casing normalization, annotation formatting, modifier ordering, and
+ApexDoc code block formatting.
 
 ## The Problem
 
@@ -31,13 +32,150 @@ final String expectedJson = String.join(new List<String>{ '{', '  \"tags\" : [ \
 
 ## The Solution
 
-This plugin wraps `prettier-plugin-apex` and modifies the printing behaviour:
+This plugin wraps `prettier-plugin-apex` and modifies the printing behaviour
+with comprehensive formatting enhancements:
 
-- **List literals** with 2+ entries → Always multiline
-- **Map literals** with 2+ entries → Always multiline
-- **Set literals** with 2+ entries → Always multiline
+- **Collection formatting** → Lists, Sets, and Maps with 2+ entries are always
+  multiline with braces on separate lines
+- **Casing normalization** → Type names, reserved words, and annotations are
+  normalized to proper casing
+- **ApexDoc `{@code}` blocks** → Code inside is formatted using Prettier
+- **Annotation formatting** → Annotations are normalized and properly formatted
+- **Modifier ordering** → Modifiers are sorted in a consistent order
+- **Enhanced comment handling** → Better comment placement and attachment using
+  Prettier's comment system
 
 This is **non-configurable** behaviour. Once installed, it just works.
+
+## Architecture
+
+This plugin has been architected with **AST-based processing** as the primary
+approach, minimizing regex usage and maximizing leverage of Prettier's
+infrastructure:
+
+- **AST-First Processing**: Works with comment AST nodes and token structures
+  rather than raw text parsing
+- **Prettier Integration**: Uses Prettier's doc builders (`fill`, `join`) for
+  text formatting instead of regex-based word splitting
+- **Minimal Regex**: Only uses regex where absolutely necessary (complex
+  annotation parsing, preprocessing)
+- **Character-Based Fallbacks**: Uses simple character scanning only for text
+  content within AST nodes (like code blocks in comments)
+
+### Benefits
+
+- **Better Performance**: Reduced regex compilation overhead
+- **Improved Reliability**: AST operations are more predictable than complex
+  regex patterns
+- **Enhanced Maintainability**: Structured processing is easier to understand
+  and modify
+- **Future Compatibility**: Leverages Prettier's AST infrastructure for better
+  long-term compatibility
+
+## Features
+
+### Collection Formatting
+
+Collections (Lists, Sets, and Maps) with 2 or more entries are always formatted
+multiline with opening and closing braces on separate lines:
+
+```apex
+// Before
+List<String> items = new List<String>{ 'one', 'two', 'three' };
+
+// After
+List<String> items = new List<String>{
+  'one',
+  'two',
+  'three'
+};
+```
+
+Single-item collections remain on one line for compactness.
+
+### Casing Normalization
+
+The plugin normalizes casing throughout your codebase:
+
+- **Type names**: `string` → `String`, `account` → `Account`, `list<integer>` →
+  `List<Integer>`
+- **Reserved words**: `PUBLIC` → `public`, `Class` → `class`, `STATIC` →
+  `static`
+- **Standard objects**: `account` → `Account`, `contact` → `Contact`
+- **Object suffixes**: `MyObject__C` → `MyObject__c`,
+  `Custom__datacategoryselection` → `Custom__DataCategorySelection`
+- **Annotation names**: `auraenabled` → `AuraEnabled`, `testmethod` →
+  `TestMethod`
+- **Annotation options**: `cacheable` → `cacheable` (normalized to camelCase)
+
+This ensures consistent casing across your entire codebase, making it easier to
+read and maintain.
+
+### Annotation Formatting
+
+Annotations are normalized and formatted with proper multiline support:
+
+```apex
+// Before
+@auraenabled(cacheable=true)
+@testmethod
+
+// After
+@AuraEnabled(cacheable = true)
+@TestMethod
+```
+
+Annotations with multiple parameters are automatically formatted multiline when
+needed.
+
+### Modifier Ordering
+
+Modifiers are automatically sorted in a consistent order:
+
+- **Fields**: Access modifier → `static` → `final` → `transient` → other
+- **Methods**: Access modifier → `static` → `override` → `virtual` → `abstract`
+  → other
+- **Annotations**: Always appear before keyword modifiers
+
+This ensures a consistent code style across your project.
+
+### ApexDoc Formatting
+
+Code inside ApexDoc `{@code}` blocks is automatically formatted using Prettier,
+with proper indentation and alignment:
+
+```apex
+/**
+ * Example method.
+ * {@code
+ *   List<String> items = new List<String>{
+ *     'a',
+ *     'b',
+ *     'c'
+ *   };
+ * }
+ */
+```
+
+The formatting maintains the `*` vertical alignment and handles nested braces
+correctly.
+
+### Comment Handling Improvements
+
+This plugin includes enhanced comment handling that leverages Prettier's
+built-in comment attachment system:
+
+- **Smart comment placement** for Apex-specific constructs (classes, interfaces,
+  block statements)
+- **Dangling comment support** for empty code blocks
+- **Binary expression comments** properly attached to right operands
+- **Block statement leading comments** moved into block bodies for better
+  formatting
+- **ApexDoc normalization** → Missing or extra asterisks are normalized,
+  indentation is corrected
+
+These improvements ensure comments are placed more intelligently and
+consistently with Prettier's standards.
 
 ## Installation
 
@@ -137,6 +275,50 @@ Set<String> singleSet = new Set<String>{ 'only' };
 Map<String, Integer> singleMap = new Map<String, Integer>{ 'key' => 1 };
 ```
 
+### Additional Examples
+
+#### Casing Normalization
+
+```apex
+// Before
+public class myclass {
+    private string name;
+    private account acc;
+    private list<integer> numbers;
+}
+
+// After
+public class MyClass {
+    private String name;
+    private Account acc;
+    private List<Integer> numbers;
+}
+```
+
+#### Modifier Ordering
+
+```apex
+// Before
+final public static Integer count;
+
+// After
+public static final Integer count;
+```
+
+#### Annotation Normalization
+
+```apex
+// Before
+@auraenabled(cacheable=true)
+@testmethod
+public void myMethod() {}
+
+// After
+@AuraEnabled(cacheable = true)
+@TestMethod
+public void myMethod() {}
+```
+
 ## Requirements
 
 - Node.js >= 20
@@ -174,4 +356,6 @@ file for details.
 
 - [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) by
   Dang Mai
+- Inspiration for some of the prettying functionality is also taken from
+  [Ilya Matsuev's `prettier-plugin-apex` fork](https://github.com/IlyaMatsuev/prettier-plugin-apex)
 - [Prettier](https://prettier.io/) for the amazing formatting engine

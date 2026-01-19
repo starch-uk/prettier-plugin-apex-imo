@@ -1,0 +1,2 @@
+Integer x = 1;
+
