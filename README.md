@@ -8,8 +8,9 @@
 
 An opinionated enhancement for
 [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) that
-enforces multiline formatting for Apex Lists, Sets, and Maps with multiple
-entries, and formats code inside ApexDoc `{@code}` blocks.
+provides comprehensive Apex code formatting including multiline collection
+formatting, casing normalization, annotation formatting, modifier ordering, and
+ApexDoc code block formatting.
 
 ## The Problem
 
@@ -31,12 +32,16 @@ final String expectedJson = String.join(new List<String>{ '{', '  \"tags\" : [ \
 
 ## The Solution
 
-This plugin wraps `prettier-plugin-apex` and modifies the printing behaviour:
+This plugin wraps `prettier-plugin-apex` and modifies the printing behaviour
+with comprehensive formatting enhancements:
 
-- **List literals** with 2+ entries → Always multiline
-- **Map literals** with 2+ entries → Always multiline
-- **Set literals** with 2+ entries → Always multiline
+- **Collection formatting** → Lists, Sets, and Maps with 2+ entries are always
+  multiline with braces on separate lines
+- **Casing normalization** → Type names, reserved words, and annotations are
+  normalized to proper casing
 - **ApexDoc `{@code}` blocks** → Code inside is formatted using Prettier
+- **Annotation formatting** → Annotations are normalized and properly formatted
+- **Modifier ordering** → Modifiers are sorted in a consistent order
 - **Enhanced comment handling** → Better comment placement and attachment using
   Prettier's comment system
 
@@ -67,7 +72,95 @@ infrastructure:
 - **Future Compatibility**: Leverages Prettier's AST infrastructure for better
   long-term compatibility
 
-## Comment Handling Improvements
+## Features
+
+### Collection Formatting
+
+Collections (Lists, Sets, and Maps) with 2 or more entries are always formatted
+multiline with opening and closing braces on separate lines:
+
+```apex
+// Before
+List<String> items = new List<String>{ 'one', 'two', 'three' };
+
+// After
+List<String> items = new List<String>{
+  'one',
+  'two',
+  'three'
+};
+```
+
+Single-item collections remain on one line for compactness.
+
+### Casing Normalization
+
+The plugin normalizes casing throughout your codebase:
+
+- **Type names**: `string` → `String`, `account` → `Account`, `list<integer>` →
+  `List<Integer>`
+- **Reserved words**: `PUBLIC` → `public`, `Class` → `class`, `STATIC` →
+  `static`
+- **Standard objects**: `account` → `Account`, `contact` → `Contact`
+- **Object suffixes**: `MyObject__C` → `MyObject__c`,
+  `Custom__datacategoryselection` → `Custom__DataCategorySelection`
+- **Annotation names**: `auraenabled` → `AuraEnabled`, `testmethod` →
+  `TestMethod`
+- **Annotation options**: `cacheable` → `cacheable` (normalized to camelCase)
+
+This ensures consistent casing across your entire codebase, making it easier to
+read and maintain.
+
+### Annotation Formatting
+
+Annotations are normalized and formatted with proper multiline support:
+
+```apex
+// Before
+@auraenabled(cacheable=true)
+@testmethod
+
+// After
+@AuraEnabled(cacheable = true)
+@TestMethod
+```
+
+Annotations with multiple parameters are automatically formatted multiline when
+needed.
+
+### Modifier Ordering
+
+Modifiers are automatically sorted in a consistent order:
+
+- **Fields**: Access modifier → `static` → `final` → `transient` → other
+- **Methods**: Access modifier → `static` → `override` → `virtual` → `abstract`
+  → other
+- **Annotations**: Always appear before keyword modifiers
+
+This ensures a consistent code style across your project.
+
+### ApexDoc Formatting
+
+Code inside ApexDoc `{@code}` blocks is automatically formatted using Prettier,
+with proper indentation and alignment:
+
+```apex
+/**
+ * Example method.
+ * {@code
+ *   List<String> items = new List<String>{
+ *     'a',
+ *     'b',
+ *     'c'
+ *   };
+ * }
+ */
+```
+
+The formatting maintains the `*` vertical alignment and handles nested braces
+correctly.
+
+### Comment Handling Improvements
 
 This plugin includes enhanced comment handling that leverages Prettier's
 built-in comment attachment system:
@@ -78,6 +171,8 @@ built-in comment attachment system:
 - **Binary expression comments** properly attached to right operands
 - **Block statement leading comments** moved into block bodies for better
   formatting
+- **ApexDoc normalization** → Missing or extra asterisks are normalized,
+  indentation is corrected
 
 These improvements ensure comments are placed more intelligently and
 consistently with Prettier's standards.
@@ -180,40 +275,49 @@ Set<String> singleSet = new Set<String>{ 'only' };
 Map<String, Integer> singleMap = new Map<String, Integer>{ 'key' => 1 };
 ```
 
-### ApexDoc {@code} Block Formatting
+### Additional Examples
 
-Code inside ApexDoc `{@code}` blocks is automatically formatted using Prettier:
-
-**Before:**
+#### Casing Normalization
 
 ```apex
-/**
- * Example method.
- * {@code List<String> items = new List<String>{'a','b','c'}; }
- */
+// Before
+public class myclass {
+    private string name;
+    private account acc;
+    private list<integer> numbers;
+}
+
+// After
+public class MyClass {
+    private String name;
+    private Account acc;
+    private List<Integer> numbers;
+}
 ```
 
-**After:**
+#### Modifier Ordering
 
 ```apex
-/**
- * Example method.
- * {@code
- *   List<String> items = new List<String>{
- *     'a',
- *     'b',
- *     'c'
- *   };
- * }
- */
+// Before
+final public static Integer count;
+
+// After
+public static final Integer count;
 ```
 
-The formatting:
+#### Annotation Normalization
 
-- Aligns with the opening bracket of `{@code`
-- Maintains the `*` vertical alignment of the comment block
-- Handles nested braces correctly
-- Preserves invalid blocks (unmatched brackets or invalid code) unchanged
+```apex
+// Before
+@auraenabled(cacheable=true)
+@testmethod
+public void myMethod() {}
+
+// After
+@AuraEnabled(cacheable = true)
+@TestMethod
+public void myMethod() {}
+```
 
 ## Requirements
 
@@ -252,4 +356,6 @@ file for details.
 
 - [prettier-plugin-apex](https://github.com/dangmai/prettier-plugin-apex) by
   Dang Mai
+- Inspiration for some of the prettying functionality is also taken from
+  [Ilya Matsuev's `prettier-plugin-apex` fork](https://github.com/IlyaMatsuev/prettier-plugin-apex)
 - [Prettier](https://prettier.io/) for the amazing formatting engine

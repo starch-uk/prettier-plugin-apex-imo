@@ -60,6 +60,69 @@ describe('prettier-plugin-apex-imo integration', () => {
 				description: 'should only process {@code} in ApexDoc comments',
 				fixture: 'apexdoc-regular-comment',
 			},
+			{
+				description:
+					'should handle code block ending with field declaration',
+				fixture: 'apexdoc-code-block-ends-with-field',
+			},
+			{
+				description:
+					'should normalize multiple blank lines to single blank line',
+				fixture: 'apexdoc-code-block-multiple-blank-lines',
+			},
+			{
+				description:
+					'should handle code block where last field has no next line',
+				fixture: 'apexdoc-code-block-last-field-no-next',
+			},
+			{
+				description:
+					'should handle code block where last line ends with brace and no next line',
+				fixture: 'apexdoc-code-block-last-line-brace-no-next',
+			},
+			{
+				description:
+					'should handle code block ending with semicolon followed by blank lines',
+				fixture: 'apexdoc-code-block-ends-with-blanks',
+			},
+			{
+				description:
+					'should handle code block with field followed only by blank lines until end',
+				fixture: 'apexdoc-code-block-field-followed-by-blanks-only',
+			},
+			{
+				description:
+					'should handle code block where last line ends with semicolon followed only by blanks',
+				fixture: 'apexdoc-code-block-last-line-semicolon-only-blanks',
+			},
+			{
+				fixture: 'apexdoc-code-block-trailing-blanks',
+			},
+			{
+				description:
+					'should handle code block where penultimate line ends with semicolon, last line is blank',
+				fixture: 'apexdoc-code-block-penultimate-semicolon-blanks',
+			},
+			{
+				description:
+					'should handle multiple blank lines in processCodeLines',
+				fixture: 'apexdoc-processcode-multiple-blanks',
+			},
+			{
+				description:
+					'should handle multiple blank lines after semicolon in processCodeLines',
+				fixture: 'apexdoc-processcode-semicolon-multiple-blanks',
+			},
+			{
+				description:
+					'should handle four blank lines after semicolon to ensure while loop executes multiple times',
+				fixture: 'apexdoc-processcode-semicolon-four-blanks',
+			},
+			{
+				description:
+					'should handle code block where penultimate line ends with semicolon',
+				fixture: 'apexdoc-code-block-penultimate-semicolon',
+			},
 		])(
 			'$description',
 			async ({

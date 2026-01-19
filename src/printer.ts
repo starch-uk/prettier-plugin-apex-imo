@@ -14,7 +14,7 @@ import type {
 	ApexAnnotationNode,
 } from './types.js';
 
-const { group, indent, softline, ifBreak, line, join } = doc.builders;
+const { group, indent, softline, ifBreak, line, join, hardline } = doc.builders;
 import { isAnnotation, printAnnotation } from './annotations.js';
 import {
 	createTypeNormalizingPrint,
@@ -46,9 +46,130 @@ const APEX_CLASS_DECL = 'apex.jorje.data.ast.ClassDecl';
 const APEX_INTERFACE_DECL = 'apex.jorje.data.ast.InterfaceDecl';
 const APEX_ENUM_DECL = 'apex.jorje.data.ast.EnumDecl';
 const APEX_METHOD_DECL = 'apex.jorje.data.ast.MethodDecl';
+const APEX_BLOCK_MEMBER_METHOD = 'apex.jorje.data.ast.BlockMember$MethodMember';
 const APEX_BLOCK_STMNT = 'apex.jorje.data.ast.Stmnt$BlockStmnt';
+const APEX_MODIFIER_ANNOTATION_CLASS =
+	'apex.jorje.data.ast.Modifier$Annotation';
 
 const ZERO_LENGTH = 0;
+
+const NO_DOLLAR_INDEX = -1;
+
+const FIELD_RANK_ACCESS = 0;
+const FIELD_RANK_STATIC = 1;
+const FIELD_RANK_FINAL = 2;
+const FIELD_RANK_TRANSIENT = 3;
+const FIELD_RANK_OTHER = 4;
+const FIELD_RANK_UNSPECIFIED = 5;
+
+const METHOD_RANK_ACCESS = 0;
+const METHOD_RANK_STATIC = 1;
+const METHOD_RANK_OVERRIDE = 2;
+const METHOD_RANK_VIRTUAL = 3;
+const METHOD_RANK_ABSTRACT = 4;
+const METHOD_RANK_OTHER = 5;
+const METHOD_RANK_UNSPECIFIED = 6;
+
+const ANNOTATION_RANK = -1;
+const STRING_START_INDEX = 0;
+
+const getModifierKeyword = (modifier: unknown): string | undefined => {
+	if (!isObject(modifier)) return undefined;
+	const modifierClass = (modifier as { ['@class']?: unknown })['@class'];
+	if (typeof modifierClass !== 'string') return undefined;
+	const lastDollarIndex = modifierClass.lastIndexOf('$');
+	if (lastDollarIndex === NO_DOLLAR_INDEX) return undefined;
+	const SINGLE_OFFSET = 1;
+	const keyword = modifierClass.slice(lastDollarIndex + SINGLE_OFFSET);
+	let result = keyword.toLowerCase();
+	// Jorje modifier node classes are like `Modifier$PublicModifier` or `Modifier$StaticModifier`.
+	// Our ranking tables expect the bare keyword: `public`, `static`, etc.
+	const MODIFIER_SUFFIX = 'modifier';
+	if (result.endsWith(MODIFIER_SUFFIX)) {
+		result = result.slice(STRING_START_INDEX, -MODIFIER_SUFFIX.length);
+	}
+	return result;
+};
+
+const ACCESS_MODIFIERS: readonly string[] = [
+	'global',
+	'public',
+	'protected',
+	'private',
+] as const;
+
+const getFieldModifierRank = (keyword: string | undefined): number => {
+	let rank = FIELD_RANK_UNSPECIFIED;
+	if (keyword !== undefined) {
+		if (ACCESS_MODIFIERS.includes(keyword)) rank = FIELD_RANK_ACCESS;
+		else if (keyword === 'static') rank = FIELD_RANK_STATIC;
+		else if (keyword === 'final') rank = FIELD_RANK_FINAL;
+		else if (keyword === 'transient') rank = FIELD_RANK_TRANSIENT;
+		else rank = FIELD_RANK_OTHER;
+	}
+	return rank;
+};
+
+const getMethodModifierRank = (keyword: string | undefined): number => {
+	let rank = METHOD_RANK_UNSPECIFIED;
+	if (keyword !== undefined) {
+		if (ACCESS_MODIFIERS.includes(keyword)) rank = METHOD_RANK_ACCESS;
+		else if (keyword === 'static') rank = METHOD_RANK_STATIC;
+		else if (keyword === 'override') rank = METHOD_RANK_OVERRIDE;
+		else if (keyword === 'virtual') rank = METHOD_RANK_VIRTUAL;
+		else if (keyword === 'abstract') rank = METHOD_RANK_ABSTRACT;
+		else rank = METHOD_RANK_OTHER;
+	}
+	return rank;
+};
+
+interface ModifierEntry {
+	readonly index: number;
+	readonly rank: number;
+}
+
+const buildSortedModifierIndexOrder = (
+	modifiers: readonly unknown[],
+	getRank: (keyword: string | undefined) => number,
+): number[] => {
+	const entries: ModifierEntry[] = [];
+
+	for (let index = 0; index < modifiers.length; index++) {
+		const modifier = modifiers[index];
+		if (!isObject(modifier)) {
+			entries.push({ index, rank: getRank(undefined) });
+			continue;
+		}
+
+		const modifierClass = (modifier as { ['@class']?: unknown })['@class'];
+		if (modifierClass === APEX_MODIFIER_ANNOTATION_CLASS) {
+			// Always keep annotations before all keyword modifiers while preserving order
+			entries.push({ index, rank: ANNOTATION_RANK });
+			continue;
+		}
+
+		const keyword = getModifierKeyword(modifier);
+		const rank = getRank(keyword);
+		entries.push({ index, rank });
+	}
+
+	const sorted = entries
+		.slice()
+		.sort((left, right) => {
+			if (left.rank !== right.rank) return left.rank - right.rank;
+			return left.index - right.index;
+		})
+		.map((entry) => entry.index);
+	return sorted;
+};
+
+const getSortedFieldModifierIndexOrder = (
+	modifiers: readonly unknown[],
+): number[] => buildSortedModifierIndexOrder(modifiers, getFieldModifierRank);
+
+const getSortedMethodModifierIndexOrder = (
+	modifiers: readonly unknown[],
+): number[] => buildSortedModifierIndexOrder(modifiers, getMethodModifierRank);
 
 const hasAnyComments = (node: unknown): boolean => {
 	const maybe = node as { comments?: unknown } | null | undefined;
@@ -64,6 +185,37 @@ const isEmptyBlockStmntNode = (node: unknown): boolean => {
 	const maybe = unwrapped as { ['@class']?: unknown; stmnts?: unknown };
 	if (maybe['@class'] !== APEX_BLOCK_STMNT) return false;
 	return !Array.isArray(maybe.stmnts) || maybe.stmnts.length === ZERO_LENGTH;
+};
+
+/**
+ * Determines the blank line spacing doc to insert between consecutive methods.
+ * If the next member doc already starts with a hardline (e.g., from annotations),
+ * only one hardline is needed. Otherwise, two hardlines are needed to create a blank line.
+ * @param nextDoc - The doc for the next member (current member being processed).
+ * @returns The doc to push for spacing between methods.
+ */
+const getMethodSpacingDoc = (nextDoc: Doc): Doc => {
+	const nextStartsWithHardline =
+		Array.isArray(nextDoc) &&
+		nextDoc.length > ZERO_LENGTH &&
+		nextDoc[ZERO_LENGTH] === hardline;
+	// If nextDoc already starts with hardline, only add one more hardline
+	// Otherwise, add [hardline, hardline] to create a blank line
+	return nextStartsWithHardline ? hardline : [hardline, hardline];
+};
+
+/**
+ * Conditionally adds modifier docs to parts array if modifiers exist.
+ * @param parts - The parts array to add modifiers to.
+ * @param modifierDocs - The modifier docs array (may be empty).
+ */
+const addModifierDocsIfPresent = (
+	parts: Doc[],
+	modifierDocs: readonly Doc[],
+): void => {
+	if (modifierDocs.length > ZERO_LENGTH) {
+		parts.push(modifierDocs as Doc);
+	}
 };
 
 const blockSliceHasCommentMarkers = (
@@ -86,6 +238,32 @@ const blockSliceHasCommentMarkers = (
 	const slice = originalText.slice(startIndex, endIndex);
 	// Treat any inline or block comment markers as "has comments" for safety.
 	return slice.includes('/*') || slice.includes('//');
+};
+
+/**
+ * Extracts and formats typeArguments for classes.
+ * Helper function to avoid code duplication between empty class path and spacing path.
+ * @param node - The class node.
+ * @param path - The AST path to the node.
+ * @param print - The print function.
+ * @returns Array of Docs for the typeArguments (e.g., ['<', 'T', ', ', 'U', '>']) or empty array.
+ */
+const formatTypeArguments = (
+	node: ApexNode,
+	path: Readonly<AstPath<ApexNode>>,
+	print: (path: Readonly<AstPath<ApexNode>>) => Doc,
+): Doc[] => {
+	const typeArgs = (node as { typeArguments?: { value?: unknown[] } })
+		.typeArguments?.value;
+	if (Array.isArray(typeArgs) && typeArgs.length > ZERO_LENGTH) {
+		const typeArgDocs = path.map(
+			print,
+			'typeArguments' as never,
+			'value' as never,
+		);
+		return ['<', join(', ', typeArgDocs), '>'];
+	}
+	return [];
 };
 
 const buildEmptyClassInheritanceDocs = (
@@ -114,8 +292,15 @@ const buildEmptyClassInheritanceDocs = (
 
 // Internal helpers exported for unit testing and full coverage
 const __TEST_ONLY__ = {
+	addModifierDocsIfPresent,
 	blockSliceHasCommentMarkers,
 	buildEmptyClassInheritanceDocs,
+	formatTypeArguments,
+	getMethodModifierRank,
+	getMethodSpacingDoc,
+	getModifierKeyword,
+	getSortedFieldModifierIndexOrder,
+	getSortedMethodModifierIndexOrder,
 	hasAnyComments,
 	isEmptyBlockStmntNode,
 };
@@ -483,17 +668,46 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 		print: (path: Readonly<AstPath<ApexNode>>) => Doc,
 		// eslint-disable-next-line @typescript-eslint/max-params -- Function requires 4 parameters for Prettier printer API
 	): Doc | null => {
-		const { decls } = node as { decls?: unknown[] };
+		const { decls } = node as {
+			decls?: unknown[];
+			modifiers?: unknown[];
+		};
 		if (!Array.isArray(decls)) return null;
+
+		// Sort field modifiers in AST before printing (extract keywords from nodes, not Docs)
+		// Mutate path.node.modifiers directly to ensure path.map() sees the sorted order
+		const pathNodeModifiers = (path.node as { modifiers?: unknown[] })
+			.modifiers;
+		if (
+			Array.isArray(pathNodeModifiers) &&
+			pathNodeModifiers.length > ZERO_LENGTH
+		) {
+			const sortedModifierIndices =
+				getSortedFieldModifierIndexOrder(pathNodeModifiers);
+			const sortedModifiers = sortedModifierIndices.map(
+				(index) => pathNodeModifiers[index],
+			);
+			// Mutate the modifiers array in place on path.node
+			// This ensures path.map() will iterate in sorted order
+			pathNodeModifiers.length = ZERO_LENGTH;
+			for (const sortedModifier of sortedModifiers) {
+				pathNodeModifiers.push(sortedModifier);
+			}
+		}
+		const nodeModifiers = pathNodeModifiers;
 
 		// Cache these values as they're used in both branches
 		// Normalize reserved words in modifiers (e.g., PUBLIC -> public, Static -> static)
 		const reservedWordNormalizingPrint =
 			createReservedWordNormalizingPrint(print);
-		const modifierDocs = path.map(
-			reservedWordNormalizingPrint,
-			'modifiers' as never,
-		) as unknown as Doc[];
+		// path.node.modifiers may be undefined, so handle that case
+		const modifierDocs =
+			Array.isArray(nodeModifiers) && nodeModifiers.length > ZERO_LENGTH
+				? (path.map(
+						reservedWordNormalizingPrint,
+						'modifiers' as never,
+					) as unknown as Doc[])
+				: [];
 		const typeDoc = path.call(print, 'type' as never) as unknown as Doc;
 		const breakableTypeDoc = makeTypeDocBreakable(typeDoc, options);
 		const hasAssignments = hasVariableAssignments(decls);
@@ -519,17 +733,22 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 			if (modifierDocs.length > ZERO_LENGTH) {
 				resultParts.push(...modifierDocs);
 			}
-			resultParts.push(breakableTypeDoc);
 
 			if (nameDocs.length > SINGLE_DECL) {
 				const wrappedNames = nameDocs.map((nameDoc) => {
 					return ifBreak(indent([line, nameDoc]), [' ', nameDoc]);
 				});
-				resultParts.push(joinDocs([', ', softline], wrappedNames), ';');
+				// Keep wrapping decisions scoped to the `type names` group so that
+				// unrelated line breaks (e.g., from annotations/modifiers) don't force a wrap.
+				const signatureDoc = group([
+					breakableTypeDoc,
+					joinDocs([', ', softline], wrappedNames),
+				]);
+				resultParts.push(signatureDoc, ';');
 				return group(resultParts);
 			}
 
-			// Single declaration
+			// Single declaration: keep `type name;` on one line (fixtures expect no forced break here)
 			// path.map always returns dense arrays (no undefined holes)
 			const FIRST_NAME_INDEX = 0;
 			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- path.map always returns dense arrays, firstNameDoc is always defined
@@ -538,7 +757,8 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				' ',
 				firstNameDoc,
 			]);
-			resultParts.push(wrappedName, ';');
+			const signatureDoc = group([breakableTypeDoc, wrappedName]);
+			resultParts.push(signatureDoc, ';');
 			return group(resultParts);
 		}
 
@@ -823,17 +1043,10 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				parts.push(' ');
 				parts.push(path.call(typeNormalizingPrint, 'name' as never));
 
-				const typeArgs = (
-					node as { typeArguments?: { value?: unknown[] } }
-				).typeArguments?.value;
-				if (Array.isArray(typeArgs) && typeArgs.length > ZERO_LENGTH) {
-					const typeArgDocs = path.map(
-						typeNormalizingPrint,
-						'typeArguments' as never,
-						'value' as never,
-					);
-					parts.push('<', join(', ', typeArgDocs), '>');
-				}
+				// Handle typeArguments using helper function (shared with spacing path)
+				parts.push(
+					...formatTypeArguments(node, path, typeNormalizingPrint),
+				);
 
 				if (nodeClass === APEX_CLASS_DECL) {
 					parts.push(
@@ -847,11 +1060,240 @@ const createWrappedPrinter = (originalPrinter: any): any => {
 				parts.push(' ', '{}');
 				return parts;
 			}
+
+			// Handle classes with members: add spacing between consecutive methods
+			// Only intercept if the class has at least one method AND spacing is needed
+			// Skip spacing override for code blocks (apex-anonymous parser) to preserve original spacing
+			const currentOptions = getCurrentPrintOptions();
+			const isCodeBlockFormatting =
+				currentOptions?.parser === 'apex-anonymous';
+			if (
+				hasMembers &&
+				nodeClass === APEX_CLASS_DECL &&
+				!isCodeBlockFormatting
+			) {
+				const hasAnyMethod = decl.members?.some((member) => {
+					// Members from AST are always objects
+					const memberClass = getNodeClassOptional(
+						member as ApexNode,
+					);
+					return (
+						memberClass === APEX_METHOD_DECL ||
+						memberClass === APEX_BLOCK_MEMBER_METHOD
+					);
+				});
+				// Check if original text has pattern indicating no spacing between methods
+				// Pattern: method ending, newline, optional whitespace, annotation (no blank line)
+				// Only add spacing if we have 3+ consecutive methods with this pattern
+				const currentOriginalText = getCurrentOriginalText();
+				let shouldAddSpacing = false;
+				let maxConsecutiveMethodCount = 0;
+				let matchCount = 0;
+				if (hasAnyMethod === true) {
+					// Count consecutive methods in AST (works even when originalText is unavailable,
+					// e.g., during embedded {@code} formatting).
+					// hasMembers check ensures members is an array with length > 0
+					let currentConsecutiveCount = 0;
+					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- hasMembers check ensures members is array
+					const members = decl.members!;
+					for (const member of members) {
+						// Members from AST are always objects
+						const memberClass = getNodeClassOptional(
+							member as ApexNode,
+						);
+						const isMethod =
+							memberClass === APEX_BLOCK_MEMBER_METHOD ||
+							memberClass === APEX_METHOD_DECL;
+						if (isMethod) {
+							currentConsecutiveCount++;
+							if (
+								currentConsecutiveCount >
+								maxConsecutiveMethodCount
+							) {
+								maxConsecutiveMethodCount =
+									currentConsecutiveCount;
+							}
+						} else {
+							currentConsecutiveCount = ZERO_LENGTH;
+						}
+					}
+
+					const METHOD_SPACING_CONSECUTIVE_THRESHOLD = 3;
+
+					// Only apply spacing override when we have originalText to pattern-match.
+					// Embedded formatting (e.g., {@code} blocks) should use upstream printer spacing.
+					if (
+						currentOriginalText !== undefined &&
+						maxConsecutiveMethodCount >=
+							METHOD_SPACING_CONSECUTIVE_THRESHOLD
+					) {
+						// Pattern for methods with annotations: }\n@
+						const noSpacingPatternWithAnnotations = /\}\s*\n\s*@/g;
+						// Pattern for methods without annotations: }\n\s*public|private|protected|global
+						const noSpacingPatternWithoutAnnotations =
+							/\}\s*\n\s*(public|private|protected|global)/g;
+						const hasBlankLinePattern = /\}\s*\n\s*\n/;
+						const matchesWithAnnotations =
+							currentOriginalText.match(
+								noSpacingPatternWithAnnotations,
+							);
+						const matchesWithoutAnnotations =
+							currentOriginalText.match(
+								noSpacingPatternWithoutAnnotations,
+							);
+						const ZERO_MATCHES = 0;
+						const matchesWithAnnotationsCount =
+							matchesWithAnnotations?.length ?? ZERO_MATCHES;
+						const matchesWithoutAnnotationsCount =
+							matchesWithoutAnnotations?.length ?? ZERO_MATCHES;
+						// Use the higher count (methods with annotations might have more matches due to annotation lines)
+						matchCount = Math.max(
+							matchesWithAnnotationsCount,
+							matchesWithoutAnnotationsCount,
+						);
+						// Require 2+ matches (indicating 3+ consecutive methods without spacing)
+						// 2 matches means 3 consecutive methods: method1 -> method2 (match 1), method2 -> method3 (match 2)
+						const MIN_MATCHES_FOR_SPACING = 2;
+						// AND no blank lines between any methods
+						shouldAddSpacing =
+							matchCount >= MIN_MATCHES_FOR_SPACING &&
+							!hasBlankLinePattern.test(currentOriginalText);
+					}
+				}
+				if (shouldAddSpacing) {
+					const memberDocs = path.map(
+						typeNormalizingPrint,
+						'members' as never,
+					) as unknown as Doc[];
+					// shouldAddSpacing is only true when we have 3+ consecutive methods, so memberDocs.length > 0
+					const parts: Doc[] = [];
+					const modifierDocs = path.map(
+						typeNormalizingPrint,
+						'modifiers' as never,
+					) as unknown as Doc[];
+					// modifierDocs is always an array, but may be empty if class has no modifiers
+					addModifierDocsIfPresent(parts, modifierDocs);
+
+					parts.push('class');
+					parts.push(' ');
+					parts.push(
+						path.call(typeNormalizingPrint, 'name' as never),
+					);
+
+					// Handle typeArguments using helper function (shared with empty class path)
+					parts.push(
+						...formatTypeArguments(
+							node,
+							path,
+							typeNormalizingPrint,
+						),
+					);
+
+					parts.push(
+						...buildEmptyClassInheritanceDocs(
+							path,
+							typeNormalizingPrint,
+						),
+					);
+
+					// Add spacing between consecutive methods
+					const formattedMembers: Doc[] = [];
+					const INDEX_OFFSET = 1;
+					// hasMembers check ensures members is an array
+					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- hasMembers ensures members is array
+					const members = decl.members!;
+					for (let i = 0; i < memberDocs.length; i++) {
+						if (i > ZERO_LENGTH) {
+							// memberDocs.length matches members.length, so indices are valid
+							// Members from Jorje AST are always objects
+							const prevMember = members[i - INDEX_OFFSET];
+							const currentMember = members[i];
+							const prevMemberClass = getNodeClassOptional(
+								prevMember as ApexNode,
+							);
+							const currentMemberClass = getNodeClassOptional(
+								currentMember as ApexNode,
+							);
+							const prevIsMethod =
+								prevMemberClass === APEX_METHOD_DECL ||
+								prevMemberClass === APEX_BLOCK_MEMBER_METHOD;
+							const currentIsMethod =
+								currentMemberClass === APEX_METHOD_DECL ||
+								currentMemberClass === APEX_BLOCK_MEMBER_METHOD;
+							// Add empty line between consecutive methods
+							// Only add spacing if there are no comments between methods
+							// Members from AST are always objects, but we check for safety
+							const prevHasComments =
+								isObject(prevMember) &&
+								hasAnyComments(prevMember as ApexNode);
+							const currentHasComments =
+								isObject(currentMember) &&
+								hasAnyComments(currentMember as ApexNode);
+							// Only add blank lines between consecutive methods (not field↔method or method↔innerClass)
+							const shouldInsertBlankLine =
+								prevIsMethod &&
+								currentIsMethod &&
+								!prevHasComments &&
+								!currentHasComments;
+
+							if (shouldInsertBlankLine) {
+								// Add exactly one blank line (two newlines). Some member docs (notably those
+								// starting with annotations) already begin with a `hardline`, so we only
+								// need one more newline in that case.
+								// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Index is valid since we iterate over memberDocs
+								const nextDoc = memberDocs[i]!;
+								formattedMembers.push(
+									getMethodSpacingDoc(nextDoc),
+								);
+							} else {
+								// Normal spacing between members
+								formattedMembers.push(softline);
+							}
+						}
+						// path.map() always returns an array with the same length as members
+						// so memberDoc is always defined
+						// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Index is valid since we iterate over memberDocs
+						const memberDoc = memberDocs[i]!;
+						formattedMembers.push(memberDoc);
+					}
+
+					parts.push(
+						' ',
+						'{',
+						indent([softline, ...formattedMembers]),
+						softline,
+						'}',
+					);
+					return group(parts);
+				}
+			}
 		}
 
 		// Inline empty method bodies as `{}` (stmnt is a wrapped BlockStmnt in practice).
 		if (nodeClass === APEX_METHOD_DECL) {
-			const method = node as unknown as { stmnt?: unknown };
+			const method = node as unknown as {
+				stmnt?: unknown;
+				modifiers?: unknown[];
+			};
+			// Sort method modifiers in AST before printing
+			if (!Array.isArray(method.modifiers)) {
+				method.modifiers = [];
+			}
+			const methodModifiers = method.modifiers;
+			if (methodModifiers.length > ZERO_LENGTH) {
+				const sortedModifierIndices =
+					getSortedMethodModifierIndexOrder(methodModifiers);
+				const sortedModifiers = sortedModifierIndices.map(
+					(index) => methodModifiers[index],
+				);
+				// methodModifiers is already verified as an array above, and it references method.modifiers
+				// So method.modifiers is guaranteed to be an array here
+				method.modifiers.length = ZERO_LENGTH;
+				for (const sortedModifier of sortedModifiers) {
+					method.modifiers.push(sortedModifier);
+				}
+			}
+
 			const currentOriginalText = getCurrentOriginalText();
 			const stmntHasCommentMarkers = blockSliceHasCommentMarkers(
 				method.stmnt,

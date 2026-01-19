@@ -1,6 +1,6 @@
 {
 	"name": "prettier-plugin-apex-imo",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"description": "Opinionated multiline formatting for Apex Lists and Maps - extends prettier-plugin-apex",
 	"keywords": [
 		"prettier",
@@ -50,7 +50,7 @@
 		"format:check": "prettier --check .",
 		"prepare": "husky"
 	},
-	"packageManager": "pnpm@10.28.0",
+	"packageManager": "pnpm@10.28.1",
 	"peerDependencies": {
 		"prettier": "^3.0.0",
 		"prettier-plugin-apex": "^2.0.0"

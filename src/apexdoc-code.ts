@@ -647,8 +647,7 @@ const processAllCodeBlocksInComment = async ({
 		});
 
 		// Annotations are normalized via AST during printing (see printAnnotation in annotations.ts)
-		// Preserve blank lines: reinsert blank lines after } when followed by annotations or access modifiers
-		// This preserves the structure from original code (blank lines after } before annotations/methods)
+		// Preserve blank lines: reinsert blank lines based on semantic structure
 		const formattedLines = formattedCode.trim().split('\n');
 		const resultLines: string[] = [];
 
@@ -657,19 +656,79 @@ const processAllCodeBlocksInComment = async ({
 			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- formattedLines from split('\n') always contains strings
 			const formattedLine = formattedLines[i]!;
 			// Removed unreachable undefined check: formattedLines from split('\n') always contains strings
+			const currentLineTrimmed = formattedLine.trim();
+			const isCurrentLineBlank = currentLineTrimmed === '';
+
+			// If current line is blank, preserve it as-is (Prettier may have inserted it)
+			if (isCurrentLineBlank) {
+				resultLines.push('');
+				continue;
+			}
+
 			resultLines.push(formattedLine);
-			// Insert blank line after } when followed by annotations or access modifiers
-			if (
-				preserveBlankLineAfterClosingBrace(
+			if (i < formattedLines.length - INDEX_OFFSET_ONE) {
+				// Find next non-blank line (skip blank lines that Prettier may have inserted)
+				let nextNonBlankIndex = i + INDEX_OFFSET_ONE;
+				while (
+					nextNonBlankIndex < formattedLines.length &&
+					formattedLines[nextNonBlankIndex]?.trim() === ''
+				) {
+					nextNonBlankIndex++;
+				}
+				// formattedCode.trim() removes trailing whitespace, so nextNonBlankIndex is always < formattedLines.length
+				// Prettier normalizes blank lines, so we'll always find the next non-blank line
+				// The while loop condition ensures nextNonBlankIndex < formattedLines.length when it exits
+				const nextNonBlankLine =
+					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- While loop ensures nextNonBlankIndex < formattedLines.length
+					formattedLines[nextNonBlankIndex]!.trim();
+				// Preserve blank lines based on semantic structure:
+				// 1. After } when followed by annotations or access modifiers (existing logic)
+				// 2. After field declarations (;) when followed by annotations
+				// 3. Between consecutive methods (} followed by @)
+				// 4. Between abstract methods (; followed by @)
+				// 5. Before inner classes (; or } followed by class declaration)
+				const endsWithSemicolon = currentLineTrimmed.endsWith(';');
+				const endsWithBrace = currentLineTrimmed.endsWith('}');
+				const nextStartsWithAnnotation =
+					nextNonBlankLine.startsWith('@');
+				const nextStartsWithClass =
+					nextNonBlankLine.startsWith('public class') ||
+					nextNonBlankLine.startsWith('private class') ||
+					nextNonBlankLine.startsWith('protected class') ||
+					nextNonBlankLine.startsWith('global class');
+				const preserveAfterBrace = preserveBlankLineAfterClosingBrace(
 					formattedLines as readonly string[],
 					i,
-				)
-			) {
-				resultLines.push('');
+				);
+				const shouldPreserveBlankLine =
+					preserveAfterBrace ||
+					(endsWithSemicolon && nextStartsWithAnnotation) ||
+					(endsWithBrace && nextStartsWithAnnotation) ||
+					((endsWithSemicolon || endsWithBrace) &&
+						nextStartsWithClass);
+				// Always add blank line when needed - normalization will handle duplicates
+				if (shouldPreserveBlankLine) {
+					resultLines.push('');
+				}
 			}
 		}
 
-		formattedCode = resultLines.join('\n');
+		// Normalize multiple consecutive blank lines to single blank lines
+		const normalizedResultLines: string[] = [];
+		for (const line of resultLines) {
+			const isBlank = line === '';
+			const prevLine =
+				normalizedResultLines[
+					normalizedResultLines.length - INDEX_OFFSET_ONE
+				];
+			const prevIsBlank = prevLine === '';
+			// Skip blank lines if previous line was also blank (normalize to single blank line)
+			if (isBlank && prevIsBlank) {
+				continue;
+			}
+			normalizedResultLines.push(line);
+		}
+		formattedCode = normalizedResultLines.join('\n');
 
 		// Replace the code block with formatted version
 		const SUBSTRING_START = 0;

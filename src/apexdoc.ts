@@ -258,8 +258,49 @@ const processCodeLines = (codeToUse: string): string => {
 		const codeLine = codeLines[i]!;
 		resultLines.push(codeLine);
 
+		// Preserve blank lines after } when followed by annotations or access modifiers
 		if (preserveBlankLineAfterClosingBrace(codeLines, i)) {
 			resultLines.push('');
+		} else if (i < codeLines.length - INDEX_ONE) {
+			// Preserve blank lines after field declarations (;) when followed by annotations
+			// or before inner classes
+			const trimmedLine = codeLine.trim();
+			const endsWithSemicolon = trimmedLine.endsWith(';');
+			const endsWithBrace = trimmedLine.endsWith('}');
+			if (endsWithSemicolon || endsWithBrace) {
+				// Find next non-blank line, skipping any blank lines in between
+				let nextNonBlankIndex = i + INDEX_ONE;
+				// Skip consecutive blank lines until we find a non-blank line or reach the end
+				while (
+					nextNonBlankIndex < codeLines.length &&
+					codeLines[nextNonBlankIndex]?.trim() === ''
+				) {
+					nextNonBlankIndex++;
+				}
+				// Extract next non-blank line
+				// nextNonBlankIndex is always < codeLines.length because:
+				// - We start with nextNonBlankIndex = i + 1 where i < codeLines.length - 1
+				// - The while loop increments while nextNonBlankIndex < codeLines.length
+				// - After trim(), the last line is never blank, so we always find a non-blank line
+				// - If all remaining lines were blank, trim() would have removed them
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- nextNonBlankIndex is always < codeLines.length
+				const nextNonBlankLine = codeLines[nextNonBlankIndex]!.trim();
+				const nextStartsWithAnnotation =
+					nextNonBlankLine.startsWith('@');
+				const nextStartsWithClass =
+					nextNonBlankLine.startsWith('public class') ||
+					nextNonBlankLine.startsWith('private class') ||
+					nextNonBlankLine.startsWith('protected class') ||
+					nextNonBlankLine.startsWith('global class');
+				if (
+					(endsWithSemicolon && nextStartsWithAnnotation) ||
+					(endsWithBrace && nextStartsWithAnnotation) ||
+					((endsWithSemicolon || endsWithBrace) &&
+						nextStartsWithClass)
+				) {
+					resultLines.push('');
+				}
+			}
 		}
 	}
 
@@ -1019,6 +1060,11 @@ const detectCodeBlockDocs = (
 	return newDocs;
 };
 
+// Internal helper exported for unit testing and full coverage
+const __TEST_ONLY__ = {
+	processCodeLines,
+};
+
 export {
 	EMPTY_CODE_TAG,
 	normalizeSingleApexDocComment,
@@ -1026,6 +1072,7 @@ export {
 	removeTrailingEmptyLines,
 	isApexDoc,
 	filterNonEmptyLines,
+	__TEST_ONLY__,
 };
 
 /**

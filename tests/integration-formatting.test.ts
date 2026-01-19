@@ -232,4 +232,74 @@ describe('prettier-plugin-apex-imo integration', () => {
 			},
 		);
 	});
+
+	describe('Member modifier ordering', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should order field and method modifiers in outer and inner classes',
+				fixture: 'member-modifiers-order',
+			},
+			{
+				description:
+					'should order field and method modifiers inside ApexDoc {@code} blocks',
+				fixture: 'apexdoc-member-modifiers-order',
+			},
+			{
+				description:
+					'should preserve order of modifiers with same rank (tie-breaker)',
+				fixture: 'member-modifiers-tie-breaker',
+			},
+			{
+				description:
+					'should preserve order when modifier ranks are equal',
+				fixture: 'member-modifiers-same-rank',
+			},
+			{
+				description:
+					'should preserve order of multiple annotations with same rank',
+				fixture: 'member-modifiers-multiple-annotations',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
+
+	describe('Method spacing', () => {
+		it.concurrent.each([
+			{
+				description:
+					'should add blank lines between consecutive methods with annotations',
+				fixture: 'method-spacing-with-annotations',
+			},
+			{
+				description:
+					'should add blank lines between consecutive methods without annotations',
+				fixture: 'method-spacing-no-annotations',
+			},
+			{
+				description:
+					'should add blank lines between consecutive methods when class has modifiers',
+				fixture: 'method-spacing-with-modifiers',
+			},
+		])(
+			'$description',
+			async ({
+				fixture,
+			}: Readonly<{ description: string; fixture: string }>) => {
+				const input = loadFixture(fixture, 'input');
+				const expected = loadFixture(fixture, 'output');
+				const result = await formatApex(input);
+				expect(result).toBe(expected);
+			},
+		);
+	});
 });
